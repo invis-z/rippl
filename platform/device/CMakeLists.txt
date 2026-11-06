@@ -306,7 +306,7 @@ target_link_options(rippl_usb_overlay PRIVATE
 
 set(RIPPL_FIRMWARE_VERSION "0.12.0" CACHE STRING "major.minor.patch written to the image header")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-set(RIPPL_DEVICE_IMAGE ${CMAKE_BINARY_DIR}/HIFIEC90.IMG)
+set(RIPPL_DEVICE_IMAGE ${CMAKE_BINARY_DIR}/RIPPL.IMG)
 set(RIPPL_GLYPH_FACE_ARGUMENTS "")
 foreach(face_file ${RIPPL_GLYPH_FACE_FILES} ${RIPPL_LANGUAGE_PACK_FILES})
     list(APPEND RIPPL_GLYPH_FACE_ARGUMENTS --glyph-face ${face_file})
