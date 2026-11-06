@@ -311,26 +311,32 @@ set(RIPPL_GLYPH_FACE_ARGUMENTS "")
 foreach(face_file ${RIPPL_GLYPH_FACE_FILES} ${RIPPL_LANGUAGE_PACK_FILES})
     list(APPEND RIPPL_GLYPH_FACE_ARGUMENTS --glyph-face ${face_file})
 endforeach()
+set(RIPPL_IMAGE_ARGUMENTS
+    --version ${RIPPL_FIRMWARE_VERSION}
+    --elf $<TARGET_FILE:rippl_device>
+    --nm ${CMAKE_NM}
+    --overlay $<TARGET_FILE:rippl_rescan_overlay>
+    --usb-overlay $<TARGET_FILE:rippl_usb_overlay>
+    --core1-mp3 ${RIPPL_CORE1_MP3_BINARY}
+    --core1-flac ${RIPPL_CORE1_BINARY}
+    --core1-aac ${RIPPL_CORE1_AAC_BINARY}
+    --core1-opus ${RIPPL_CORE1_OPUS_BINARY}
+)
+set(RIPPL_IMAGE_DEPENDS rippl_device rippl_rescan_overlay rippl_usb_overlay ${RIPPL_CORE1_MP3_BINARY} ${RIPPL_CORE1_BINARY}
+    ${RIPPL_CORE1_AAC_BINARY} ${RIPPL_CORE1_OPUS_BINARY}
+    ${PROJECT_SOURCE_DIR}/tools/make_image.py
+)
 
 add_custom_target(rippl_device_image ALL
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/make_image.py
-        --version ${RIPPL_FIRMWARE_VERSION}
-        --elf $<TARGET_FILE:rippl_device>
-        --nm ${CMAKE_NM}
-        --overlay $<TARGET_FILE:rippl_rescan_overlay>
-        --usb-overlay $<TARGET_FILE:rippl_usb_overlay>
-        --core1-mp3 ${RIPPL_CORE1_MP3_BINARY}
-        --core1-flac ${RIPPL_CORE1_BINARY}
-        --core1-aac ${RIPPL_CORE1_AAC_BINARY}
-        --core1-opus ${RIPPL_CORE1_OPUS_BINARY}
+        ${RIPPL_IMAGE_ARGUMENTS}
+        --image-mib 8
         ${RIPPL_GLYPH_FACE_ARGUMENTS}
         --output ${RIPPL_DEVICE_IMAGE}
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/size_report.py
         --build ${CMAKE_BINARY_DIR} --summary --nm ${CMAKE_NM}
     BYPRODUCTS ${RIPPL_DEVICE_IMAGE}
-    DEPENDS rippl_device rippl_rescan_overlay rippl_usb_overlay ${RIPPL_CORE1_MP3_BINARY} ${RIPPL_CORE1_BINARY}
-        ${RIPPL_CORE1_AAC_BINARY} ${RIPPL_CORE1_OPUS_BINARY}
-        ${PROJECT_SOURCE_DIR}/tools/make_image.py
+    DEPENDS ${RIPPL_IMAGE_DEPENDS}
     VERBATIM
 )
 
