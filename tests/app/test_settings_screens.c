@@ -23,8 +23,7 @@ static const char *const DISPLAY[] = {
     "Lyrics",     "Brightness",         "Screen timeout",      "Orientation",
     "Animations", "Battery percentage", "Portrait status bar", "Clock"};
 static const char *const LIBRARY[] = {"Music folders",    "Rescan library", "Cover Flow",
-                                      "Cover Flow order", "Artist albums",  "Folders & playlists",
-                                      "Listen history"};
+                                      "Cover Flow order", "Artist albums",  "Folders & playlists"};
 static const char *const BUTTONS[] = {"Volume buttons", "Swap volume buttons", "Menu button",
                                       "Power on"};
 static const char *const SYSTEM[] = {"Language", "Date & time", "Start screen",
