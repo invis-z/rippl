@@ -91,6 +91,16 @@ static bool read_pack(void *context, uint32_t face, uint32_t offset, void *buffe
 
 static const FontPackReader READER = {read_pack, NULL};
 static Font PACKED_FONT;
+static const Font LETTER_FONT = {.pack_faces = {1, 1}, .level_bits = FONT_TWO_BIT_LEVELS};
+
+static void make_two_bit(void)
+{
+    for (uint32_t glyph = 0; glyph < GLYPHS; glyph++) {
+        pack.bytes[INDEX_OFFSET + glyph / FONT_PACK_ENTRIES_PER_SECTOR * FONT_PACK_SECTOR_BYTES +
+                   glyph % FONT_PACK_ENTRIES_PER_SECTOR * FONT_PACK_ENTRY_BYTES + 7] =
+            FONT_TWO_BIT_LEVELS;
+    }
+}
 
 static void attach(void)
 {
@@ -279,10 +289,82 @@ static void a_font_without_a_pack_face_ignores_packs(void)
     CHECK(glyph != NULL && glyph->codepoint == FONT_FALLBACK_CODEPOINT);
 }
 
+static void a_two_bit_letter_comes_with_its_levels(void)
+{
+    attach();
+    make_two_bit();
+    const Glyph *glyph = font_find_glyph(&LETTER_FONT, codepoint_of(7));
+    CHECK(glyph != NULL && glyph->codepoint == codepoint_of(7));
+    if (glyph != NULL) {
+        CHECK_EQUAL(5, font_glyph_level(&LETTER_FONT, glyph, 0, 0));
+        CHECK_EQUAL(15, font_glyph_level(&LETTER_FONT, glyph, 1, 0));
+        CHECK_EQUAL(15, font_glyph_level(&LETTER_FONT, glyph, 0, 1));
+    }
+}
+
+static void showing_the_same_letter_again_reads_nothing(void)
+{
+    attach();
+    make_two_bit();
+    font_find_glyph(&LETTER_FONT, codepoint_of(3));
+    uint32_t reads = pack.reads;
+    CHECK(font_find_glyph(&LETTER_FONT, codepoint_of(3)) != NULL);
+    CHECK_EQUAL(reads, pack.reads);
+    CHECK(font_find_glyph(&LETTER_FONT, codepoint_of(4)) != NULL);
+    CHECK(pack.reads > reads);
+}
+
+static void a_glyph_is_only_read_at_the_depth_it_was_packed(void)
+{
+    attach();
+    CHECK(font_pack_find_levels(0, codepoint_of(1), FONT_TWO_BIT_LEVELS) == NULL);
+    make_two_bit();
+    font_pack_forget();
+    CHECK(font_pack_find(0, codepoint_of(1)) == NULL);
+    CHECK(font_pack_find_levels(0, codepoint_of(1), FONT_TWO_BIT_LEVELS) != NULL);
+}
+
+static void small_two_bit_letters_stay_cached_side_by_side(void)
+{
+    attach();
+    make_two_bit();
+    font_find_glyph(&LETTER_FONT, codepoint_of(3));
+    font_find_glyph(&LETTER_FONT, codepoint_of(4));
+    uint32_t reads = pack.reads;
+    for (int round = 0; round < 3; round++) {
+        CHECK(font_find_glyph(&LETTER_FONT, codepoint_of(3)) != NULL);
+        CHECK(font_find_glyph(&LETTER_FONT, codepoint_of(4)) != NULL);
+    }
+    CHECK_EQUAL(reads, pack.reads);
+}
+
+static void a_large_letter_takes_the_large_slot_and_keeps_the_small_ones(void)
+{
+    attach();
+    make_two_bit();
+    uint8_t *entry = pack.bytes + INDEX_OFFSET + 5 * FONT_PACK_ENTRY_BYTES;
+    entry[2] = 30;
+    entry[3] = 30;
+    put32(entry + 8, 0);
+    font_find_glyph(&LETTER_FONT, codepoint_of(3));
+    const Glyph *large = font_find_glyph(&LETTER_FONT, codepoint_of(5));
+    CHECK(large != NULL && large->width == 30);
+    CHECK(font_glyph_bitmap(&LETTER_FONT, large) != NULL);
+    uint32_t reads = pack.reads;
+    CHECK(font_find_glyph(&LETTER_FONT, codepoint_of(3)) != NULL);
+    CHECK(font_find_glyph(&LETTER_FONT, codepoint_of(5)) == large);
+    CHECK_EQUAL(reads, pack.reads);
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
         TEST_CASE(a_packed_glyph_has_its_metrics),
+        TEST_CASE(a_two_bit_letter_comes_with_its_levels),
+        TEST_CASE(showing_the_same_letter_again_reads_nothing),
+        TEST_CASE(a_glyph_is_only_read_at_the_depth_it_was_packed),
+        TEST_CASE(small_two_bit_letters_stay_cached_side_by_side),
+        TEST_CASE(a_large_letter_takes_the_large_slot_and_keeps_the_small_ones),
         TEST_CASE(a_packed_glyph_brings_its_bitmap),
         TEST_CASE(glyphs_in_later_index_sectors_are_found),
         TEST_CASE(codepoints_outside_the_pack_are_missing),
