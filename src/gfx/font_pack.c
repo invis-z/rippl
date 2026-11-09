@@ -4,7 +4,11 @@ enum {
     FACE_UNKNOWN = 0,
     FACE_READY = 1,
     FACE_MISSING = 2,
-    MAX_CODEPOINT = 0xFFFF
+    MAX_CODEPOINT = 0xFFFF,
+    FOUR_BIT_LEVELS = 0,
+    TWO_BIT_LEVELS = 2,
+    FOUR_BIT_PER_BYTE = 2,
+    TWO_BIT_PER_BYTE = 4
 };
 
 static const uint8_t MAGIC[4] = {'E', 'G', 'L', 'F'};
@@ -24,9 +28,17 @@ typedef struct PackSlot {
     uint8_t bitmap[FONT_PACK_MAX_BITMAP];
 } PackSlot;
 
+typedef struct LargeSlot {
+    uint32_t key;
+    bool present;
+    Glyph glyph;
+    uint8_t bitmap[FONT_PACK_MAX_LARGE_BITMAP];
+} LargeSlot;
+
 typedef struct PackState {
     PackFace faces[FONT_PACK_FACES];
     uint8_t entries[FONT_PACK_ENTRIES_PER_SECTOR * FONT_PACK_ENTRY_BYTES];
+    LargeSlot large;
 } PackState;
 
 static FontPackReader pack_reader;
@@ -76,6 +88,7 @@ void font_pack_forget(void)
     for (uint32_t face = 0; face < FONT_PACK_FACES; face++) {
         state->faces[face].state = FACE_UNKNOWN;
     }
+    state->large.key = 0;
     for (uint32_t index = 0; index < slot_count; index++) {
         slots[index].key = 0;
     }
@@ -168,26 +181,42 @@ static const uint8_t *find_entry(uint32_t index, const PackFace *face, uint32_t 
     return NULL;
 }
 
-static bool load_glyph(uint32_t index, uint32_t codepoint, PackSlot *slot)
+typedef struct GlyphTarget {
+    Glyph *glyph;
+    uint8_t *bitmap;
+    uint32_t capacity;
+    uint8_t levels;
+} GlyphTarget;
+
+typedef enum GlyphLoad {
+    GLYPH_MISSING,
+    GLYPH_LOADED,
+    GLYPH_TOO_BIG
+} GlyphLoad;
+
+static GlyphLoad load_glyph(uint32_t index, uint32_t codepoint, GlyphTarget target)
 {
     const PackFace *face = ready_face(index);
     const uint8_t *entry = face != NULL ? find_entry(index, face, codepoint) : NULL;
-    if (entry == NULL) {
-        return false;
+    if (entry == NULL || entry[7] != target.levels) {
+        return GLYPH_MISSING;
     }
-    uint32_t bytes = ((uint32_t)entry[2] * entry[3] + 1) / 2;
-    if (bytes > FONT_PACK_MAX_BITMAP ||
-        (bytes > 0 && !read_face(index, le32(entry + 8), slot->bitmap, bytes))) {
-        return false;
+    uint32_t per_byte = target.levels == TWO_BIT_LEVELS ? TWO_BIT_PER_BYTE : FOUR_BIT_PER_BYTE;
+    uint32_t bytes = ((uint32_t)entry[2] * entry[3] + per_byte - 1) / per_byte;
+    if (bytes > target.capacity) {
+        return GLYPH_TOO_BIG;
     }
-    slot->glyph = (Glyph){.codepoint = (uint16_t)codepoint,
-                          .bitmap_offset = 0,
-                          .width = entry[2],
-                          .height = entry[3],
-                          .left = (int8_t)entry[4],
-                          .top = (int8_t)entry[5],
-                          .advance = entry[6]};
-    return true;
+    if (bytes > 0 && !read_face(index, le32(entry + 8), target.bitmap, bytes)) {
+        return GLYPH_MISSING;
+    }
+    *target.glyph = (Glyph){.codepoint = (uint16_t)codepoint,
+                            .bitmap_offset = 0,
+                            .width = entry[2],
+                            .height = entry[3],
+                            .left = (int8_t)entry[4],
+                            .top = (int8_t)entry[5],
+                            .advance = entry[6]};
+    return GLYPH_LOADED;
 }
 
 static uint32_t set_of(uint32_t key)
@@ -195,27 +224,54 @@ static uint32_t set_of(uint32_t key)
     return (key * 2654435761u >> 16) % (slot_count / FONT_PACK_WAYS);
 }
 
-const Glyph *font_pack_find(uint32_t face, uint32_t codepoint)
+static const Glyph *load_large(uint32_t face, uint32_t codepoint, uint32_t key, uint8_t levels)
+{
+    LargeSlot *large = &state->large;
+    large->key = 0;
+    large->present = load_glyph(face, codepoint,
+                                (GlyphTarget){&large->glyph, large->bitmap,
+                                              FONT_PACK_MAX_LARGE_BITMAP, levels}) == GLYPH_LOADED;
+    large->key = key;
+    return large->present ? &large->glyph : NULL;
+}
+
+const Glyph *font_pack_find_levels(uint32_t face, uint32_t codepoint, uint8_t levels)
 {
     if (state == NULL || face >= FONT_PACK_FACES || codepoint > MAX_CODEPOINT) {
         return NULL;
     }
-    uint32_t key = (face + 1) << 16 | codepoint;
+    uint32_t key = (uint32_t)levels << 24 | (face + 1) << 16 | codepoint;
     PackSlot *set = slots + set_of(key) * FONT_PACK_WAYS;
     for (uint32_t way = 0; way < FONT_PACK_WAYS; way++) {
         if (set[way].key == key) {
             return set[way].present ? &set[way].glyph : NULL;
         }
     }
+    if (state->large.key == key) {
+        return state->large.present ? &state->large.glyph : NULL;
+    }
     PackSlot *slot = &set[victim++ % FONT_PACK_WAYS];
     slot->key = 0;
-    slot->present = load_glyph(face, codepoint, slot);
+    GlyphLoad load = load_glyph(
+        face, codepoint, (GlyphTarget){&slot->glyph, slot->bitmap, FONT_PACK_MAX_BITMAP, levels});
+    if (load == GLYPH_TOO_BIG) {
+        return load_large(face, codepoint, key, levels);
+    }
+    slot->present = load == GLYPH_LOADED;
     slot->key = key;
     return slot->present ? &slot->glyph : NULL;
 }
 
+const Glyph *font_pack_find(uint32_t face, uint32_t codepoint)
+{
+    return font_pack_find_levels(face, codepoint, FOUR_BIT_LEVELS);
+}
+
 const uint8_t *font_pack_bitmap(const Glyph *glyph)
 {
+    if (state != NULL && glyph == &state->large.glyph) {
+        return state->large.bitmap;
+    }
     const uint8_t *address = (const uint8_t *)glyph;
     const uint8_t *start = (const uint8_t *)slots;
     if (slots == NULL || address < start || address >= start + slot_count * sizeof(PackSlot)) {
