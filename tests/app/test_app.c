@@ -114,9 +114,9 @@ static void start_app_with_library(void)
     const uint8_t *bytes = fixture_bytes(&size);
     const uint8_t *covers = fixture_covers_bytes(&covers_size);
     fake_hal_reset();
-    fake_hal_add_file("/.echo/library.db", bytes, size);
-    fake_hal_add_file("/.echo/covers.bin", covers, covers_size);
-    fake_hal_add_file("/.echo/build.tmp", NULL, 16 * 1024 * 1024);
+    fake_hal_add_file("/.rippl/library.db", bytes, size);
+    fake_hal_add_file("/.rippl/covers.bin", covers, covers_size);
+    fake_hal_add_file("/.rippl/build.tmp", NULL, 16 * 1024 * 1024);
     now_ms = START_MS;
     fake_hal_set_milliseconds(now_ms);
     app_start();
@@ -227,7 +227,7 @@ static void the_home_menu_is_the_root(void)
 {
     start_app();
     step();
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     CHECK_EQUAL(1, app_screen_depth());
 }
 
@@ -244,7 +244,7 @@ static void back_returns_to_the_previous_screen(void)
     start_app();
     tap(KEY_PLAY);
     tap(KEY_BACK);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
 }
 
 static void a_long_back_returns_home_from_deep_screens(void)
@@ -519,7 +519,7 @@ static void home_art_keeps_the_playing_album(void)
         wait_ms(HOME_ART_CYCLE_MS);
     }
     step();
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     CHECK_EQUAL(RED_COVER, home_art_probe());
 }
 
@@ -528,7 +528,7 @@ static void the_home_menu_shows_now_playing_last_once_a_track_is_loaded(void)
     start_app_with_library();
     play_first_album_track();
     hold_back();
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     move_down(HOME_NOW_PLAYING_INDEX);
     tap(KEY_PLAY);
     CHECK(title_is("Now Playing"));
@@ -600,7 +600,7 @@ static void the_equalizer_opens_from_settings_and_is_applied(void)
     start_app_with_library();
     CHECK_EQUAL(0, fake_hal_equalizer().band_count);
     open_top_setting(SETTINGS_EQUALIZER_INDEX);
-    CHECK(title_is("Equalizer"));
+    CHECK(title_is("Equaliser"));
     move_down(2);
     CHECK_EQUAL(2, fake_hal_equalizer().band_count);
     tap(KEY_BACK);
@@ -939,7 +939,7 @@ static void going_back_slides_the_screen_out_to_the_right(void)
     tap(KEY_PLAY);
     wait_ms(SLIDE_DURATION_MS);
     tap(KEY_BACK);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     CHECK_EQUAL(DEFAULT_THEME.colors.scrollbar_thumb, scrollbar_probe());
     wait_ms(SLIDE_DURATION_MS);
     CHECK(scrollbar_probe() != DEFAULT_THEME.colors.scrollbar_thumb);
@@ -1151,7 +1151,7 @@ static void the_splash_ignores_keys_until_it_ends(void)
     app_show_splash();
     step();
     tap(KEY_PLAY);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     wait_ms(SPLASH_MS);
     tap(KEY_PLAY);
     CHECK(title_is("Music"));
@@ -1315,20 +1315,20 @@ static void start_on_a_fresh_card(HalReserveResult result)
 static void a_fresh_card_gets_the_player_files_and_a_first_scan(void)
 {
     start_on_a_fresh_card(HAL_RESERVE_CREATED);
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/settings.bin"));
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/resume.bin"));
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/favorites.bin"));
-    CHECK_EQUAL(4 * 1024 * 1024, fake_hal_reserved_size("/.echo/library.db"));
-    uint32_t covers_size = fake_hal_reserved_size("/.echo/covers.bin");
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/settings.bin"));
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/resume.bin"));
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/favourites.bin"));
+    CHECK_EQUAL(4 * 1024 * 1024, fake_hal_reserved_size("/.rippl/library.db"));
+    uint32_t covers_size = fake_hal_reserved_size("/.rippl/covers.bin");
     CHECK_EQUAL(80 * 1024 * 1024, covers_size);
     CHECK((covers_size - COVERS_HEADER_SIZE) / (COVERS_ENTRY_SIZE + COVER_BUILD_RECORD_BYTES) >=
           2500);
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/scan.bin"));
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/upnext.bin"));
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/bluetooth.bin"));
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/equalizer.bin"));
-    CHECK_EQUAL(1024 * 1024, fake_hal_reserved_size("/.echo/history.bin"));
-    CHECK_EQUAL(4096, fake_hal_reserved_size("/.echo/update.bin"));
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/scan.bin"));
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/upnext.bin"));
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/bluetooth.bin"));
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/equaliser.bin"));
+    CHECK_EQUAL(1024 * 1024, fake_hal_reserved_size("/.rippl/history.bin"));
+    CHECK_EQUAL(4096, fake_hal_reserved_size("/.rippl/update.bin"));
     step();
     CHECK_EQUAL(1, fake_hal_scratch_borrow_count());
     CHECK(toast_is("Library: 0 tracks"));
@@ -1404,7 +1404,7 @@ static void a_new_firmware_rescans_music_that_changed(void)
     start_on_a_fresh_card(HAL_RESERVE_CREATED);
     step();
     static const uint8_t BLANK[16] = {0};
-    CHECK(hal_file_write_at("/.echo/scan.bin", 0, BLANK, sizeof BLANK));
+    CHECK(hal_file_write_at("/.rippl/scan.bin", 0, BLANK, sizeof BLANK));
     fake_hal_set_version("newer");
     restart_app();
     step();
@@ -1416,7 +1416,7 @@ static void a_new_firmware_rebuilds_a_library_it_cannot_read(void)
     start_on_a_fresh_card(HAL_RESERVE_CREATED);
     step();
     static const uint8_t OLD_VERSION[2] = {2, 0};
-    CHECK(hal_file_write_at("/.echo/library.db", 4, OLD_VERSION, sizeof OLD_VERSION));
+    CHECK(hal_file_write_at("/.rippl/library.db", 4, OLD_VERSION, sizeof OLD_VERSION));
     fake_hal_set_version("newer");
     restart_app();
     step();
@@ -1428,7 +1428,7 @@ static void a_different_stored_fingerprint_is_rescanned_after_usb(void)
     start_on_a_fresh_card(HAL_RESERVE_CREATED);
     step();
     static const uint8_t BLANK[16] = {0};
-    CHECK(hal_file_write_at("/.echo/scan.bin", 0, BLANK, sizeof BLANK));
+    CHECK(hal_file_write_at("/.rippl/scan.bin", 0, BLANK, sizeof BLANK));
     app_request_rescan_if_music_changed();
     step();
     CHECK_EQUAL(2, fake_hal_scratch_borrow_count());
@@ -1728,11 +1728,11 @@ static void holding_play_on_an_album_adds_it_to_favorites(void)
     start_app_with_library();
     open_albums_and_hold_the_first();
     CHECK(title_is("Albums"));
-    CHECK(toast_is("Added to Favorites"));
+    CHECK(toast_is("Added to Favourites"));
     tap(KEY_BACK);
     move_down(MUSIC_FAVORITES_INDEX - MUSIC_ALBUMS_INDEX);
     tap(KEY_PLAY);
-    CHECK(title_is("Favorites"));
+    CHECK(title_is("Favourites"));
     tap(KEY_PLAY);
     CHECK(title_is("Back In Black"));
 }
@@ -1745,9 +1745,9 @@ static void holding_play_in_favorites_removes_the_album(void)
     move_down(MUSIC_FAVORITES_INDEX - MUSIC_ALBUMS_INDEX);
     tap(KEY_PLAY);
     hold(KEY_PLAY);
-    CHECK(toast_is("Removed from Favorites"));
+    CHECK(toast_is("Removed from Favourites"));
     tap(KEY_PLAY);
-    CHECK(title_is("Favorites"));
+    CHECK(title_is("Favourites"));
 }
 
 static void favorites_survive_a_restart(void)
@@ -1796,7 +1796,7 @@ static void the_start_screen_setting_opens_albums(void)
     tap(KEY_BACK);
     CHECK(title_is("Music"));
     tap(KEY_BACK);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
 }
 
 static void the_start_screen_setting_opens_now_playing(void)
@@ -1881,7 +1881,7 @@ static void holding_play_in_cover_flow_toggles_a_favorite(void)
     start_app_with_library();
     open_music_entry(MUSIC_COVER_FLOW_INDEX);
     hold(KEY_PLAY);
-    CHECK(toast_is("Added to Favorites"));
+    CHECK(toast_is("Added to Favourites"));
     CHECK(title_is("Cover Flow"));
 }
 
@@ -2052,7 +2052,7 @@ static void a_notice_is_drawn_at_once_over_the_current_screen(void)
     app_show_notice("USB", "Connected to a computer");
     CHECK_EQUAL(presents + 1, fake_hal_present_count());
     CHECK(fake_hal_pixels_written() > pixels);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
 }
 
 static void a_notice_turns_the_display_on(void)
@@ -2327,7 +2327,7 @@ static void menu_opens_now_playing_from_anywhere_while_playing(void)
     start_app_with_library();
     play_first_album_track();
     hold_back();
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     tap(KEY_MENU);
     CHECK(title_is("Now Playing"));
     int depth = app_screen_depth();
@@ -2340,7 +2340,7 @@ static void menu_does_nothing_while_nothing_plays(void)
 {
     start_app_with_library();
     tap(KEY_MENU);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
 }
 
 static uint8_t history_settings[SETTINGS_FILE_SIZE];
@@ -2354,8 +2354,8 @@ static void start_app_with_history_and_chip(bool history_on, HalTime chip, uint3
     settings.options[OPTION_TIME_ZONE] = WALL_CLOCK_ZONE_UTC;
     settings_encode(&settings, history_settings);
     fake_hal_reset();
-    fake_hal_add_file("/.echo/library.db", bytes, size);
-    fake_hal_add_file("/.echo/settings.bin", history_settings, sizeof history_settings);
+    fake_hal_add_file("/.rippl/library.db", bytes, size);
+    fake_hal_add_file("/.rippl/settings.bin", history_settings, sizeof history_settings);
     fake_hal_add_file(LISTEN_HISTORY_PATH, NULL, 16 * HISTORY_SLOT_BYTES);
     fake_hal_set_time(chip);
     fake_hal_set_build_day(build_day);
@@ -2436,7 +2436,7 @@ static void back_leaves_a_setting_then_its_group_then_settings(void)
     tap(KEY_BACK);
     CHECK(title_is("Settings"));
     tap(KEY_BACK);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
 }
 
 static void settings_and_its_groups_keep_their_selected_rows(void)
@@ -2446,7 +2446,7 @@ static void settings_and_its_groups_keep_their_selected_rows(void)
     tap(KEY_BACK);
     tap(KEY_BACK);
     tap(KEY_BACK);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     tap(KEY_PLAY);
     CHECK(title_is("Settings"));
     tap(KEY_PLAY);
@@ -2503,8 +2503,8 @@ static void start_app_with_settings(const Settings *settings)
     const uint8_t *library = fixture_bytes(&size);
     const uint8_t *covers = fixture_covers_bytes(&covers_size);
     fake_hal_reset();
-    fake_hal_add_file("/.echo/library.db", library, size);
-    fake_hal_add_file("/.echo/covers.bin", covers, covers_size);
+    fake_hal_add_file("/.rippl/library.db", library, size);
+    fake_hal_add_file("/.rippl/covers.bin", covers, covers_size);
     fake_hal_add_file(SETTINGS_STORE_PATH, bytes, sizeof bytes);
     now_ms = START_MS;
     fake_hal_set_milliseconds(now_ms);
@@ -3124,7 +3124,7 @@ static void the_header_and_status_bar_take_the_face_colours_until_home(void)
     CHECK(!header_shows(DEFAULT_THEME.colors.success));
     hold_back();
     wait_ms(SLIDE_DURATION_MS);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     CHECK_EQUAL(DEFAULT_THEME.colors.header_top, fake_hal_pixel(2, 0));
     CHECK(header_shows(DEFAULT_THEME.colors.success));
     CHECK(!header_shows(face->success));
@@ -3143,7 +3143,7 @@ static void leaving_a_face_flips_the_header_and_status_bar_at_the_midpoint(void)
     wait_ms(KEY_HOLD_MS);
     const ThemeColors *face = face_code_in_use()->chrome[NP_FACE_CASSETTE];
     hold_back();
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     CHECK(shows_chrome_of(face));
     wait_ms(SLIDE_DURATION_MS * 3 / 4);
     CHECK(shows_chrome_of(&DEFAULT_THEME.colors));
@@ -3250,7 +3250,7 @@ static void start_app_with_clock(bool clock_on)
     settings.options[OPTION_CLOCK] = clock_on ? CLOCK_ON : CLOCK_OFF;
     settings_encode(&settings, clock_settings);
     fake_hal_reset();
-    fake_hal_add_file("/.echo/settings.bin", clock_settings, sizeof clock_settings);
+    fake_hal_add_file("/.rippl/settings.bin", clock_settings, sizeof clock_settings);
     fake_hal_set_time((HalTime){.present = true,
                                 .valid = true,
                                 .year = 2026,
@@ -3337,7 +3337,7 @@ static bool log_after_a_play(bool history_on)
     wait_ms(40000);
     app_release_audio();
     const char *log = (const char *)fake_hal_file_bytes(SCROBBLER_LOG_PATH, &size);
-    static const char HEADER[] = "#AUDIOSCROBBLER/1.1\n#TZ/UTC\n#CLIENT/EchoPod test\n";
+    static const char HEADER[] = "#AUDIOSCROBBLER/1.1\n#TZ/UTC\n#CLIENT/Rippl test\n";
     if (log == NULL) {
         return false;
     }
@@ -3372,17 +3372,17 @@ static void start_with_new_firmware(HalTime chip)
 static void a_new_firmware_asks_once_for_the_clock_after_the_start_up_screen(void)
 {
     start_with_new_firmware(chip_on(2026, 1, 14));
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     wait_ms(SPLASH_MS);
     CHECK(title_is("Set the date and time?"));
     move_down(1);
     tap(KEY_PLAY);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     restart_app();
     app_show_splash();
     wait_ms(SPLASH_MS);
     wait_ms(SPLASH_MS);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
 }
 
 static void set_now_opens_the_date_and_time_at_the_build_date(void)
@@ -3396,7 +3396,7 @@ static void set_now_opens_the_date_and_time_at_the_build_date(void)
     move_up(1);
     tap(KEY_BACK);
     tap(KEY_BACK);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
     CHECK_EQUAL(1, fake_hal_time_write_count());
     CHECK_EQUAL(2026, fake_hal_time().year);
     CHECK_EQUAL(11, fake_hal_time().month);
@@ -3408,7 +3408,7 @@ static void a_new_firmware_does_not_ask_when_the_clock_is_set(void)
     start_with_new_firmware(chip_on(2026, 11, 5));
     wait_ms(SPLASH_MS);
     wait_ms(SPLASH_MS);
-    CHECK(title_is("EchoPod"));
+    CHECK(title_is("Rippl"));
 }
 
 static void the_header_shows_the_time_only_while_the_clock_setting_is_on(void)

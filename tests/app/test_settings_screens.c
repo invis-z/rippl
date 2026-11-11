@@ -14,14 +14,14 @@ enum {
 static SettingsScreens screens;
 
 static const char *const TOP[SETTINGS_TOP_COUNT] = {
-    "Shuffle", "Repeat",  "Bluetooth", "Equalizer", "Sleep timer",
+    "Shuffle", "Repeat",  "Bluetooth", "Equaliser", "Sleep timer",
     "Sound",   "Display", "Library",   "Buttons",   "System"};
 
 static const char *const SOUND[] = {"Gain", "Output", "Filter", "Balance", "Bluetooth level"};
 static const char *const DISPLAY[] = {
-    "Theme",      "Accent color",    "Highlight",           "Now Playing",
-    "Lyrics",     "Brightness",      "Screen timeout",      "Orientation",
-    "Animations", "Battery percent", "Portrait status bar", "Clock"};
+    "Theme",      "Accent colour",      "Highlight",           "Now Playing",
+    "Lyrics",     "Brightness",         "Screen timeout",      "Orientation",
+    "Animations", "Battery percentage", "Portrait status bar", "Clock"};
 static const char *const LIBRARY[] = {"Music folders",    "Rescan library", "Cover Flow",
                                       "Cover Flow order", "Artist albums",  "Folders & playlists",
                                       "Listen history"};
