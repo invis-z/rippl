@@ -104,9 +104,12 @@ NpTestScene np_test_scene(uint8_t face, NpTestLayout layout, NpTestState state)
 
 NowPlayingFrame np_test_frame(const NpTestScene *scene)
 {
+    static uint32_t scratch[1536];
     NowPlayingFrame frame = scene->frame;
     frame.theme = &scene->theme;
     frame.status = &scene->status;
+    frame.scratch = scratch;
+    frame.scratch_size = (uint32_t)sizeof scratch;
     return frame;
 }
 

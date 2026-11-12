@@ -43,6 +43,8 @@ typedef struct NowPlayingFrame {
     uint32_t shown_ms;
     uint32_t tick;
     NowPlayingFeedback feedback;
+    void *scratch;
+    uint32_t scratch_size;
     uint8_t face;
     bool playing;
     bool scrubbing;

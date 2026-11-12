@@ -962,6 +962,7 @@ static void frame_of(const NowPlayingScreen *now_playing, NowPlayingFrame *frame
     frame_state(now_playing, frame);
     frame->cover = (Image){0};
     current_cover(now_playing, &frame->cover);
+    frame->scratch = hal_system_cover_scratch(&frame->scratch_size);
     face_texts(now_playing, frame, texts);
 }
 

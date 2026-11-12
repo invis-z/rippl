@@ -3,6 +3,7 @@
 #include "faces.h"
 #include "np_faces/face_shapes.h"
 #include "ui/label.h"
+#include "ui/rippl_logo.h"
 
 #define WALNUT_TOP COLOR_RGB(72, 44, 24)
 #define WALNUT_BOTTOM COLOR_RGB(40, 24, 16)
@@ -27,15 +28,11 @@ enum {
     RIM_INNER = 64,
     LABEL_RADIUS = 28,
     LABEL_MASK = 40,
-    PLAIN_RING = 23,
-    PLAIN_RING_INNER = 22,
+    COVER_FIXED_BITS = 16,
     GROOVE_FIRST = 45,
     GROOVE_STEP = 7,
     GROOVE_COUNT = 3,
-    GLINT_STEPS = 18,
-    GLINT_WIDTH = 32,
-    GLINT_FROM = 44,
-    GLINT_TO = 58,
+    TURN_STEPS = 18,
     SPINDLE = 48,
     BADGE_DISC = 320,
     BADGE_SIDE = 18,
@@ -56,6 +53,11 @@ typedef struct Deck {
     const NowPlayingFrame *frame;
     Point centre;
 } Deck;
+
+typedef struct Span {
+    int first;
+    int end;
+} Span;
 
 typedef struct Rows {
     int x;
@@ -112,19 +114,127 @@ RIPPL_NP_FACES_CODE static void plate(const Deck *deck)
     ring(deck, RIM_INNER * Q4, 0, VINYL);
 }
 
+RIPPL_NP_FACES_CODE static uint8_t label_angle(const Deck *deck)
+{
+    return (uint8_t)(deck->frame->tick % TURN_STEPS * SHAPE_TURN / TURN_STEPS);
+}
+
+RIPPL_NP_FACES_CODE static Span span_in(int origin, int length, int clip_start, int clip_length)
+{
+    int first = clip_start - origin;
+    int end = clip_start + clip_length - origin;
+    return (Span){first < 0 ? 0 : first, end > length ? length : end};
+}
+
+enum {
+    COVER_SPREAD_MASK = 0x07E0F81F,
+    COVER_ROUND_HALF = 0x01004008
+};
+
+RIPPL_NP_FACES_CODE static uint32_t spread_pixel(Color color)
+{
+    return ((uint32_t)color | ((uint32_t)color << 16)) & (uint32_t)COVER_SPREAD_MASK;
+}
+
+RIPPL_NP_FACES_CODE static void turned_cover(const Deck *deck, Image cover, uint8_t angle)
+{
+    int radius = LABEL_RADIUS;
+    int span = 2 * radius + 1;
+    Point origin = {deck->centre.x - radius, deck->centre.y - radius};
+    Canvas *canvas = deck->canvas;
+    Rect clip = canvas->clip;
+    Span rows = span_in(origin.y, span, clip.y, clip.height);
+    Span columns = span_in(origin.x, span, clip.x, clip.width);
+    if (rows.first < rows.end && columns.first < columns.end && cover.width > 0 &&
+        cover.height > 0) {
+        int sine = shape_sine(angle);
+        int cosine = shape_cosine(angle);
+        int reach = radius * SHAPE_UNIT;
+        int limit = radius * radius + radius;
+        int step_u = (cover.width << COVER_FIXED_BITS) / (2 * reach);
+        int step_v = (cover.height << COVER_FIXED_BITS) / (2 * reach);
+        int du_x = cosine * step_u;
+        int du_y = sine * step_u;
+        int dv_x = -sine * step_v;
+        int dv_y = cosine * step_v;
+        int width = cover.width;
+        int max_x = width - 1;
+        int max_y = cover.height - 1;
+        int max_u = max_x << COVER_FIXED_BITS;
+        int max_v = max_y << COVER_FIXED_BITS;
+        int mid_u = (max_x << (COVER_FIXED_BITS - 1)) + (1 << (COVER_FIXED_BITS - 5));
+        int mid_v = (max_y << (COVER_FIXED_BITS - 1)) + (1 << (COVER_FIXED_BITS - 5));
+        const Color *src = cover.pixels;
+        for (int row = rows.first; row < rows.end; row++) {
+            int dy = row - radius;
+            int room = limit - dy * dy;
+            if (room < 0) {
+                continue;
+            }
+            int half = (int)shape_isqrt((uint32_t)room);
+            int first = radius - half;
+            int end = radius + half + 1;
+            if (first < columns.first) {
+                first = columns.first;
+            }
+            if (end > columns.end) {
+                end = columns.end;
+            }
+            if (first >= end) {
+                continue;
+            }
+            int dx0 = first - radius;
+            int u = mid_u + dx0 * du_x + dy * du_y;
+            int v = mid_v + dx0 * dv_x + dy * dv_y;
+            Color *dst =
+                &canvas->pixels[(origin.y + row - canvas->bounds.y) * canvas->bounds.width +
+                                origin.x + first - canvas->bounds.x];
+            for (int column = first; column < end; column++) {
+                int cu = u < 0 ? 0 : u > max_u ? max_u : u;
+                int cv = v < 0 ? 0 : v > max_v ? max_v : v;
+                int sx = cu >> COVER_FIXED_BITS;
+                int sy = cv >> COVER_FIXED_BITS;
+                const Color *p0 = src + sy * width + sx;
+                const Color *p1 = sy < max_y ? p0 + width : p0;
+                int dx = sx < max_x ? 1 : 0;
+                Color c00 = p0[0];
+                Color c10 = p0[dx];
+                Color c01 = p1[0];
+                Color c11 = p1[dx];
+                if (((c00 ^ c10) | (c00 ^ c01) | (c00 ^ c11)) == 0) {
+                    *dst++ = c00;
+                } else {
+                    uint32_t fx = (uint32_t)((cu >> (COVER_FIXED_BITS - 4)) & 15);
+                    uint32_t fy = (uint32_t)((cv >> (COVER_FIXED_BITS - 4)) & 15);
+                    uint32_t inv_x = 16u - fx;
+                    uint32_t inv_y = 16u - fy;
+                    uint32_t top =
+                        ((spread_pixel(c00) * inv_x + spread_pixel(c10) * fx + COVER_ROUND_HALF) >>
+                         4) &
+                        COVER_SPREAD_MASK;
+                    uint32_t bot =
+                        ((spread_pixel(c01) * inv_x + spread_pixel(c11) * fx + COVER_ROUND_HALF) >>
+                         4) &
+                        COVER_SPREAD_MASK;
+                    uint32_t mix =
+                        ((top * inv_y + bot * fy + COVER_ROUND_HALF) >> 4) & COVER_SPREAD_MASK;
+                    *dst++ = (Color)(mix | (mix >> 16));
+                }
+                u += du_x;
+                v += dv_x;
+            }
+        }
+    }
+    ring(deck, LABEL_MASK * Q4, radius * Q4, VINYL);
+}
+
 RIPPL_NP_FACES_CODE static void label_art(const Deck *deck)
 {
     Image cover = deck->frame->cover;
-    int corner = deck->centre.y - LABEL_RADIUS;
     if (cover.pixels == NULL) {
-        ring(deck, LABEL_RADIUS * Q4, 0, LABEL_RED);
-        ring(deck, PLAIN_RING * Q4, PLAIN_RING_INNER * Q4, CREAM);
-        return;
+        cover = face_logo_cover(deck->frame->scratch, deck->frame->scratch_size, LABEL_RED, CREAM);
     }
-    int side = 2 * LABEL_RADIUS;
-    image_draw_quad(deck->canvas, cover,
-                    (Quad){deck->centre.x - LABEL_RADIUS, side, corner, side, corner, side});
-    ring(deck, LABEL_MASK * Q4, LABEL_RADIUS * Q4, VINYL);
+    turned_cover(deck, cover, label_angle(deck));
 }
 
 RIPPL_NP_FACES_CODE static void grooves(const Deck *deck)
@@ -133,8 +243,6 @@ RIPPL_NP_FACES_CODE static void grooves(const Deck *deck)
         int radius = GROOVE_FIRST + GROOVE_STEP * index;
         ring(deck, (radius + 1) * Q4, radius * Q4, ALU_DARK);
     }
-    uint8_t angle = (uint8_t)(deck->frame->tick % GLINT_STEPS * SHAPE_TURN / GLINT_STEPS);
-    spoke(deck->canvas, (ShapeSpoke){deck->centre, angle, GLINT_WIDTH, GLINT_FROM, GLINT_TO}, ALU);
     ring(deck, SPINDLE, 0, ALU);
 }
 
