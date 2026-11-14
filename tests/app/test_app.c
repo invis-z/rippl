@@ -54,21 +54,21 @@ enum {
     DISPLAY_ACCENT_ROW = 1,
     DISPLAY_HIGHLIGHT_ROW = 2,
     DISPLAY_NOW_PLAYING_ROW = 3,
-    DISPLAY_BRIGHTNESS_ROW = 4,
-    DISPLAY_TIMEOUT_ROW = 5,
-    DISPLAY_ORIENTATION_ROW = 6,
-    DISPLAY_STATUS_BAR_ROW = 9,
-    DISPLAY_CLOCK_ROW = 10,
+    DISPLAY_LYRICS_ROW = 4,
+    DISPLAY_BRIGHTNESS_ROW = 5,
+    DISPLAY_TIMEOUT_ROW = 6,
+    DISPLAY_ORIENTATION_ROW = 7,
+    DISPLAY_STATUS_BAR_ROW = 10,
+    DISPLAY_CLOCK_ROW = 11,
     LIBRARY_FOLDERS_ROW = 0,
     LIBRARY_RESCAN_ROW = 1,
-    LIBRARY_START_ROW = 2,
-    LIBRARY_FOLDER_VIEW_ROW = 6,
-    LIBRARY_LYRICS_ROW = 7,
+    LIBRARY_FOLDER_VIEW_ROW = 5,
     BUTTONS_SWAP_ROW = 1,
     BUTTONS_POWER_ON_ROW = 3,
     SYSTEM_LANGUAGE_ROW = 0,
     SYSTEM_DATE_TIME_ROW = 1,
-    SYSTEM_USB_PROMPT_ROW = 4,
+    SYSTEM_START_ROW = 2,
+    SYSTEM_USB_PROMPT_ROW = 5,
     DAC_VOLUME_WINDOW_MS = 3000,
     MUSIC_COVER_FLOW_INDEX = 0,
     MUSIC_PLAYLISTS_INDEX = 7,
@@ -1170,7 +1170,7 @@ static void without_a_card_the_lists_ask_for_one(void)
 static void without_a_card_a_setting_change_asks_for_one(void)
 {
     start_without_a_card();
-    open_setting(SETTINGS_LIBRARY, LIBRARY_LYRICS_ROW);
+    open_setting(SETTINGS_DISPLAY, DISPLAY_LYRICS_ROW);
     move_down(1);
     tap(KEY_PLAY);
     CHECK(toast_is("Insert a microSD card to save settings"));
@@ -1762,7 +1762,7 @@ static void playlists_open_from_the_music_menu(void)
 static void start_with(StartScreen start)
 {
     start_app_with_library();
-    open_setting(SETTINGS_LIBRARY, LIBRARY_START_ROW);
+    open_setting(SETTINGS_SYSTEM, SYSTEM_START_ROW);
     CHECK(title_is("Start screen"));
     move_down((int)start);
     tap(KEY_PLAY);
@@ -2857,7 +2857,7 @@ static void lyrics_in_capitals_are_found_and_the_setting_hides_them(void)
     play_first_album_track();
     CHECK(app_now_playing_lyric() != NULL);
     hold_back();
-    open_setting(SETTINGS_LIBRARY, LIBRARY_LYRICS_ROW);
+    open_setting(SETTINGS_DISPLAY, DISPLAY_LYRICS_ROW);
     CHECK(title_is("Lyrics"));
     move_down(1);
     tap(KEY_PLAY);
