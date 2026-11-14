@@ -5,6 +5,7 @@
 #include "device/pll.h"
 #include "dmac.h"
 #include "hal/clock.h"
+#include "hal/display.h"
 #include "hal/system.h"
 #include "irq.h"
 #include "registers.h"
@@ -185,6 +186,7 @@ bool hal_system_set_clock_mhz(uint32_t mhz)
         return true;
     }
     board_audio_before_clock_change();
+    hal_display_wait();
     dmac_suspend();
     board_start_record_step(HAL_START_STEP_CLOCK_SWITCH);
     uint32_t primask = irq_save();

@@ -122,11 +122,11 @@ void np_test_draw(const NpTestScene *scene, Color *pixels)
     NOW_PLAYING_FACES.draw(&frame, &canvas);
 }
 
-static void draw_strip(const NpTestScene *scene, Color *pixels, int top)
+static void draw_strip(const NpTestScene *scene, Color *pixels, int top, int strip_rows)
 {
     static Color strip[NP_TEST_MAX_WIDTH * NP_TEST_STRIP_ROWS];
     NpTestLayout layout = scene->layout;
-    int rows = layout.height - top < NP_TEST_STRIP_ROWS ? layout.height - top : NP_TEST_STRIP_ROWS;
+    int rows = layout.height - top < strip_rows ? layout.height - top : strip_rows;
     for (int index = 0; index < layout.width * rows; index++) {
         strip[index] = NP_TEST_SENTINEL;
     }
@@ -136,11 +136,16 @@ static void draw_strip(const NpTestScene *scene, Color *pixels, int top)
     memcpy(pixels + top * layout.width, strip, (size_t)(layout.width * rows) * sizeof strip[0]);
 }
 
+void np_test_draw_strips_of(const NpTestScene *scene, Color *pixels, int strip_rows)
+{
+    for (int top = 0; top < scene->layout.height; top += strip_rows) {
+        draw_strip(scene, pixels, top, strip_rows);
+    }
+}
+
 void np_test_draw_strips(const NpTestScene *scene, Color *pixels)
 {
-    for (int top = 0; top < scene->layout.height; top += NP_TEST_STRIP_ROWS) {
-        draw_strip(scene, pixels, top);
-    }
+    np_test_draw_strips_of(scene, pixels, NP_TEST_STRIP_ROWS);
 }
 
 bool np_test_same(const Color *first, const Color *second, NpTestLayout layout)
