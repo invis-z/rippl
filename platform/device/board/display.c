@@ -85,9 +85,7 @@ static void bus_pixels(void *context, const uint16_t *pixels, uint32_t count)
         uint32_t high = base | (pixel >> 8) << PANEL_BUS_DATA_SHIFT;
         uint32_t low = base | (pixel & 0xFFu) << PANEL_BUS_DATA_SHIFT;
         *port = high;
-        *port = high;
         *port = high | PANEL_BUS_WR;
-        *port = low;
         *port = low;
         *port = low | PANEL_BUS_WR;
     }
