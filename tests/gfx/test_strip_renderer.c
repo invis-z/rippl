@@ -122,6 +122,42 @@ static void a_drawer_that_paints_everything_skips_the_clear(void)
     CHECK_EQUAL(LEFTOVER, recording.frame[4][5]);
 }
 
+static const Color *written_from[MAX_RECORDED];
+static int written_count;
+
+static void record_source(void *context, Rect area, const Color *pixels)
+{
+    record_write(context, area, pixels);
+    written_from[written_count++] = pixels;
+}
+
+static void a_second_buffer_takes_every_other_strip(void)
+{
+    static Color other_pixels[SCREEN_WIDTH * STRIP_HEIGHT];
+    static Recording recording;
+    recording = (Recording){.rect_to_paint = {1, 1, 3, 3}};
+    written_count = 0;
+    StripRenderer renderer = {
+        .strip_pixels = strip_pixels,
+        .other_pixels = other_pixels,
+        .screen_width = SCREEN_WIDTH,
+        .screen_height = SCREEN_HEIGHT,
+        .strip_height = STRIP_HEIGHT,
+        .background = BACKGROUND,
+    };
+    FrameDrawer drawer = {.draw = record_draw, .context = &recording};
+    FrameSink sink = {.write = record_source, .context = &recording};
+    strip_renderer_render(&renderer, drawer, sink);
+    CHECK_EQUAL(EXPECTED_STRIPS, written_count);
+    CHECK(written_from[0] == strip_pixels);
+    CHECK(written_from[1] == other_pixels);
+    CHECK(written_from[2] == strip_pixels);
+    CHECK_EQUAL(BACKGROUND, recording.frame[0][0]);
+    CHECK_EQUAL(PAINT, recording.frame[2][2]);
+    CHECK_EQUAL(PAINT, recording.frame[3][3]);
+    CHECK_EQUAL(BACKGROUND, recording.frame[4][5]);
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
@@ -129,6 +165,7 @@ int main(void)
         TEST_CASE(strips_start_from_the_background_color),
         TEST_CASE(a_rect_spanning_strips_appears_whole),
         TEST_CASE(a_drawer_that_paints_everything_skips_the_clear),
+        TEST_CASE(a_second_buffer_takes_every_other_strip),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

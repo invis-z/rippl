@@ -20,7 +20,9 @@ static bool strips_match_a_full_draw(const NpTestScene *scene)
 {
     np_test_draw(scene, first);
     np_test_draw_strips(scene, second);
-    return np_test_same(first, second, scene->layout);
+    bool whole_strips = np_test_same(first, second, scene->layout);
+    np_test_draw_strips_of(scene, second, NP_TEST_STRIP_ROWS / 2);
+    return whole_strips && np_test_same(first, second, scene->layout);
 }
 
 static bool paused_frames_ignore_the_clock(const NpTestScene *scene)

@@ -51,6 +51,7 @@ NowPlayingFrame np_test_frame(const NpTestScene *scene);
 void np_test_clear(Color *pixels);
 void np_test_draw(const NpTestScene *scene, Color *pixels);
 void np_test_draw_strips(const NpTestScene *scene, Color *pixels);
+void np_test_draw_strips_of(const NpTestScene *scene, Color *pixels, int strip_rows);
 bool np_test_same(const Color *first, const Color *second, NpTestLayout layout);
 bool np_test_area_painted(const Color *pixels, NpTestLayout layout);
 bool np_test_outside_untouched(const Color *pixels, NpTestLayout layout);
