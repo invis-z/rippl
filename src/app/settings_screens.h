@@ -27,7 +27,7 @@ typedef enum SettingsGroup {
 enum {
     SETTINGS_CHOICE_COUNT = 34,
     SETTINGS_TOP_COUNT = 5 + SETTINGS_GROUP_COUNT,
-    SETTINGS_GROUP_ROWS_MAX = 11
+    SETTINGS_GROUP_ROWS_MAX = 12
 };
 
 typedef struct SettingsContext {
