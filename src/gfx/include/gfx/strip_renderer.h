@@ -16,6 +16,7 @@ typedef struct FrameSink {
 
 typedef struct StripRenderer {
     Color *strip_pixels;
+    Color *other_pixels;
     int screen_width;
     int screen_height;
     int strip_height;

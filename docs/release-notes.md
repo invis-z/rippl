@@ -32,6 +32,7 @@ The first Rippl release, forked from EchoPod 0.12.0.
 
 ### Look
 
+- The screen is sent through the processor's LCD controller by DMA, while the next part of the picture is drawn, instead of the processor toggling the panel's pins itself. Sending a frame took 5–11 ms before and now takes almost none, so screens that redraw often spend less time on each frame.
 - The start-up screen shows the Rippl logo fading in, instead of the word Rippl.
 - The Now Playing faces fill the whole screen, without the header and status bar, and grow into the room. In landscape the cassette's window is taller and the Turntable's record is bigger, with the song beside it at the top and the codec on its own line. In portrait the cassette gets a tape counter that counts turns of the take-up reel, and the Turntable is turned so the tonearm sits on top. The Turntable redraws 20 times a second while it plays, so its label turns smoothly at 16⅔ RPM, and its tonearm creeps in across the whole album or playlist instead of each song (it stays at the start with Shuffle songs, and crosses each album with Shuffle albums). The cassette's tape winds from one reel to the other the same way, across the whole album or playlist.
 - The VU meters and LCD deck faces are gone: their needles and spectrum moved in a fixed pattern and never followed the music. Now Playing offers Standard, Cassette and Turntable.
