@@ -182,7 +182,8 @@ static const uint32_t SCREEN_ON_CLOCK_MHZ = 200;
 static const uint32_t IDLE_CLOCK_MHZ = 96;
 static const FadeTiming GOODBYE_TIMING = {.fade_ms = 600, .hold_ms = 400, .rising = false};
 static const char GOODBYE_TEXT[] = "Goodbye";
-static Color strip_pixels[HAL_DISPLAY_WIDTH * STRIP_HEIGHT];
+static Color strip_pixels[HAL_DISPLAY_WIDTH * STRIP_HEIGHT] __attribute__((aligned(4)));
+static bool strips_overlap;
 static uint32_t row_hashes[HAL_DISPLAY_LONG_SIDE];
 
 static Screen *top_screen(void)
@@ -697,8 +698,9 @@ static void write_to_display(void *context, Rect area, const Color *pixels)
         return;
     }
     const Color *first_row = pixels + (size_t)(changed.y - area.y) * (size_t)area.width;
-    for (int sent = 0; sent < changed.height; sent += SEND_ROWS) {
-        int rows = changed.height - sent < SEND_ROWS ? changed.height - sent : SEND_ROWS;
+    int send_rows = strips_overlap ? changed.height : SEND_ROWS;
+    for (int sent = 0; sent < changed.height; sent += send_rows) {
+        int rows = changed.height - sent < send_rows ? changed.height - sent : send_rows;
         uint32_t started_us = hal_clock_microseconds();
         hal_display_write(changed.x, changed.y + sent, changed.width, rows,
                           first_row + (size_t)sent * (size_t)area.width);
@@ -756,8 +758,14 @@ static StatusBarState current_status_bar(void)
 
 static void render(FrameDrawer drawer, bool drawer_paints_everything, int strip_height)
 {
+    strips_overlap = hal_display_vop_mode() == HAL_VOP_MODE_DMA;
+    if (strips_overlap) {
+        hal_display_wait();
+        strip_height = (strip_height + 1) / 2;
+    }
     StripRenderer renderer = {
         .strip_pixels = strip_pixels,
+        .other_pixels = strips_overlap ? strip_pixels + HAL_DISPLAY_WIDTH * STRIP_HEIGHT / 2 : NULL,
         .screen_width = current_theme()->metrics.screen_width,
         .screen_height = current_theme()->metrics.screen_height,
         .strip_height = strip_height,

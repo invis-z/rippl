@@ -329,6 +329,20 @@ uint32_t hal_display_panel_id(void)
     return 0;
 }
 
+void hal_display_set_vop_mode(uint8_t mode)
+{
+    (void)mode;
+}
+
+uint8_t hal_display_vop_mode(void)
+{
+    return 0;
+}
+
+void hal_display_wait(void)
+{
+}
+
 void hal_display_set_rotation(HalDisplayRotation rotation)
 {
     fake.rotation = rotation;

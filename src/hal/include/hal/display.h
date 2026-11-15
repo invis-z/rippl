@@ -24,3 +24,13 @@ void hal_display_present(void);
 void hal_display_set_power(bool on);
 void hal_display_set_brightness(uint8_t level);
 uint32_t hal_display_panel_id(void);
+enum {
+    HAL_VOP_MODE_GPIO,
+    HAL_VOP_MODE_CPU,
+    HAL_VOP_MODE_DMA,
+    HAL_VOP_MODE_COUNT
+};
+
+void hal_display_set_vop_mode(uint8_t mode);
+uint8_t hal_display_vop_mode(void);
+void hal_display_wait(void);
