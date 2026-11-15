@@ -811,7 +811,7 @@ def run_check(card, volume, internal=None, excluded=frozenset()):
         print("The card has no fingerprint yet, so the player will rescan it after USB.")
         return 1
     print("They differ: either the music changed since the player's last scan, or this computer "
-          "reads the file times differently from the player (see docs/user-guide.md).")
+          "reads the file times differently from the player (see docs/user/tide.md).")
     return 1
 
 
