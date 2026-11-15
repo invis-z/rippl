@@ -26,6 +26,7 @@ typedef enum AudioFrameResult {
 typedef struct AudioFrame {
     const int32_t *left;
     const int32_t *right;
+    const uint32_t *words;
     uint32_t first_sample;
     uint32_t samples;
     uint8_t bits;

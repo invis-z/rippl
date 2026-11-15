@@ -1548,10 +1548,122 @@ static void an_aac_track_describes_its_stream(void)
     interface.close(interface.context);
 }
 
+static uint32_t engine_word(int32_t sample, uint8_t bits)
+{
+    if (bits > 24) {
+        return (uint32_t)sample;
+    }
+    int32_t value = sample * (1 << (24 - bits));
+    value = value > 8388607 ? 8388607 : value < -8388608 ? -8388608 : value;
+    return (uint32_t)value << 8;
+}
+
+typedef struct TrackWords {
+    uint32_t *words;
+    uint32_t count;
+    uint32_t word_frames;
+    bool ok;
+} TrackWords;
+
+static void append_words(TrackWords *track, const uint32_t *words, uint32_t count)
+{
+    track->words = realloc(track->words, sizeof(uint32_t) * (track->count + count));
+    memcpy(track->words + track->count, words, sizeof(uint32_t) * count);
+    track->count += count;
+}
+
+static TrackWords track_words(void (*begin)(void), const char *name, bool words, bool equalize)
+{
+    begin();
+    if (equalize) {
+        equalizer_init(&core1_equalizer);
+        core1_stream_set_equalizer(&stream, &core1_equalizer, &share);
+        share_curve(bells_and_shelves(6, -4), true);
+    }
+    core1_source_set_word_output(&source, words);
+    TrackWords track = {.words = NULL, .count = 0, .word_frames = 0, .ok = false};
+    AudioTrackInfo info;
+    if (!interface.open(interface.context, name, 0, &info)) {
+        return track;
+    }
+    AudioFrame frame;
+    AudioFrameResult result;
+    while ((result = next_frame(&frame)) == AUDIO_FRAME_READY) {
+        if (frame.words != NULL) {
+            append_words(&track, frame.words, 2 * frame.samples);
+            track.word_frames++;
+        } else {
+            for (uint32_t sample = 0; sample < frame.samples; sample++) {
+                uint32_t pair[2] = {engine_word(frame.left[sample], frame.bits),
+                                    engine_word(frame.right[sample], frame.bits)};
+                append_words(&track, pair, 2);
+            }
+        }
+        interface.release(interface.context);
+    }
+    interface.close(interface.context);
+    track.ok = result == AUDIO_FRAME_END && track.count > 0;
+    return track;
+}
+
+static bool words_match_rows(void (*begin)(void), const char *name, bool equalize)
+{
+    TrackWords rows = track_words(begin, name, false, equalize);
+    TrackWords words = track_words(begin, name, true, equalize);
+    bool ok = rows.ok && words.ok && rows.word_frames == 0 && rows.count == words.count &&
+              memcmp(rows.words, words.words, sizeof(uint32_t) * rows.count) == 0 &&
+              words.word_frames > 0;
+    free(rows.words);
+    free(words.words);
+    return ok;
+}
+
+static void begin_flac(void)
+{
+    start(BIG_RING_BYTES);
+}
+
+static void begin_mp3(void)
+{
+    start_with(BIG_RING_BYTES, true);
+}
+
+static void begin_mp4(void)
+{
+    start_mp4(BIG_RING_BYTES);
+}
+
+static void begin_wav(void)
+{
+    start_wav(BIG_RING_BYTES);
+}
+
+static void core_1_words_match_the_main_core_s_conversion(void)
+{
+    CHECK(words_match_rows(begin_flac, "lpc_16_44k_stereo", false));
+    CHECK(words_match_rows(begin_flac, "lpc_24_96k_stereo", false));
+    CHECK(words_match_rows(begin_flac, "fixed_16_mono", false));
+    CHECK(words_match_rows(begin_mp3, "mp3/cbr_128_44k_stereo_tagged", false));
+    CHECK(words_match_rows(begin_mp4, "alac/stereo_24_96k", false));
+    CHECK(words_match_rows(begin_mp4, "alac/mono_16_22k", false));
+    build_wav(2, 44100, 32, 50000);
+    CHECK(words_match_rows(begin_wav, "wav", false));
+    build_wav(1, 44100, 16, 50000);
+    CHECK(words_match_rows(begin_wav, "wav", false));
+}
+
+static void core_1_words_match_the_main_core_with_the_equalizer_on(void)
+{
+    CHECK(words_match_rows(begin_flac, "lpc_16_44k_stereo", true));
+    CHECK(words_match_rows(begin_flac, "fixed_16_mono", true));
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
         TEST_CASE(a_24_bit_96k_track_streams_through_core_1_exactly),
+        TEST_CASE(core_1_words_match_the_main_core_s_conversion),
+        TEST_CASE(core_1_words_match_the_main_core_with_the_equalizer_on),
         TEST_CASE(a_16_bit_track_streams_through_core_1_exactly),
         TEST_CASE(a_32_bit_track_streams_through_core_1_whole),
         TEST_CASE(core_1_equalizes_exactly_like_the_main_core),

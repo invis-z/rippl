@@ -681,6 +681,18 @@ void hal_audio_set_output(HalAudioOutput output)
     fake.audio.output = output;
 }
 
+static bool core0_output;
+
+void hal_audio_set_word_output(bool words)
+{
+    core0_output = !words;
+}
+
+bool hal_audio_word_output(void)
+{
+    return !core0_output;
+}
+
 void hal_audio_set_equalizer(const EqualizerCurve *curve)
 {
     fake.audio.equalizer = *curve;

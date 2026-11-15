@@ -103,3 +103,5 @@ void flac_defer_join(FlacDecoder *decoder, bool defer);
 void flac_join(FlacJoin join, const int32_t *first, const int32_t *second, int32_t *left,
                int32_t *right, uint32_t count);
 void flac_join_pair(FlacJoin join, int32_t first, int32_t second, int32_t *left, int32_t *right);
+void flac_join_interleaved(FlacJoin join, const int32_t *first, const int32_t *second,
+                           int32_t *frames, uint32_t count);

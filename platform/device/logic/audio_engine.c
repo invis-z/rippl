@@ -11,6 +11,7 @@ enum {
     SAMPLE_MIN = -8388608,
     MILLISECONDS_PER_SECOND = 1000,
     CHUNK_FRAMES = 32,
+    WORD_RUN = 4,
     COMPRESSED_MAX_RATE = 384000,
     COMPRESSED_WIDE_MAX_RATE = 96000,
     NARROW_SAMPLE_BITS = 24,
@@ -340,8 +341,78 @@ static void ramp_chunk(AudioEngine *engine, int32_t *chunk, uint32_t count)
     }
 }
 
+static int32_t ramped(const AudioEngine *engine, int32_t sample)
+{
+    uint32_t gain = (engine->ramp_done << GAIN_SHIFT) / engine->ramp_frames;
+    return (int32_t)floor_shift((int64_t)sample * gain, GAIN_SHIFT);
+}
+
+static void ramp_words(AudioEngine *engine, uint32_t slot, uint32_t count, bool wide)
+{
+    uint32_t frames = ring_frames(engine);
+    for (uint32_t index = 0; index < count && engine->ramp_done < engine->ramp_frames; index++) {
+        uint32_t *words = &engine->config.ring[WORDS_PER_FRAME * slot];
+        for (uint32_t channel = 0; channel < WORDS_PER_FRAME; channel++) {
+            int32_t sample = wide ? (int32_t)words[channel]
+                                  : (int32_t)words[channel] >> (WORD_BITS - OUTPUT_BITS);
+            words[channel] = (uint32_t)word_sample(ramped(engine, sample), wide);
+        }
+        engine->ramp_done++;
+        slot = slot + 1 == frames ? 0 : slot + 1;
+    }
+}
+
+static void copy_word_run(uint32_t *to, const uint32_t *from, uint32_t count)
+{
+    for (; count >= WORD_RUN; count -= WORD_RUN, to += WORD_RUN, from += WORD_RUN) {
+        uint32_t first = from[0];
+        uint32_t second = from[1];
+        uint32_t third = from[2];
+        uint32_t fourth = from[3];
+        to[0] = first;
+        to[1] = second;
+        to[2] = third;
+        to[3] = fourth;
+    }
+    for (uint32_t index = 0; index < count; index++) {
+        to[index] = from[index];
+    }
+}
+
+static void copy_words(AudioEngine *engine, uint32_t count)
+{
+    uint32_t frames = ring_frames(engine);
+    uint32_t slot = engine->produced % frames;
+    const uint32_t *from = engine->frame.words + WORDS_PER_FRAME * engine->pending_offset;
+    uint32_t first = smaller(count, frames - slot);
+    copy_word_run(&engine->config.ring[WORDS_PER_FRAME * slot], from, WORDS_PER_FRAME * first);
+    copy_word_run(engine->config.ring, from + WORDS_PER_FRAME * first,
+                  WORDS_PER_FRAME * (count - first));
+    if (engine->ramp_done < engine->ramp_frames) {
+        ramp_words(engine, slot, count, engine->frame.bits > OUTPUT_BITS);
+    }
+    engine->produced += count;
+}
+
+static void copy_pending_words(AudioEngine *engine)
+{
+    while (engine->pending_frames > 0 && free_space(engine) > 0) {
+        uint32_t count = smaller(engine->pending_frames, free_space(engine));
+        copy_words(engine, count);
+        engine->pending_offset += count;
+        engine->pending_frames -= count;
+    }
+    if (engine->pending_frames == 0) {
+        release_frame(engine);
+    }
+}
+
 static void copy_pending(AudioEngine *engine)
 {
+    if (engine->frame.words != NULL) {
+        copy_pending_words(engine);
+        return;
+    }
     int32_t chunk[WORDS_PER_FRAME * CHUNK_FRAMES];
     while (engine->pending_frames > 0 && free_space(engine) > 0) {
         uint32_t room = free_space(engine);

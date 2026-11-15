@@ -67,6 +67,33 @@ static void close_file(void *context)
     (void)context;
 }
 
+static bool frames_as_words;
+static uint32_t frame_words[2 * FLAC_MAX_BLOCK];
+
+static uint32_t engine_word(int32_t sample, uint8_t bits)
+{
+    if (bits > 24) {
+        return (uint32_t)sample;
+    }
+    int32_t value = sample * (1 << (24 - bits));
+    value = value > 8388607 ? 8388607 : value < -8388608 ? -8388608 : value;
+    return (uint32_t)value << 8;
+}
+
+static AudioFrameResult delivered(AudioFrame *frame)
+{
+    if (frames_as_words) {
+        for (uint32_t sample = 0; sample < frame->samples; sample++) {
+            frame_words[2 * sample] = engine_word(frame->left[sample], frame->bits);
+            frame_words[2 * sample + 1] = engine_word(frame->right[sample], frame->bits);
+        }
+        frame->left = NULL;
+        frame->right = NULL;
+        frame->words = frame_words;
+    }
+    return AUDIO_FRAME_READY;
+}
+
 static AudioFrameResult decode_next(void *context, AudioFrame *frame)
 {
     FlacDecoder *flac = ((FlacSource *)context)->decoder;
@@ -79,7 +106,7 @@ static AudioFrameResult decode_next(void *context, AudioFrame *frame)
                           .first_sample = flac->frame_first_sample,
                           .samples = flac->block_samples,
                           .bits = flac->info.bits_per_sample};
-    return AUDIO_FRAME_READY;
+    return delivered(frame);
 }
 
 static bool decode_open(void *context, const char *path, uint32_t start_ms, AudioTrackInfo *track)
@@ -155,7 +182,7 @@ static AudioFrameResult scripted_next(void *context, AudioFrame *frame)
                           .first_sample = 0,
                           .samples = 16,
                           .bits = source_state->bits == 0 ? 16 : source_state->bits};
-    return AUDIO_FRAME_READY;
+    return delivered(frame);
 }
 
 static void scripted_release(void *context)
@@ -713,10 +740,45 @@ static void a_frame_is_released_once_its_samples_are_in_the_ring(void)
     CHECK_EQUAL(1, scripted.closes);
 }
 
+static uint32_t stage_rings[2][3][RING_WORDS];
+
+static void play_ramped_and_wrapped(bool scripted_source, uint32_t (*stages)[RING_WORDS])
+{
+    if (scripted_source) {
+        start_scripted_engine(0, 400);
+        use_32_bit_frames();
+        CHECK(audio_engine_play(&engine, "scripted", 0, 1));
+    } else {
+        start_engine();
+        CHECK(audio_engine_play(&engine, "lpc_16_44k_stereo", 0, 1));
+    }
+    audio_engine_lead_in(&engine, 10, 300);
+    static const uint32_t CONSUMED[3] = {0, RING_FRAMES / 2 + 7, RING_FRAMES + 123};
+    for (int stage = 0; stage < 3; stage++) {
+        pump_until_full(CONSUMED[stage]);
+        memcpy(stages[stage], ring, sizeof ring);
+    }
+}
+
+static void frames_given_as_words_fill_the_ring_like_rows(void)
+{
+    for (int scripted_source = 0; scripted_source < 2; scripted_source++) {
+        for (int as_words = 0; as_words < 2; as_words++) {
+            frames_as_words = as_words != 0;
+            play_ramped_and_wrapped(scripted_source != 0, stage_rings[as_words]);
+        }
+        frames_as_words = false;
+        for (int stage = 0; stage < 3; stage++) {
+            CHECK(memcmp(stage_rings[0][stage], stage_rings[1][stage], sizeof ring) == 0);
+        }
+    }
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
         TEST_CASE(the_current_path_is_the_track_being_played),
+        TEST_CASE(frames_given_as_words_fill_the_ring_like_rows),
         TEST_CASE(a_long_card_path_is_kept_whole),
         TEST_CASE(a_source_that_is_not_ready_leaves_the_ring_alone),
         TEST_CASE(a_frame_is_released_once_its_samples_are_in_the_ring),
