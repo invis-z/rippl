@@ -1,9 +1,9 @@
 # Credits
 
-Rippl is licensed under GPL-3.0-or-later (`LICENSE`). It builds on the work of others:
+Rippl is licensed under GPL-3.0-or-later ([LICENSE](LICENSE)). It builds on the work of others:
 
 - **[EchoPod](https://github.com/BasilSkyWalk/echopod)** by BasilSkyWalk (GPL-3.0-or-later): the firmware Rippl is forked from, at EchoPod 0.12.0.
-- **[ReChord](https://github.com/brnomt/ReChord)** (GPL-3.0): the community research into the Echo Mini's hardware. Its notes, drivers and debrick guide are where most of the hardware knowledge in `docs/hardware.md`, and values such as the panel and DAC set-up, come from.
+- **[ReChord](https://github.com/brnomt/ReChord)** (GPL-3.0): the community research into the Echo Mini's hardware. Its notes, drivers, debrick guide and its copy of Rockchip's RKNanoD SDK are where most of the hardware knowledge in [docs/reference/hardware.md](docs/reference/hardware.md), and values such as the panel and DAC set-up, come from.
 - **The livetrack.club Echo Mini debrick guide**, on which the maskrom recovery steps build.
 - **[libmad](https://codeberg.org/tenacityteam/libmad)** 0.16.4, by Underbit Technologies and the Tenacity team (GPL-2.0-or-later): the MP3 decoder on the player (`third_party/libmad`).
 - **[Apple Lossless Audio Codec](https://github.com/macosforge/alac)** by Apple (Apache-2.0): Rippl's own ALAC decoder (`src/codec/alac.c`) follows its reference decoder's algorithm; no Apple code is included.
@@ -13,8 +13,8 @@ Rippl is licensed under GPL-3.0-or-later (`LICENSE`). It builds on the work of o
 - **[dr_libs](https://github.com/mackron/dr_libs)** by David Reid (public domain or MIT-0): FLAC, MP3 and WAV decoding in the simulator (`third_party/dr_libs`).
 - **[Inter](https://github.com/rsms/inter)** by Rasmus Andersson and the Inter project authors (SIL Open Font License 1.1): the UI font, pre-rendered into `src/fonts` (`assets/fonts/inter/OFL.txt`).
 - **[rkdeveloptool](https://github.com/rockchip-linux/rkdeveloptool)** by Rockchip (GPL-2.0): used for maskrom recovery. It isn't included; `tools/patch_rkdeveloptool.py` patches a checkout for the Echo Mini.
-- **chuqiao ([foxchuqiao](https://github.com/foxchuqiao))**: the first Simplified Chinese translation of the interface (pull request 11), which `assets/lang/zh.txt` starts from. The other language files were written by Claude and no native speaker has reviewed them.
-- **velppa ([velppa](https://github.com/velppa))**: the comparison with FiiO's 4.0.0 firmware behind 0.9.1 (issue 12), made with Claude Code.
+- **chuqiao ([foxchuqiao](https://github.com/foxchuqiao))**: the first Simplified Chinese translation of the interface (pull request 11), which `assets/lang/zh.txt` starts from. The other language files are machine translations that no native speaker has reviewed yet.
+- **velppa ([velppa](https://github.com/velppa))**: the comparison with FiiO's 4.0.0 firmware behind 0.9.1 (issue 12).
 - **[pid.codes](https://pid.codes)**: the USB vendor ID `1209`.
 
 Snowsky and FiiO are trademarks of their owners. Rippl isn't made, endorsed or supported by FiiO.
