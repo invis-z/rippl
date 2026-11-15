@@ -1,137 +1,67 @@
 <h1 align="center"><img src="assets/rippl-title.svg" width="48" alt="" align="absmiddle"> Rippl</h1>
 
-Replacement firmware for the Snowsky (FiiO) Echo Mini 8 GB music player. It has an iPod-style Cover Flow browser, a music library built on the player, album favorites, M3U playlists and an Up Next queue. It isn't made or supported by FiiO.
+<p align="center">Replacement firmware for the Snowsky (FiiO) Echo Mini 8 GB music player.</p>
 
-It's a fork of EchoPod (github.com/BasilSkyWalk/echopod), from EchoPod 0.12.0.
+Rippl gives the Echo Mini an iPod-style Cover Flow browser, a music library built on the player, favourites, playlists and an Up Next queue, with gapless hi-res playback up to 384 kHz. It's a fork of [EchoPod](https://github.com/BasilSkyWalk/echopod) 0.12.0, and isn't made or supported by FiiO.
 
-- **Installing and using it:** `docs/user-guide.md`.
-- **Read first:** `docs/known-issues.md`. Rippl is early, and has been tested on one player.
-- **What's new:** `docs/release-notes.md`.
+> [!WARNING]
+> **Rippl is under active development, tested on one player, and comes with no warranty.** On-card file formats (`/.rippl`, themes, and settings) are unstable and may change or reset without migration between builds. Read the [known issues](docs/user/known-issues.md) before installing, and make sure you can [recover the player](docs/development/recovery.md).
 
-The hardware knowledge it relies on comes largely from the [ReChord](https://github.com/brnomt/ReChord) project's research (`docs/hardware.md`, `CREDITS.md`).
+## Features
 
-## What it does
+- **Playback:** FLAC, ALAC, WAV, MP3, AAC, Opus and QOA, gapless, from 8 kHz to 384 kHz, 32-bit FLAC and ALAC up to 96 kHz. Low-rate files are upsampled with a proper filter.
+- **Library:** Cover Flow, Artists, Album Artists, Albums, Genres, Folders, All Songs, M3U playlists and Favourites, built on the player and kept current by incremental rescans.
+- **Now Playing:** the cover with lyrics from `.lrc` files, or one of three animated faces: Cassette, Turntable and Tape Window.
+- **Queue:** shuffle by song or album, repeat, Up Next, and resume after power-off.
+- **Equaliser:** parametric presets from Equalizer APO and AutoEQ files.
+- **Audiobooks and podcasts:** their own shelves, with a bookmark for every book and episode, and `.m4b` chapters.
+- **Bluetooth headphones:** pairing, six remembered devices, automatic reconnection.
+- **USB:** both drives as mass storage, a USB DAC, or a Hi-Res DAC up to 384 kHz.
+- **And more:** portrait mode, nine themes, a clock with daylight saving, 18 languages, CJK names, screen-off controls, and updates by copying a file.
 
-- **Plays** FLAC, ALAC, MP3, AAC, Opus, QOA and WAV, from 8 to 192 kHz with 24-bit output, gapless.
-- **Cover Flow**, with every album and a Random album tile, and **Now Playing** with the cover, progress and seeking.
-- **A library built on the player:** Artists, Album Artists, Albums, Genres, Folders, All Songs, Playlists (M3U and M3U8) and Favorites, with fast scroll and letter jumps. Or build it on a computer with **Tide**.
-- **Queue and modes:** shuffle songs or albums, repeat, and Up Next (Play Next, Add to Up Next). The queue and position come back after power-off.
-- **Equalizer:** presets from `.txt` files (Equalizer APO and AutoEQ format).
-- **Portrait mode:** Settings → Orientation turns the screen upright either way, with layouts made for it. The volume rocker turns with it.
-- **Languages:** English and Simplified Chinese are built in; Japanese, Korean, German, French, Spanish, Italian, Portuguese, Dutch, Swedish, Danish, Norwegian, Finnish, Russian, Ukrainian, Polish and Indonesian are packs added to the internal drive with `tide languages install` (or from `rippl-languages.zip`). The choice applies after a restart. Titles and artists in Cyrillic, Greek, Polish, Czech, Turkish, Romanian and Vietnamese letters draw too.
-- **Audiobooks and podcasts** on their own shelves, with a bookmark for each.
-- **Bluetooth headphones:** pairing, up to six remembered, reconnecting by itself.
-- **USB:** both drives as mass storage, or the player as a USB DAC.
-- **Everyday controls:** pause, volume and skip with the screen off, a sleep timer, auto off and a charge screen.
-- **Chinese, Japanese and Korean** names.
-- **Updates itself** from a file copy, and goes back to FiiO's firmware the same way.
+[Tide](docs/user/tide.md), a companion tool for Windows, macOS and Linux, is meant to build the library on a computer so the player skips its own scan; it hasn't been tested yet.
 
-## Build and run the simulator (macOS)
+## Getting started
 
-```sh
-brew install cmake sdl2 clang-format
-brew install --cask gcc-arm-embedded
-python3 -m venv .venv && .venv/bin/pip install -r tools/requirements.txt -r tools/requirements-build.txt
-cmake --preset dev
-cmake --build --preset dev
-ctest --preset dev
-./build/dev/platform/sim/rippl_sim
-```
+1. Read the [installation guide](docs/user/install.md) and install `RIPPL.IMG`.
+2. Put music on a microSD card and insert it.
+3. Switch on. The player builds its library on the first start.
 
-`ctest` also builds the firmware, which needs an `arm-none-eabi-gcc` with newlib's headers. Homebrew's `arm-none-eabi-gcc` formula has none (`math.h: No such file or directory`); Arm's toolchain (`gcc-arm-embedded`) has them. Uninstall the formula first if it's there, so the two don't clash.
+The [documentation](docs/README.md) covers everything else.
 
-## Build on Windows
-
-Install [MSYS2](https://www.msys2.org) and, in its CLANG64 shell, the packages `mingw-w64-clang-x86_64-{clang,compiler-rt,cmake,ninja,SDL2}` and `mingw-w64-clang-x86_64-arm-none-eabi-{gcc,binutils,newlib}`, plus Python 3 with `pip install -r tools/requirements.txt`. With `C:\msys64\clang64\bin` first on the PATH (and not `C:\msys64\usr\bin`, whose git ignores this repo's line endings):
+## Building
 
 ```sh
-CMAKE_GENERATOR=Ninja CC=clang cmake --preset dev
-cmake --build --preset dev
-ctest --preset dev
+cmake --preset dev && cmake --build --preset dev && ctest --preset dev
+cmake --preset release && cmake --build --preset release
 ```
 
-## Build the firmware
+The first line builds the simulator and runs the tests; the second builds the firmware into `build/release/RIPPL.IMG`. See [building](docs/development/building.md) for requirements on macOS, Windows and Linux.
 
-```sh
-cmake --preset release
-cmake --build --preset release
-```
+## Repository layout
 
-This writes `build/release/HIFIEC90.IMG`. The `device` preset builds the same image with the developer Diagnostics rows. `docs/device-install.md` covers installing builds during development.
-
-## Use your music library in the simulator
-
-```sh
-mkdir -p build/system
-./build/dev/platform/sim/rippl_sim --card /path/to/music --system-dir build/system
-```
-
-The simulator behaves like the player: on the first start it creates the save files in the system folder, scans the music folder (every format stock lists, plus `.m3u`/`.m3u8` playlists) into the library and finds the album covers (segment files in `library/` and `covers/`, and `manifest.bin`). Settings → Rescan library scans again. The music folder is only ever read.
-
-To skip the scan on the player, **Tide** builds the library, the covers and the music fingerprint (`scan.bin`) on a computer, straight into the card's `/.rippl` folder in the player's own segment files, so the player's check after USB finds nothing to rescan and its next rescan reads only new files (`docs/user-guide.md`, Build the library on a computer). Each release carries it as one file for Windows, macOS (Apple silicon) and Linux, with nothing to install, built by `.github/workflows/tide.yml` with PyInstaller; from the source it's `python3 tools/tide sync E:` (`tide bookmarks` lists audiobook bookmarks). To build the file yourself: `python -m pip install -r tools/requirements.txt -r tools/requirements-build.txt`, then `python -m PyInstaller --onefile --name tide --paths tools --add-data assets/lang/languages.json:assets/lang --add-data src/lang/packs:src/lang/packs tools/tide/__main__.py` from the repository's folder (on Windows, write `;` instead of `:` in the two `--add-data` values). `tools/library_index.py` still writes the old `library.db` as the reference the device builder is tested against.
-
-## Testing on a player
-
-1. Install the firmware (`docs/user-guide.md`, or `docs/device-install.md` for development builds).
-2. Put music on a microSD card (FAT32 or exFAT), in any folder layout, and insert it.
-3. Switch on. The player creates `/.rippl` on the card, scans it ("Scanning library", then "Finding covers") and shows "Library: N tracks, M covers".
-4. After copying music over USB, eject both drives: the player rescans by itself. Settings → Rescan library does it on demand.
-
-Nothing else on the card needs a computer. Covers come from art embedded in one of each album's first four tracks (FLAC, MP3/WAV/DSF/DFF ID3, MP4, APE, WMA, Ogg Vorbis and Opus) or a `cover`/`folder`/`front`/`albumart` JPEG or PNG next to the tracks.
-
-### Simulator keys
-
-| Device button | Keyboard |
+| Path | Contents |
 |---|---|
-| Volume up (moves menus down) | Down arrow |
-| Volume down (moves menus up) | Up arrow |
-| Play | Return or Space |
-| Menu | M or Tab |
-| Back | Backspace or Escape |
-| Power | P |
+| `src/` | The player, shared by the firmware and the simulator: app, UI, library, playback, codecs, DSP, graphics, fonts |
+| `platform/device/` | The firmware: board drivers, core 1 decoder programs, overlays |
+| `platform/sim/` | The SDL2 simulator |
+| `tests/` | Host tests, run with `ctest` |
+| `tools/` | Image, font and language pack builders, Tide, the PC indexer |
+| `assets/` | Fonts, translations, artwork |
+| `docs/` | [Documentation](docs/README.md) |
 
-### Simulator options
+## Status
 
-| Option | Effect |
-|---|---|
-| `--scale N` | Window scale (default 3) |
-| `--frames N` | Quit after N frames |
-| `--headless` | No window |
-| `--screenshot FILE.bmp` | Save the last frame on exit |
-| `--card DIR` | Use DIR as the card root (read only) |
-| `--system-dir DIR` | Read and write `/.rippl/` (library database, resume, settings, favorites) in DIR |
-| `--battery N` | Report N % battery in the header (default 80) |
-| `--charging` | Report the battery as charging |
-| `--clock-date YYYY-MM-DD` | Start the clock chip on that date (at the host's time of day) |
-| `--keys LIST` | Play a key script, e.g. `down,down,play,back:long` (`up`, `down`, `play`, `menu`, `back`, `power`, each optionally `:long`) |
+Rippl is a personal project. Issues and pull requests are turned off, and there's no support, roadmap or release schedule. You're welcome to fork it under its [licence](LICENSE); the [development docs](docs/development) cover building, testing and the project's conventions.
 
-Headless runs use a virtual clock, so scripted screenshots are deterministic.
+## Licence
 
-### Navigation
+GPL-3.0-or-later; see [LICENSE](LICENSE). Bundled fonts and libraries keep their own licences; [CREDITS.md](CREDITS.md) lists them and the projects Rippl builds on.
 
-| Button | In lists | On Now Playing | While seeking |
-|---|---|---|---|
-| Volume up / down | Next / previous item (wraps on a single press, not while held) | Tap for volume; hold Vol+ for the next track, Vol− for the previous one | Forward / back 5 s per tap, 15 s steps while held |
-| Play | Select (a song plays the list from that song); hold on an album to add or remove it from Favorites | Play / pause; hold to seek | Jump to the chosen time |
-| Menu | | | |
-| Back | Back; hold to go home | Back; hold to go home | Cancel |
-| Power | Screen off or on; hold 2 s to turn off | Same | Same |
+## AI-assisted code and licensing
 
-The screen turns off after the screen timeout or a tap of Power. With the screen off, Play pauses and resumes, a tap of vol± changes the volume and holding vol± skips tracks, all without waking the screen; Power turns it back on.
+Rippl's modifications to EchoPod were developed with the assistance of a large language model (LLM). Depending on the jurisdiction, such code may not be attributable to a human author, and its copyright status, including whether it is protected at all or in the public domain, may be uncertain.
 
-Home also lists Audiobooks and Podcasts when the card has an `Audiobooks` or `Podcasts` folder: every book and episode remembers where you stopped, plays in order, and hold vol± jumps 30 s forward or 15 s back. Books and episodes stay out of the Music lists (`docs/user-guide.md`).
+Before redistributing this code or incorporating it into a commercial or otherwise sensitive project, have it reviewed by a qualified legal professional, and confirm that the notices, licences and attribution requirements in [LICENSE](LICENSE) and [CREDITS.md](CREDITS.md) are satisfied.
 
-Settings: Shuffle (Off / Songs / Albums), Repeat (Off / One / All), Sleep timer, Screen timeout, Brightness, Gain, Output and Start screen. They're saved in `/.rippl/settings.bin`, and favorites in `/.rippl/favorites.bin`. Without `--system-dir` the simulator can't save, and says so. Playback resumes, paused, where it left off.
-
-Music → Cover Flow shows your albums as covers, by album artist. Vol± move, Play opens the album, holding Play adds or removes it from Favorites, and Back leaves. Music → Playlists lists the M3U playlists the indexer found. Music → Favorites lists your favorite albums.
-
-## Layout
-
-- `src/`: the player, built for the device and the simulator (`app`, `ui`, `library`, `playback`, `codec`, `dsp`, `sound`, `settings`, `gfx`, `fonts`, `core`, `hal`).
-- `platform/device/`: the firmware for the player (board drivers, the core 1 decoders, the rescan overlay); `platform/sim/`: the SDL2 simulator.
-- `tests/`: host tests, run with `ctest`; `tools/`: image, font and language pack builders, Tide (`tools/tide`) and the PC indexer.
-- `docs/`: install, recovery, user guide, hardware notes, the library format and known issues.
-
-## License
-
-GPL-3.0-or-later. See `LICENSE`. The bundled Inter font is under the SIL Open Font License 1.1 (`assets/fonts/inter/OFL.txt`), and so are the Chinese, Japanese and Korean glyph packs made from Noto Sans CJK SC (`assets/fonts/noto-cjk/OFL.txt`). The simulator's decoders (dr_flac, dr_mp3, dr_wav) are public domain or MIT-0 (`third_party/dr_libs/LICENSE`). The player's MP3 decoder is libmad, GPL-2.0-or-later (`third_party/libmad/COPYING`). The QOA decoder is Dominic Szablewski's reference implementation, MIT (`third_party/qoa/LICENSE`).
+This notice is provided for general awareness only and does not constitute legal advice.
