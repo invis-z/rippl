@@ -286,7 +286,7 @@ static void the_frame_overlay_splits_the_drawing(void)
                                        [DRAW_PART_TEXT] = 2000,   [DRAW_PART_BACKDROP] = 600,
                                        [DRAW_PART_HASH] = 1500,   [DRAW_PART_AUDIO] = 0};
     frame_overlay_format_parts(parts, text, sizeof text);
-    CHECK(strcmp("c9 r3 t2 b1 h2 a0", text) == 0);
+    CHECK(strcmp("cv9 r3 t2 bg1 h2 a0", text) == 0);
 }
 
 static void the_frame_overlay_shows_the_audio_numbers(void)
@@ -312,16 +312,36 @@ static void the_frame_overlay_shows_average_and_longest_block_times(void)
                            .read_total_us = 20000,
                            .read_max_us = 11600};
     frame_overlay_format_block_times(stats, text, sizeof text);
-    CHECK(strcmp("d23/38 c5/12", text) == 0);
+    CHECK(strcmp("dec23/38 rd5/12", text) == 0);
 }
 
 static void the_frame_overlay_shows_zero_before_any_block(void)
 {
     char text[FRAME_OVERLAY_TEXT_CAPACITY];
     frame_overlay_format_block_times((HalAudioStats){0}, text, sizeof text);
-    CHECK(strcmp("d0/0 c0/0", text) == 0);
+    CHECK(strcmp("dec0/0 rd0/0", text) == 0);
     frame_overlay_format_audio((HalAudioStats){0}, text, sizeof text);
     CHECK(strcmp("b0 x0 o0 L0% c0%", text) == 0);
+}
+
+static void the_frame_overlay_block_and_part_lines_fit_its_width(void)
+{
+    char text[FRAME_OVERLAY_TEXT_CAPACITY];
+    int width = frame_overlay_area(&DEFAULT_THEME).width;
+    const Font *font = DEFAULT_THEME.fonts.small;
+    HalAudioStats stats = {.blocks = 1,
+                           .decode_total_us = 99000,
+                           .decode_max_us = 999000,
+                           .read_total_us = 99000,
+                           .read_max_us = 999000};
+    frame_overlay_format_block_times(stats, text, sizeof text);
+    CHECK(text_width(font, text) <= width);
+    uint32_t parts[DRAW_PART_COUNT];
+    for (int part = 0; part < DRAW_PART_COUNT; part++) {
+        parts[part] = 99000;
+    }
+    frame_overlay_format_parts(parts, text, sizeof text);
+    CHECK(text_width(font, text) <= width);
 }
 
 static void open_music_entry(int index)
@@ -3464,6 +3484,7 @@ int main(void)
         TEST_CASE(the_frame_overlay_shows_the_audio_numbers),
         TEST_CASE(the_frame_overlay_shows_average_and_longest_block_times),
         TEST_CASE(the_frame_overlay_shows_zero_before_any_block),
+        TEST_CASE(the_frame_overlay_block_and_part_lines_fit_its_width),
         TEST_CASE(diagnostics_shows_the_firmware_version_from_the_hal),
         TEST_CASE(albums_open_from_the_library),
         TEST_CASE(album_rows_show_a_chevron_and_track_rows_do_not),

@@ -50,7 +50,7 @@ void frame_overlay_format(FrameBreakdown breakdown, char *text, size_t capacity)
 
 void frame_overlay_format_parts(const uint32_t *parts_us, char *text, size_t capacity)
 {
-    static const char *const PREFIXES[DRAW_PART_COUNT] = {"c", " r", " t", " b", " h", " a"};
+    static const char *const PREFIXES[DRAW_PART_COUNT] = {"cv", " r", " t", " bg", " h", " a"};
     StringBuilder builder = string_builder_make(text, capacity);
     for (int part = 0; part < DRAW_PART_COUNT; part++) {
         append_milliseconds(&builder, PREFIXES[part], parts_us[part]);
@@ -88,9 +88,9 @@ static void append_average_and_longest(StringBuilder *builder, const char *prefi
 void frame_overlay_format_block_times(HalAudioStats stats, char *text, size_t capacity)
 {
     StringBuilder builder = string_builder_make(text, capacity);
-    append_average_and_longest(&builder, "d", stats.decode_total_us, stats.blocks,
+    append_average_and_longest(&builder, "dec", stats.decode_total_us, stats.blocks,
                                stats.decode_max_us);
-    append_average_and_longest(&builder, " c", stats.read_total_us, stats.blocks,
+    append_average_and_longest(&builder, " rd", stats.read_total_us, stats.blocks,
                                stats.read_max_us);
 }
 
