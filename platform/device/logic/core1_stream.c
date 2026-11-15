@@ -13,6 +13,10 @@ enum {
     OPUS_OUTPUT_BITS = 16,
     OPUS_FRAME_SAMPLES = 960,
     EQUALIZED_BITS = 24,
+    WORD_CHANNELS = 2,
+    WORD_SHIFT = 8,
+    SAMPLE_MAX = 8388607,
+    SAMPLE_MIN = -8388608,
     LOW_RING_PARTS = 4,
     LOW_RING_BOOST = 4,
     WORD_BYTES = 4,
@@ -271,6 +275,7 @@ static void adopt(Core1Stream *stream, uint32_t generation)
     stream->holding = false;
     stream->finished = false;
     stream->starved = false;
+    stream->words = control->word_output != 0;
     upsampler_start(&stream->upsampler, info.sample_rate,
                     info.bits_per_sample <= EQUALIZED_BITS ? EQUALIZED_BITS : info.bits_per_sample);
     stream->upsampled_timed = false;
@@ -319,6 +324,83 @@ static void copy_channels(Core1Stream *stream, uint32_t slot, uint32_t samples)
     }
 }
 
+static uint32_t source_bits(const Core1Stream *stream);
+
+static void interleave_channels(Core1Stream *stream, int32_t *frames, uint32_t samples)
+{
+    const Core1Block *block = &stream->pending;
+    uint32_t stride = block->stride > 0 ? block->stride : 1;
+    uint32_t first = stream->emitted * stride;
+    if (stream->channels == FLAC_MAX_CHANNELS && stride == 1 && block->narrow[0] == NULL &&
+        block->narrow[1] == NULL) {
+        flac_join_interleaved((FlacJoin)block->join, block->channels[0] + first,
+                              block->channels[1] + first, frames, samples);
+        return;
+    }
+    for (uint32_t channel = 0; channel < stream->channels; channel++) {
+        const int32_t *from = block->channels[channel];
+        const int16_t *narrow = block->narrow[channel];
+        for (uint32_t index = 0; index < samples; index++) {
+            uint32_t at = first + index * stride;
+            frames[WORD_CHANNELS * index + channel] = narrow != NULL ? narrow[at] : from[at];
+        }
+    }
+}
+
+static uint32_t equalize_frames(Core1Stream *stream, int32_t *frames, uint32_t samples,
+                                uint32_t bits)
+{
+    if (stream->equalizer == NULL || stream->share->enabled == 0) {
+        return 0;
+    }
+    follow_share(stream);
+    if (!equalizer_active(stream->equalizer) || bits == 0 || bits > EQUALIZED_BITS) {
+        return 0;
+    }
+    widen(frames, WORD_CHANNELS * samples, EQUALIZED_BITS - bits);
+    int32_t *right = stream->channels > 1 ? frames + 1 : NULL;
+    equalizer_process_block(stream->equalizer,
+                            (EqualizerBlock){frames, right, samples, WORD_CHANNELS});
+    return 1;
+}
+
+static int32_t clamped_sample(int32_t sample)
+{
+    return sample > SAMPLE_MAX ? SAMPLE_MAX : sample < SAMPLE_MIN ? SAMPLE_MIN : sample;
+}
+
+static void to_words(int32_t *frames, uint32_t samples, uint32_t bits, uint32_t channels)
+{
+    uint32_t count = WORD_CHANNELS * samples;
+    if (bits > EQUALIZED_BITS) {
+        for (uint32_t index = 0; channels == 1 && index < count; index += WORD_CHANNELS) {
+            frames[index + 1] = frames[index];
+        }
+        return;
+    }
+    int32_t scale = (int32_t)(1u << (EQUALIZED_BITS - bits));
+    for (uint32_t index = 0; index < count; index += WORD_CHANNELS) {
+        uint32_t left = (uint32_t)clamped_sample(frames[index] * scale) << WORD_SHIFT;
+        uint32_t right = channels == 1
+                             ? left
+                             : (uint32_t)clamped_sample(frames[index + 1] * scale) << WORD_SHIFT;
+        frames[index] = (int32_t)left;
+        frames[index + 1] = (int32_t)right;
+    }
+}
+
+static void emit_words(Core1Stream *stream, volatile StreamSlot *slot, uint32_t samples)
+{
+    int32_t *frames = stream_row(stream, stream->slot, 0);
+    interleave_channels(stream, frames, samples);
+    uint32_t bits = source_bits(stream);
+    uint32_t equalized = equalize_frames(stream, frames, samples, bits);
+    to_words(frames, samples, equalized != 0 ? EQUALIZED_BITS : bits, stream->channels);
+    slot->equalized = equalized;
+    slot->bits = equalized != 0 ? EQUALIZED_BITS : 0;
+    slot->words = 1;
+}
+
 static void hand_over(Core1Stream *stream, uint32_t outcome)
 {
     volatile StreamSlot *slot = &stream->region.control->slots[stream->slot];
@@ -338,6 +420,26 @@ static uint32_t upsampled_bits(const Core1Stream *stream)
 {
     uint32_t bits = source_bits(stream);
     return bits <= EQUALIZED_BITS ? EQUALIZED_BITS : bits;
+}
+
+static uint32_t render_rows(Core1Stream *stream, uint32_t slot, uint32_t produced)
+{
+    int32_t *right = stream->channels > 1 ? stream_row(stream, slot, 1) + produced : NULL;
+    return upsampler_render(&stream->upsampler, stream_row(stream, slot, 0) + produced, right);
+}
+
+static uint32_t render_frames(Core1Stream *stream, uint32_t slot, uint32_t produced)
+{
+    int32_t left[UPSAMPLER_MAX_FACTOR];
+    int32_t right[UPSAMPLER_MAX_FACTOR];
+    bool stereo = stream->channels > 1;
+    uint32_t made = upsampler_render(&stream->upsampler, left, stereo ? right : NULL);
+    int32_t *frames = stream_row(stream, slot, 0) + WORD_CHANNELS * produced;
+    for (uint32_t index = 0; index < made; index++) {
+        frames[WORD_CHANNELS * index] = left[index];
+        frames[WORD_CHANNELS * index + 1] = stereo ? right[index] : left[index];
+    }
+    return made;
 }
 
 static uint32_t upsample(Core1Stream *stream, uint32_t slot, uint32_t count, bool silence)
@@ -361,9 +463,8 @@ static uint32_t upsample(Core1Stream *stream, uint32_t slot, uint32_t count, boo
         for (uint32_t channel = 0; channel < stream->channels; channel++) {
             upsampler_put(&stream->upsampler, channel, values[channel] * (int32_t)(1u << widen));
         }
-        int32_t *right = stream->channels > 1 ? stream_row(stream, slot, 1) + produced : NULL;
-        produced +=
-            upsampler_render(&stream->upsampler, stream_row(stream, slot, 0) + produced, right);
+        produced += stream->words ? render_frames(stream, slot, produced)
+                                  : render_rows(stream, slot, produced);
         upsampler_advance(&stream->upsampler);
     }
     return produced;
@@ -374,8 +475,15 @@ static void hand_over_upsampled(Core1Stream *stream, uint32_t produced)
     volatile StreamSlot *slot = &stream->region.control->slots[stream->slot];
     uint32_t factor = stream->upsampler.factor;
     uint32_t bits = upsampled_bits(stream);
-    slot->equalized = equalize_slot(stream, stream->slot, produced, bits);
+    if (stream->words) {
+        int32_t *frames = stream_row(stream, stream->slot, 0);
+        slot->equalized = equalize_frames(stream, frames, produced, bits);
+        to_words(frames, produced, bits, stream->channels);
+    } else {
+        slot->equalized = equalize_slot(stream, stream->slot, produced, bits);
+    }
     slot->bits = bits;
+    slot->words = stream->words ? 1u : 0u;
     slot->first_sample = stream->upsampled_time * factor;
     slot->samples = produced;
     stream->upsampled_time += produced / factor;
@@ -411,9 +519,14 @@ static void emit_piece(Core1Stream *stream)
     }
     volatile StreamSlot *slot = &stream->region.control->slots[stream->slot];
     uint32_t samples = smaller(stream->pending.samples - stream->emitted, stream->slot_samples);
-    copy_channels(stream, stream->slot, samples);
-    slot->equalized = equalize_slot(stream, stream->slot, samples, source_bits(stream));
-    slot->bits = slot->equalized != 0 ? EQUALIZED_BITS : 0;
+    if (stream->words) {
+        emit_words(stream, slot, samples);
+    } else {
+        copy_channels(stream, stream->slot, samples);
+        slot->equalized = equalize_slot(stream, stream->slot, samples, source_bits(stream));
+        slot->bits = slot->equalized != 0 ? EQUALIZED_BITS : 0;
+        slot->words = 0;
+    }
     slot->first_sample = stream->pending.first_sample + stream->emitted;
     slot->samples = samples;
     stream->emitted += samples;
@@ -428,6 +541,7 @@ static void end_stream(Core1Stream *stream, Core1DecodeResult result)
     slot->samples = 0;
     slot->equalized = 0;
     slot->bits = 0;
+    slot->words = 0;
     stream->finished = true;
     hand_over(stream, result == CORE1_FINISHED ? AUDIO_FRAME_END : AUDIO_FRAME_ERROR);
 }
@@ -576,12 +690,18 @@ void core1_source_reset_equalizer(Core1Source *source)
     source->reset_equalizer = true;
 }
 
+void core1_source_set_word_output(Core1Source *source, bool words)
+{
+    source->word_output = words;
+}
+
 static void begin_generation(Core1Source *source, AudioTrackInfo *track)
 {
     volatile StreamControl *control = source->region.control;
     source->factor = upsampler_factor(control->sample_rate);
     track->play_rate = control->sample_rate * source->factor;
     control->equalizer_reset = source->reset_equalizer ? 1u : 0u;
+    control->word_output = source->word_output ? 1u : 0u;
     source->reset_equalizer = false;
     publish();
     control->generation = next_generation(source);
@@ -730,6 +850,20 @@ static AudioFrameResult next_frame(void *context, AudioFrame *frame)
             continue;
         }
         uint32_t skip = from - first;
+        if (slot->words != 0) {
+            const uint32_t *words = (const uint32_t *)source_row(source, slot->samples, 0);
+            if (words == NULL) {
+                return AUDIO_FRAME_ERROR;
+            }
+            *frame = (AudioFrame){
+                .words = words + WORD_CHANNELS * skip,
+                .first_sample = from - lead_trim,
+                .samples = end - from,
+                .bits = slot->bits != 0 ? (uint8_t)slot->bits : source->bits_per_sample,
+                .equalized = slot->equalized != 0,
+            };
+            return AUDIO_FRAME_READY;
+        }
         int32_t *left = source_row(source, slot->samples, 0);
         int32_t *right = source->channels > 1 ? source_row(source, slot->samples, 1) : left;
         if (left == NULL || right == NULL) {

@@ -77,6 +77,7 @@ static uint32_t music_ring[RING_WORDS];
 static SourceKind source_kind;
 static bool unknown_format;
 static Core1Source core1_source;
+static bool core0_output;
 static bool using_core1;
 static bool resume_after_clock_change;
 static bool paused_before_clock_change;
@@ -377,6 +378,7 @@ static void ensure_engine(void)
     FlacFileOpener files = {.open = open_file, .close = close_file, .context = NULL};
     core1_source_init(&core1_source, core1_region(), files, &header_decoder, FILL_BUDGET_BYTES);
     core1_source_set_wake(&core1_source, signal_core1);
+    core1_source_set_word_output(&core1_source, !core0_output);
     AudioSource source = {open_chosen, next_chosen, release_chosen, close_chosen, NULL};
     audio_engine_init(
         &engine, (AudioEngineConfig){.source = source, .ring = ring(), .ring_words = RING_WORDS});
@@ -812,6 +814,17 @@ void hal_audio_set_output(HalAudioOutput output)
 {
     output_setting = output;
     apply_volume();
+}
+
+void hal_audio_set_word_output(bool words)
+{
+    core0_output = !words;
+    core1_source_set_word_output(&core1_source, words);
+}
+
+bool hal_audio_word_output(void)
+{
+    return !core0_output;
 }
 
 void hal_audio_set_equalizer(const EqualizerCurve *curve)
