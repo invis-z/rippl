@@ -381,6 +381,22 @@ static bool read_whole_sectors(FatVolume *volume, FatFile *file, uint32_t offset
     return true;
 }
 
+uint32_t fat_read_plan(FatVolume *volume, FatFile *file, uint32_t offset, uint32_t length,
+                       uint32_t max_sectors, uint32_t *lba)
+{
+    if (offset > file->size || length > file->size - offset || offset % FAT_SECTOR_SIZE != 0) {
+        return 0;
+    }
+    uint32_t sectors = length / FAT_SECTOR_SIZE;
+    sectors = sectors < max_sectors ? sectors : max_sectors;
+    uint32_t sector_index = offset / FAT_SECTOR_SIZE;
+    if (sectors == 0 || !fat_file_sector(volume, file, sector_index, lba) ||
+        fat_sector_cached(volume, *lba)) {
+        return 0;
+    }
+    return fat_run_length(volume, file, sector_index, sectors);
+}
+
 bool fat_read(FatVolume *volume, FatFile *file, uint32_t offset, void *buffer, uint32_t length)
 {
     if (offset > file->size || length > file->size - offset) {

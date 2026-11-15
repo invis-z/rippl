@@ -9,6 +9,7 @@
 #include "hal/system.h"
 #include "irq.h"
 #include "registers.h"
+#include "sd.h"
 
 #define PLL_CON0 (CRU_BASE + 0x00u)
 #define PLL_CON1 (CRU_BASE + 0x04u)
@@ -186,6 +187,7 @@ bool hal_system_set_clock_mhz(uint32_t mhz)
         return true;
     }
     board_audio_before_clock_change();
+    sd_before_clock_change();
     hal_display_wait();
     dmac_suspend();
     board_start_record_step(HAL_START_STEP_CLOCK_SWITCH);
@@ -195,6 +197,7 @@ bool hal_system_set_clock_mhz(uint32_t mhz)
     board_start_record_step_done();
     dmac_resume();
     board_display_after_clock_change();
+    sd_after_clock_change();
     board_audio_after_clock_change();
     return switched;
 }

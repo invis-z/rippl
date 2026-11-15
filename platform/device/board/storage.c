@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdint.h>
 
 #include "board.h"
 #include "core/volume_path.h"
@@ -109,6 +110,44 @@ bool hal_file_read(HalFile file, uint32_t offset, void *buffer, uint32_t length)
     FatFile *open = file_of(file);
     return open != NULL &&
            fat_read(&volumes[file_volume[file.handle]], open, offset, buffer, length);
+}
+
+uint32_t hal_file_read_start(HalFile file, uint32_t offset, void *buffer, uint32_t length)
+{
+    FatFile *open = file_of(file);
+    if (open == NULL || file_volume[file.handle] != CARD_VOLUME ||
+        ((uintptr_t)buffer & (sizeof(uint32_t) - 1)) != 0) {
+        return 0;
+    }
+    uint32_t lba = 0;
+    uint32_t sectors =
+        fat_read_plan(&volumes[CARD_VOLUME], open, offset, length, MMC_ASYNC_MAX_BLOCKS, &lba);
+    return sectors == 0 ? 0 : sd_read_start(lba, sectors, buffer) * FAT_SECTOR_SIZE;
+}
+
+HalReadState hal_file_read_poll(void)
+{
+    switch (sd_read_poll()) {
+    case MMC_ASYNC_PENDING:
+        return HAL_READ_PENDING;
+    case MMC_ASYNC_DONE:
+        return HAL_READ_DONE;
+    case MMC_ASYNC_FAILED:
+        return HAL_READ_FAILED;
+    case MMC_ASYNC_IDLE:
+        break;
+    }
+    return HAL_READ_IDLE;
+}
+
+HalCardSpeed hal_storage_card_speed(void)
+{
+    return (HalCardSpeed)sd_speed();
+}
+
+uint32_t hal_storage_card_dma_failures(void)
+{
+    return sd_health().dma_failures;
 }
 
 void hal_file_close(HalFile *file)
