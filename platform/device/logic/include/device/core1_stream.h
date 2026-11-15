@@ -38,6 +38,7 @@ typedef struct StreamSlot {
     uint32_t samples;
     uint32_t equalized;
     uint32_t bits;
+    uint32_t words;
 } StreamSlot;
 
 typedef struct StreamControl {
@@ -61,6 +62,7 @@ typedef struct StreamControl {
     uint32_t equalizer_reset;
     uint32_t slot_offset;
     uint32_t slot_samples;
+    uint32_t word_output;
     StreamSlot slots[STREAM_SLOTS];
 } StreamControl;
 
@@ -147,6 +149,7 @@ typedef struct Core1Stream {
     void (*wait)(void);
     bool finished;
     bool starved;
+    bool words;
 } Core1Stream;
 
 void core1_stream_init(Core1Stream *stream, StreamRegion region, Core1Decoder decoder);
@@ -183,6 +186,7 @@ typedef struct Core1Source {
     bool read_failed;
     bool file_open;
     bool reset_equalizer;
+    bool word_output;
 } Core1Source;
 
 void core1_source_init(Core1Source *source, StreamRegion region, FlacFileOpener files,
@@ -190,6 +194,7 @@ void core1_source_init(Core1Source *source, StreamRegion region, FlacFileOpener 
 void core1_source_fill(Core1Source *source);
 void core1_source_set_wake(Core1Source *source, void (*wake)(void));
 void core1_source_reset_equalizer(Core1Source *source);
+void core1_source_set_word_output(Core1Source *source, bool words);
 AudioSource core1_source_interface(Core1Source *source);
 AudioSource core1_source_mp3_interface(Core1Source *source);
 AudioSource core1_source_mp4_interface(Core1Source *source);

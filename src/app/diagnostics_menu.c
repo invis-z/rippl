@@ -6,6 +6,7 @@
 #include "core/i18n.h"
 #include "diagnostics_rows.h"
 #include "diagnostics_values.h"
+#include "hal/audio.h"
 #include "hal/power.h"
 #include "hal/system.h"
 
@@ -87,6 +88,19 @@ static const char *core1_accel_value(const void *context)
     return core1_accel_text;
 }
 
+static ScreenAction cycle_audio_output(void *context)
+{
+    (void)context;
+    hal_audio_set_word_output(!hal_audio_word_output());
+    return screen_action_none();
+}
+
+static const char *audio_output_value(const void *context)
+{
+    (void)context;
+    return hal_audio_word_output() ? "Core 1" : "Core 0";
+}
+
 static char boot_hold_text[DIAGNOSTICS_VALUE_CAPACITY];
 
 static const char *boot_hold_value(const void *context)
@@ -115,6 +129,8 @@ void diagnostics_menu_build(AppScreens *screens, AppOptions *options, const Them
     screens->core1 = (Core1Option){.run = false};
     screens->core1_accel = (Core1AccelOption){.run = false};
     int count = 0;
+    items[count++] =
+        action_item(STR_DIAG_AUDIO_OUTPUT, cycle_audio_output, NULL, audio_output_value);
     items[count++] = app_screens_open_item(i18n_text(STR_DIAG_KEY_TEST),
                                            test_pattern_screen_init(&screens->test_pattern));
     items[count++] = action_item(STR_DIAG_FRAME_TIME, toggle_frame_time, options, frame_time_value);

@@ -657,40 +657,54 @@ static FlacJoin join_of(const FrameHeader *header)
     }
 }
 
-void flac_join(FlacJoin join, const int32_t *first, const int32_t *second, int32_t *left,
-               int32_t *right, uint32_t count)
+static inline __attribute__((always_inline)) void join_run(FlacJoin join, const int32_t *first,
+                                                           const int32_t *second, int32_t *left,
+                                                           int32_t *right, uint32_t count,
+                                                           uint32_t stride)
 {
     switch (join) {
     case FLAC_JOIN_LEFT_SIDE:
         for (uint32_t index = 0; index < count; index++) {
             int32_t value = first[index];
-            right[index] = (int32_t)((uint32_t)value - (uint32_t)second[index]);
-            left[index] = value;
+            right[index * stride] = (int32_t)((uint32_t)value - (uint32_t)second[index]);
+            left[index * stride] = value;
         }
         break;
     case FLAC_JOIN_SIDE_RIGHT:
         for (uint32_t index = 0; index < count; index++) {
             int32_t value = second[index];
-            left[index] = (int32_t)((uint32_t)first[index] + (uint32_t)value);
-            right[index] = value;
+            left[index * stride] = (int32_t)((uint32_t)first[index] + (uint32_t)value);
+            right[index * stride] = value;
         }
         break;
     case FLAC_JOIN_MID_SIDE:
         for (uint32_t index = 0; index < count; index++) {
             uint32_t side = (uint32_t)second[index];
             uint32_t mid = (uint32_t)first[index] << 1 | (side & 1u);
-            left[index] = floor_half(mid + side);
-            right[index] = floor_half(mid - side);
+            left[index * stride] = floor_half(mid + side);
+            right[index * stride] = floor_half(mid - side);
         }
         break;
     default:
         for (uint32_t index = 0; index < count; index++) {
             int32_t value = second[index];
-            left[index] = first[index];
-            right[index] = value;
+            left[index * stride] = first[index];
+            right[index * stride] = value;
         }
         break;
     }
+}
+
+void flac_join(FlacJoin join, const int32_t *first, const int32_t *second, int32_t *left,
+               int32_t *right, uint32_t count)
+{
+    join_run(join, first, second, left, right, count, 1);
+}
+
+void flac_join_interleaved(FlacJoin join, const int32_t *first, const int32_t *second,
+                           int32_t *frames, uint32_t count)
+{
+    join_run(join, first, second, frames, frames + 1, count, 2);
 }
 
 void flac_join_pair(FlacJoin join, int32_t first, int32_t second, int32_t *left, int32_t *right)
