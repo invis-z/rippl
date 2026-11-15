@@ -1527,3 +1527,27 @@ void *hal_system_cover_scratch(uint32_t *size)
     *size = (uint32_t)sizeof cover_scratch;
     return cover_scratch;
 }
+
+uint32_t hal_file_read_start(HalFile file, uint32_t offset, void *buffer, uint32_t length)
+{
+    (void)file;
+    (void)offset;
+    (void)buffer;
+    (void)length;
+    return 0;
+}
+
+HalReadState hal_file_read_poll(void)
+{
+    return HAL_READ_IDLE;
+}
+
+HalCardSpeed hal_storage_card_speed(void)
+{
+    return HAL_CARD_SPEED_HIGH;
+}
+
+uint32_t hal_storage_card_dma_failures(void)
+{
+    return 0;
+}

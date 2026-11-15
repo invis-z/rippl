@@ -662,8 +662,17 @@ static void use_ring(Core1Source *source, uint32_t bytes)
     source->region.control->ring_bytes = bytes;
 }
 
+static void drop_pending_read(Core1Source *source)
+{
+    while (source->async_pending &&
+           source->async.poll(source->async.context) == CORE1_READ_PENDING) {
+    }
+    source->async_pending = false;
+}
+
 static void stop_streaming(Core1Source *source)
 {
+    drop_pending_read(source);
     if (source->streaming) {
         source->region.control->generation = 0;
         source->streaming = false;
@@ -693,6 +702,57 @@ void core1_source_reset_equalizer(Core1Source *source)
 void core1_source_set_word_output(Core1Source *source, bool words)
 {
     source->word_output = words;
+}
+
+void core1_source_set_async(Core1Source *source, Core1AsyncRead async)
+{
+    drop_pending_read(source);
+    source->async = async;
+}
+
+static void publish_written(Core1Source *source, uint32_t length)
+{
+    source->written += length;
+    publish();
+    source->region.control->written = source->written;
+    wake_core1(source);
+}
+
+static bool finish_pending_read(Core1Source *source)
+{
+    if (!source->async_pending) {
+        return true;
+    }
+    Core1ReadState state = source->async.poll(source->async.context);
+    if (state == CORE1_READ_PENDING) {
+        return false;
+    }
+    source->async_pending = false;
+    if (state == CORE1_READ_FAILED &&
+        !source->input.read(source->input.context, source->async_offset, source->async_destination,
+                            source->async_length)) {
+        source->read_failed = true;
+        return false;
+    }
+    publish_written(source, source->async_length);
+    return true;
+}
+
+static bool start_async_read(Core1Source *source, void *destination, uint32_t length)
+{
+    if (source->async.start == NULL) {
+        return false;
+    }
+    uint32_t started =
+        source->async.start(source->async.context, source->written, destination, length);
+    if (started == 0 || started > length) {
+        return false;
+    }
+    source->async_pending = true;
+    source->async_offset = source->written;
+    source->async_length = started;
+    source->async_destination = destination;
+    return true;
 }
 
 static void begin_generation(Core1Source *source, AudioTrackInfo *track)
@@ -748,7 +808,7 @@ static bool open_stream(void *context, const char *path, uint32_t start_ms, Audi
 
 void core1_source_fill(Core1Source *source)
 {
-    if (!source->streaming || source->read_failed) {
+    if (!source->streaming || source->read_failed || !finish_pending_read(source)) {
         return;
     }
     volatile StreamControl *control = source->region.control;
@@ -756,6 +816,10 @@ void core1_source_fill(Core1Source *source)
         control->acked_generation == source->generation ? control->released : source->start_offset;
     observe();
     uint32_t target = smaller(released + source->region.ring_bytes, source->end_offset);
+    uint32_t on_sector = target - target % READ_SECTOR_BYTES;
+    if (target < source->end_offset && on_sector > source->written) {
+        target = on_sector;
+    }
     uint32_t budget = source->fill_budget;
     if (source->written - released < source->region.ring_bytes / LOW_RING_PARTS) {
         budget *= LOW_RING_BOOST;
@@ -765,19 +829,23 @@ void core1_source_fill(Core1Source *source)
         uint32_t length = smaller(smaller(target - source->written, budget),
                                   source->region.ring_bytes - position);
         uint32_t past_sector = (source->written + length) % READ_SECTOR_BYTES;
-        if (length > READ_SECTOR_BYTES && past_sector != 0) {
-            length -= past_sector;
+        if (past_sector != 0 && source->written + length < target) {
+            if (length > past_sector) {
+                length -= past_sector;
+            } else if (source->written % READ_SECTOR_BYTES == 0) {
+                break;
+            }
         }
         void *destination = (void *)(uintptr_t)&source->region.ring[position];
+        if (start_async_read(source, destination, length)) {
+            return;
+        }
         if (!source->input.read(source->input.context, source->written, destination, length)) {
             source->read_failed = true;
             return;
         }
-        source->written += length;
         budget -= length;
-        publish();
-        control->written = source->written;
-        wake_core1(source);
+        publish_written(source, length);
     }
 }
 

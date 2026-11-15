@@ -4,11 +4,17 @@
 #include <stddef.h>
 
 #include "core/i18n.h"
+#include "core/string_builder.h"
 #include "diagnostics_rows.h"
 #include "diagnostics_values.h"
 #include "hal/audio.h"
 #include "hal/power.h"
+#include "hal/storage.h"
 #include "hal/system.h"
+
+enum {
+    SD_READS_CAPACITY = 24
+};
 
 static ScreenAction toggle_frame_time(void *context)
 {
@@ -101,6 +107,28 @@ static const char *audio_output_value(const void *context)
     return hal_audio_word_output() ? "Core 1" : "Core 0";
 }
 
+static const char *sd_clock_value(const void *context)
+{
+    (void)context;
+    static const char *const SPEEDS[] = {"24 MHz", "50 MHz", "Refused", "Fell back"};
+    return SPEEDS[hal_storage_card_speed() % (sizeof SPEEDS / sizeof SPEEDS[0])];
+}
+
+static const char *sd_reads_value(const void *context)
+{
+    (void)context;
+    uint32_t failures = hal_storage_card_dma_failures();
+    if (failures == 0) {
+        return "DMA";
+    }
+    static char text[SD_READS_CAPACITY];
+    StringBuilder builder = string_builder_make(text, sizeof text);
+    string_builder_append(&builder, "DMA, ");
+    string_builder_append_unsigned(&builder, failures);
+    string_builder_append(&builder, failures == 1 ? " retry" : " retries");
+    return text;
+}
+
 static char boot_hold_text[DIAGNOSTICS_VALUE_CAPACITY];
 
 static const char *boot_hold_value(const void *context)
@@ -131,6 +159,8 @@ void diagnostics_menu_build(AppScreens *screens, AppOptions *options, const Them
     int count = 0;
     items[count++] =
         action_item(STR_DIAG_AUDIO_OUTPUT, cycle_audio_output, NULL, audio_output_value);
+    items[count++] = value_item(STR_DIAG_SD_CLOCK, sd_clock_value);
+    items[count++] = value_item(STR_DIAG_SD_READS, sd_reads_value);
     items[count++] = app_screens_open_item(i18n_text(STR_DIAG_KEY_TEST),
                                            test_pattern_screen_init(&screens->test_pattern));
     items[count++] = action_item(STR_DIAG_FRAME_TIME, toggle_frame_time, options, frame_time_value);

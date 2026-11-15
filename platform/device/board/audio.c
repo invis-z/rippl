@@ -130,6 +130,26 @@ static bool read_file(void *context, uint32_t offset, void *buffer, uint32_t len
     return read;
 }
 
+static uint32_t start_card_read(void *context, uint32_t offset, void *buffer, uint32_t length)
+{
+    const HalFile *open = context;
+    uint32_t started_us = hal_clock_microseconds();
+    uint32_t started = hal_file_read_start(*open, offset, buffer, length);
+    uint32_t read_us = hal_clock_microseconds() - started_us;
+    read_us_pending += read_us;
+    stats.read_total_us += read_us;
+    return started;
+}
+
+static Core1ReadState poll_card_read(void *context)
+{
+    (void)context;
+    HalReadState state = hal_file_read_poll();
+    return state == HAL_READ_PENDING ? CORE1_READ_PENDING
+           : state == HAL_READ_DONE  ? CORE1_READ_DONE
+                                     : CORE1_READ_FAILED;
+}
+
 static uint32_t larger(uint32_t a, uint32_t b)
 {
     return a > b ? a : b;
@@ -379,6 +399,7 @@ static void ensure_engine(void)
     core1_source_init(&core1_source, core1_region(), files, &header_decoder, FILL_BUDGET_BYTES);
     core1_source_set_wake(&core1_source, signal_core1);
     core1_source_set_word_output(&core1_source, !core0_output);
+    core1_source_set_async(&core1_source, (Core1AsyncRead){start_card_read, poll_card_read, &file});
     AudioSource source = {open_chosen, next_chosen, release_chosen, close_chosen, NULL};
     audio_engine_init(
         &engine, (AudioEngineConfig){.source = source, .ring = ring(), .ring_words = RING_WORDS});
