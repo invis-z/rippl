@@ -159,6 +159,9 @@ static void close_file(void *context)
     close_count++;
 }
 
+static bool with_fake_async;
+static void use_fake_async(int fail_every, int failures);
+
 static void start_with(uint32_t ring_bytes, bool mp3)
 {
     core1_sleeps = false;
@@ -179,6 +182,9 @@ static void start_with(uint32_t ring_bytes, bool mp3)
         Core1FlacBanks banks = {first_bank, second_bank};
         core1_stream_init(&stream, region, core1_flac_decoder(&core1_flac, &core1_decoder, banks));
         interface = core1_source_interface(&source);
+    }
+    if (with_fake_async) {
+        use_fake_async(0, 0);
     }
 }
 
@@ -1646,6 +1652,9 @@ static void core_1_words_match_the_main_core_s_conversion(void)
     CHECK(words_match_rows(begin_mp3, "mp3/cbr_128_44k_stereo_tagged", false));
     CHECK(words_match_rows(begin_mp4, "alac/stereo_24_96k", false));
     CHECK(words_match_rows(begin_mp4, "alac/mono_16_22k", false));
+    CHECK(words_match_rows(begin_mp3, "mp3/mpeg2_22k_stereo", false));
+    CHECK(words_match_rows(begin_mp3, "mp3/mpeg2_22k_stereo", true));
+    CHECK(words_match_rows(begin_mp4, "alac/mono_16_22k", true));
     build_wav(2, 44100, 32, 50000);
     CHECK(words_match_rows(begin_wav, "wav", false));
     build_wav(1, 44100, 16, 50000);
@@ -1658,12 +1667,89 @@ static void core_1_words_match_the_main_core_with_the_equalizer_on(void)
     CHECK(words_match_rows(begin_flac, "fixed_16_mono", true));
 }
 
+typedef struct FakeAsync {
+    uint32_t offset;
+    uint32_t length;
+    void *destination;
+    int waits;
+    int started;
+    int failures_left;
+    int fail_every;
+} FakeAsync;
+
+static FakeAsync fake_async;
+
+static uint32_t fake_read_start(void *context, uint32_t offset, void *destination, uint32_t length)
+{
+    (void)context;
+    if (offset % 512u != 0 || length < 512u) {
+        return 0;
+    }
+    uint32_t sectors = length / 512u < 5u ? length / 512u : 5u;
+    fake_async = (FakeAsync){.offset = offset,
+                             .length = sectors * 512u,
+                             .destination = destination,
+                             .waits = 3,
+                             .started = fake_async.started + 1,
+                             .failures_left = fake_async.failures_left,
+                             .fail_every = fake_async.fail_every};
+    return fake_async.length;
+}
+
+static Core1ReadState fake_read_poll(void *context)
+{
+    (void)context;
+    if (fake_async.waits-- > 0) {
+        return CORE1_READ_PENDING;
+    }
+    if (fake_async.fail_every > 0 && fake_async.started % fake_async.fail_every == 0 &&
+        fake_async.failures_left > 0) {
+        fake_async.failures_left--;
+        return CORE1_READ_FAILED;
+    }
+    uint32_t end = fake_async.offset + fake_async.length;
+    uint32_t length = end <= opened.size ? fake_async.length : opened.size - fake_async.offset;
+    memcpy(fake_async.destination, opened.bytes + fake_async.offset, length);
+    return CORE1_READ_DONE;
+}
+
+static void use_fake_async(int fail_every, int failures)
+{
+    fake_async = (FakeAsync){.fail_every = fail_every, .failures_left = failures};
+    core1_source_set_async(&source, (Core1AsyncRead){fake_read_start, fake_read_poll, NULL});
+}
+
+static void reads_in_the_background_play_exactly(void)
+{
+    start(BIG_RING_BYTES);
+    use_fake_async(0, 0);
+    CHECK(plays_exactly("lpc_24_96k_stereo", 2));
+    CHECK(fake_async.started > 3);
+    start(SMALL_RING_BYTES);
+    use_fake_async(0, 0);
+    CHECK(plays_exactly("lpc_16_44k_stereo", 2));
+    with_fake_async = true;
+    CHECK(mp3_streams_like_the_decoder("mp3/cbr_128_44k_stereo_tagged", BIG_RING_BYTES));
+    CHECK(mp3_streams_like_the_decoder("mp3/vbr_48k_mono", SMALL_RING_BYTES));
+    with_fake_async = false;
+}
+
+static void a_failed_background_read_is_read_again(void)
+{
+    start(SMALL_RING_BYTES);
+    use_fake_async(1, 1);
+    CHECK(plays_exactly("lpc_16_44k_stereo", 2));
+    CHECK_EQUAL(0, fake_async.failures_left);
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
         TEST_CASE(a_24_bit_96k_track_streams_through_core_1_exactly),
         TEST_CASE(core_1_words_match_the_main_core_s_conversion),
         TEST_CASE(core_1_words_match_the_main_core_with_the_equalizer_on),
+        TEST_CASE(reads_in_the_background_play_exactly),
+        TEST_CASE(a_failed_background_read_is_read_again),
         TEST_CASE(a_16_bit_track_streams_through_core_1_exactly),
         TEST_CASE(a_32_bit_track_streams_through_core_1_whole),
         TEST_CASE(core_1_equalizes_exactly_like_the_main_core),

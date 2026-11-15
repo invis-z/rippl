@@ -10,6 +10,25 @@ typedef struct HalFile {
 
 bool hal_file_open(HalFile *file, const char *path);
 bool hal_file_read(HalFile file, uint32_t offset, void *buffer, uint32_t length);
+
+typedef enum HalReadState {
+    HAL_READ_IDLE,
+    HAL_READ_PENDING,
+    HAL_READ_DONE,
+    HAL_READ_FAILED
+} HalReadState;
+
+typedef enum HalCardSpeed {
+    HAL_CARD_SPEED_DEFAULT,
+    HAL_CARD_SPEED_HIGH,
+    HAL_CARD_SPEED_REFUSED,
+    HAL_CARD_SPEED_FELL_BACK
+} HalCardSpeed;
+
+uint32_t hal_file_read_start(HalFile file, uint32_t offset, void *buffer, uint32_t length);
+HalReadState hal_file_read_poll(void);
+HalCardSpeed hal_storage_card_speed(void);
+uint32_t hal_storage_card_dma_failures(void);
 void hal_file_close(HalFile *file);
 bool hal_file_write(const char *path, const void *bytes, uint32_t length);
 bool hal_file_write_at(const char *path, uint32_t offset, const void *bytes, uint32_t length);

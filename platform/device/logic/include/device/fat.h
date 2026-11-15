@@ -96,3 +96,5 @@ FatReserveResult fat_grow(FatVolume *volume, const char *path, uint32_t size);
 void fat_set_new_stamp(uint32_t dos_stamp);
 uint32_t fat_new_stamp(void);
 bool fat_file_sector(FatVolume *volume, FatFile *file, uint32_t sector_index, uint32_t *lba);
+uint32_t fat_read_plan(FatVolume *volume, FatFile *file, uint32_t offset, uint32_t length,
+                       uint32_t max_sectors, uint32_t *lba);

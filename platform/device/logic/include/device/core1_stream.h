@@ -163,6 +163,18 @@ bool core1_stream_step(Core1Stream *stream);
 void core1_stream_set_wait(Core1Stream *stream, void (*wait)(void));
 void core1_stream_serve(Core1Stream *stream);
 
+typedef enum Core1ReadState {
+    CORE1_READ_PENDING,
+    CORE1_READ_DONE,
+    CORE1_READ_FAILED
+} Core1ReadState;
+
+typedef struct Core1AsyncRead {
+    uint32_t (*start)(void *context, uint32_t offset, void *buffer, uint32_t length);
+    Core1ReadState (*poll)(void *context);
+    void *context;
+} Core1AsyncRead;
+
 typedef struct Core1Source {
     StreamRegion region;
     uint32_t ring_capacity;
@@ -187,6 +199,11 @@ typedef struct Core1Source {
     bool file_open;
     bool reset_equalizer;
     bool word_output;
+    Core1AsyncRead async;
+    bool async_pending;
+    uint32_t async_offset;
+    uint32_t async_length;
+    void *async_destination;
 } Core1Source;
 
 void core1_source_init(Core1Source *source, StreamRegion region, FlacFileOpener files,
@@ -195,6 +212,7 @@ void core1_source_fill(Core1Source *source);
 void core1_source_set_wake(Core1Source *source, void (*wake)(void));
 void core1_source_reset_equalizer(Core1Source *source);
 void core1_source_set_word_output(Core1Source *source, bool words);
+void core1_source_set_async(Core1Source *source, Core1AsyncRead async);
 AudioSource core1_source_interface(Core1Source *source);
 AudioSource core1_source_mp3_interface(Core1Source *source);
 AudioSource core1_source_mp4_interface(Core1Source *source);
