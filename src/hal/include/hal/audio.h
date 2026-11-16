@@ -139,6 +139,10 @@ void hal_audio_set_balance(uint8_t balance);
 void hal_audio_set_dre(HalAudioDre dre);
 void hal_audio_set_output(HalAudioOutput output);
 void hal_audio_set_equalizer(const EqualizerCurve *curve);
+typedef bool (*HalEqualizerFitReader)(uint32_t slot, uint32_t key, uint32_t rate,
+                                      EqualizerFit *fit);
+
+void hal_audio_set_equalizer_fits(HalEqualizerFitReader reader, uint32_t slot, uint32_t key);
 void hal_audio_set_word_output(bool words);
 bool hal_audio_word_output(void);
 void hal_audio_allow_slow_clock(bool allowed);

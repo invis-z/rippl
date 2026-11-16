@@ -13,6 +13,7 @@ const FrameStats *app_frame_stats(void);
 const char *app_screen_title(void);
 int app_screen_depth(void);
 void app_show_notice(const char *title, const char *message);
+void app_show_progress(const char *title, const char *message, uint32_t done, uint32_t total);
 void app_show_usb_notice(const char *title, const char *message);
 void app_prepare_notice(const char *title, const char *message);
 typedef struct AppDacStats {
@@ -44,6 +45,7 @@ typedef struct AppDacView {
 void app_show_dac(const AppDacView *view);
 void app_wake(void);
 void app_release_audio(void);
+bool app_refit_equalizer_preset(const char *name);
 void app_remember_dac_volume(uint8_t level);
 
 typedef enum AppDacKey {

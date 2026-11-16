@@ -166,9 +166,33 @@ static void a_word_wider_than_the_screen_breaks_between_characters(void)
     CHECK_EQUAL(3, message.layout.length[2]);
 }
 
+static void a_progress_bar_fills_as_far_as_the_progress(void)
+{
+    Rect content = theme_content_area(&TEST_THEME);
+    MessageConfig config = {.title = "Note", .message = "AB", .theme = &TEST_THEME};
+    Screen *screen = message_screen_init(&message, config);
+    Canvas canvas = ui_test_canvas();
+    screen->draw(screen->context, &canvas);
+    CHECK(!ui_test_area_has_color(&canvas, content, TEST_THEME.colors.selection_background));
+    config.progress = 1;
+    config.progress_total = 4;
+    screen = message_screen_init(&message, config);
+    canvas = ui_test_canvas();
+    screen->draw(screen->context, &canvas);
+    int padding = TEST_THEME.metrics.padding;
+    int width = content.width - 2 * padding;
+    Rect filled = {content.x + padding, content.y, width / 4, content.height};
+    Rect empty = {content.x + padding + width / 4 + 1, content.y, width - width / 4 - 1,
+                  content.height};
+    CHECK(ui_test_area_has_color(&canvas, filled, TEST_THEME.colors.selection_background));
+    CHECK(!ui_test_area_has_color(&canvas, empty, TEST_THEME.colors.selection_background));
+    CHECK(ui_test_area_has_color(&canvas, empty, TEST_THEME.colors.divider));
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
+        TEST_CASE(a_progress_bar_fills_as_far_as_the_progress),
         TEST_CASE(the_message_title_is_the_screen_title),
         TEST_CASE(back_pops_and_a_long_back_goes_home),
         TEST_CASE(other_keys_do_nothing),

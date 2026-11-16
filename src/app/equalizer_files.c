@@ -36,48 +36,116 @@ uint32_t equalizer_files_stem_length(const char *name)
     return text_extension(name) ? length - EXTENSION_LENGTH : length;
 }
 
-void equalizer_files_name(const EqualizerFileList *list, int index, char *name)
+static bool preset_entry(const HalDirEntry *entry)
 {
-    const char *stem = list->names[index];
+    if (entry->directory || entry->hidden || entry->name[0] == '.' ||
+        !text_extension(entry->name)) {
+        return false;
+    }
     uint32_t length = 0;
-    while (stem[length] != '\0') {
-        name[length] = stem[length];
+    while (entry->name[length] != '\0') {
         length++;
     }
-    for (uint32_t extension = 0; extension <= EXTENSION_LENGTH; extension++) {
-        name[length + extension] = extension == 0 ? '.' : stem[length + extension];
+    return length + 1 <= EQUALIZER_PRESET_NAME_CAPACITY;
+}
+
+static bool same_name(const char *first, const char *second)
+{
+    uint32_t index = 0;
+    while (first[index] != '\0' && first[index] == second[index]) {
+        index++;
     }
+    return first[index] == second[index];
+}
+
+bool equalizer_files_open(HalDir *dir)
+{
+    return hal_dir_open(dir, EQUALIZER_FOLDER_PATH);
+}
+
+bool equalizer_files_next(HalDir *dir, char *name)
+{
+    HalDirEntry entry;
+    while (hal_dir_next(dir, &entry)) {
+        if (!preset_entry(&entry)) {
+            continue;
+        }
+        uint32_t at = 0;
+        for (; entry.name[at] != '\0'; at++) {
+            name[at] = entry.name[at];
+        }
+        name[at] = '\0';
+        return true;
+    }
+    return false;
+}
+
+int equalizer_files_find(const EqualizerFileList *list, const char *name)
+{
+    HalDir dir;
+    if (!equalizer_files_open(&dir)) {
+        return -1;
+    }
+    char listed[EQUALIZER_FILES_NAME_CAPACITY];
+    int found = -1;
+    for (int index = 0; found < 0 && index < list->count && equalizer_files_next(&dir, listed);
+         index++) {
+        if (same_name(listed, name)) {
+            found = index;
+        }
+    }
+    hal_dir_close(&dir);
+    return found;
+}
+
+static bool nth_name(int wanted, char *name)
+{
+    HalDir dir;
+    if (wanted < 0 || wanted >= EQUALIZER_FILES_MAX || !equalizer_files_open(&dir)) {
+        return false;
+    }
+    bool found = false;
+    for (int index = 0; !found && equalizer_files_next(&dir, name); index++) {
+        found = index == wanted;
+    }
+    hal_dir_close(&dir);
+    if (!found) {
+        name[0] = '\0';
+    }
+    return found;
+}
+
+bool equalizer_files_name(const EqualizerFileList *list, int index, char *name)
+{
+    name[0] = '\0';
+    return index < list->count && nth_name(index, name);
+}
+
+bool equalizer_files_stem(const EqualizerFileList *list, int index, char *stem)
+{
+    char name[EQUALIZER_FILES_NAME_CAPACITY];
+    stem[0] = '\0';
+    if (!equalizer_files_name(list, index, name)) {
+        return false;
+    }
+    uint32_t length = equalizer_files_stem_length(name);
+    for (uint32_t at = 0; at < length; at++) {
+        stem[at] = name[at];
+    }
+    stem[length] = '\0';
+    return true;
 }
 
 void equalizer_files_scan(EqualizerFileList *list)
 {
     list->count = 0;
     HalDir dir;
-    if (!hal_dir_open(&dir, EQUALIZER_FOLDER_PATH)) {
+    if (!equalizer_files_open(&dir)) {
         return;
     }
-    HalDirEntry entry;
-    while (hal_dir_next(&dir, &entry)) {
-        if (entry.directory || entry.hidden || entry.name[0] == '.' ||
-            !text_extension(entry.name)) {
-            continue;
-        }
-        uint32_t length = 0;
-        while (entry.name[length] != '\0') {
-            length++;
-        }
-        if (length + 1 > EQUALIZER_PRESET_NAME_CAPACITY) {
-            continue;
-        }
-        char *name = list->names[list->count];
-        for (uint32_t index = 0; index <= length; index++) {
-            name[index] = entry.name[index];
-        }
-        name[length - EXTENSION_LENGTH] = '\0';
+    char name[EQUALIZER_FILES_NAME_CAPACITY];
+    while (list->count < EQUALIZER_FILES_MAX && equalizer_files_next(&dir, name)) {
         list->count++;
-        if (list->count == EQUALIZER_FILES_MAX) {
-            break;
-        }
     }
     hal_dir_close(&dir);
 }

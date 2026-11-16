@@ -52,6 +52,7 @@ The `device` build adds developer rows to Diagnostics:
 | Row | Shows or does |
 |---|---|
 | Frame time | The frame-time overlay (below) |
+| Fit log | Write each equaliser fit's times to `/.rippl/equaliser/FIT.LOG` (not saved) |
 | CPU clock | Cycle the clock through 24, 96 and 200 MHz |
 | Core 1, LPC accel | Self-tests of the second core and the FLAC accelerator |
 | Last start, Last step, Last stack, Boot hold | What happened at the last start and where a crash stopped |

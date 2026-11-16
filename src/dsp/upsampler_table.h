@@ -5,7 +5,7 @@
 enum {
     UPSAMPLER_TAPS = 64,
     UPSAMPLER_COEFFICIENT_BITS = 30,
-    UPSAMPLER_FILTER_COUNT = 4
+    UPSAMPLER_FILTER_COUNT = 2
 };
 
 typedef struct UpsamplerFilter {

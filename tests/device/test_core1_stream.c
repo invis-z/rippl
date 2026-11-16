@@ -14,6 +14,7 @@
 #include "device/core1_stream.h"
 #include "device/mp3_probe.h"
 #include "device/wav_format.h"
+#include "dsp/equalizer_fit.h"
 #include "flac_writer.h"
 
 enum {
@@ -1213,6 +1214,115 @@ static void core_1_equalizes_pieces_exactly_like_the_main_core(void)
     CHECK_EQUAL(40000u, played);
 }
 
+static int64_t fit_work[8192];
+
+static EqualizerFit fit_for_rate(const EqualizerCurve *curve, uint32_t rate)
+{
+    EqualizerFit fit = {0};
+    EqualizerFitStats stats;
+    CHECK(equalizer_fit(curve, rate, fit_work, sizeof fit_work, &fit, &stats, NULL, NULL));
+    return fit;
+}
+
+static void share_fits(const EqualizerFit *before, const EqualizerFit *after)
+{
+    EqualizerFit none = {0};
+    share.before_fit = before != NULL ? *before : none;
+    share.after_fit = after != NULL ? *after : none;
+}
+
+static int32_t (*fitted_reference(const Fixture *pcm, const EqualizerCurve *curve,
+                                  const EqualizerFit *fit, uint32_t rate, uint32_t *frames))[2]
+{
+    uint32_t count = (uint32_t)(pcm->size / 4) / 2;
+    *frames = count + UPSAMPLER_DELAY;
+    int32_t (*input)[2] = calloc(*frames, sizeof(int32_t[2]));
+    for (uint32_t index = 0; input != NULL && index < count; index++) {
+        input[index][0] = expected_at(pcm, 2 * index) * 256;
+        input[index][1] = expected_at(pcm, 2 * index + 1) * 256;
+    }
+    static Equalizer reference;
+    equalizer_init(&reference);
+    equalizer_set_rate(&reference, rate);
+    equalizer_set_curve(&reference, curve);
+    equalizer_set_fit(&reference, fit);
+    CHECK(equalizer_fitted(&reference));
+    if (input != NULL) {
+        equalizer_process(&reference, &input[0][0], *frames);
+    }
+    return input;
+}
+
+static void a_raised_track_is_equalized_with_its_fit_before_the_upsampler(void)
+{
+    made = flac_writer_make((FlacWriterSpec){24000, 2, 16, 4096, 20000, 11});
+    start(FULL_RING_BYTES);
+    use_the_flac_program_slots();
+    EqualizerCurve curve = bells_and_shelves(6, -4);
+    EqualizerFit fit = fit_for_rate(&curve, 24000);
+    share_fits(&fit, NULL);
+    core1_stream_set_equalizer(&stream, &core1_equalizer, &share);
+    share_curve(curve, true);
+    Fixture pcm = load("made", "pcm");
+    uint32_t frames = 0;
+    int32_t (*equalized)[2] = fitted_reference(&pcm, &curve, &fit, 24000, &frames);
+    int32_t (*reference)[2] = upsample_reference(equalized, frames, 24000, 0);
+    AudioTrackInfo info;
+    bool ok = reference != NULL && interface.open(interface.context, "made", 0, &info);
+    CHECK_EQUAL(48000u, info.play_rate);
+    AudioFrame frame;
+    uint32_t played = 0;
+    while (ok && next_frame(&frame) == AUDIO_FRAME_READY) {
+        ok = frame.first_sample == played && frame.equalized && frame.bits == 24 &&
+             upsampled_frame_matches(reference, &frame);
+        played += frame.samples;
+        interface.release(interface.context);
+    }
+    interface.close(interface.context);
+    share_fits(NULL, NULL);
+    free(reference);
+    free(equalized);
+    free(pcm.bytes);
+    flac_writer_free(&made);
+    CHECK(ok);
+    CHECK_EQUAL(40000u, played);
+}
+
+static void a_track_at_its_own_rate_uses_the_fit_for_that_rate(void)
+{
+    made = flac_writer_make((FlacWriterSpec){44100, 2, 16, 4096, 20000, 13});
+    start(FULL_RING_BYTES);
+    use_the_flac_program_slots();
+    EqualizerCurve curve = bells_and_shelves(6, -4);
+    EqualizerFit fit = fit_for_rate(&curve, 44100);
+    share_fits(NULL, &fit);
+    core1_stream_set_equalizer(&stream, &core1_equalizer, &share);
+    share_curve(curve, true);
+    Fixture pcm = load("made", "pcm");
+    uint32_t frames = 0;
+    int32_t (*reference)[2] = fitted_reference(&pcm, &curve, &fit, 44100, &frames);
+    AudioTrackInfo info;
+    bool ok = reference != NULL && interface.open(interface.context, "made", 0, &info);
+    AudioFrame frame;
+    uint32_t played = 0;
+    while (ok && next_frame(&frame) == AUDIO_FRAME_READY) {
+        ok = frame.first_sample == played && frame.equalized;
+        for (uint32_t sample = 0; ok && sample < frame.samples; sample++) {
+            ok = frame.left[sample] == reference[played + sample][0] &&
+                 frame.right[sample] == reference[played + sample][1];
+        }
+        played += frame.samples;
+        interface.release(interface.context);
+    }
+    interface.close(interface.context);
+    share_fits(NULL, NULL);
+    free(reference);
+    free(pcm.bytes);
+    flac_writer_free(&made);
+    CHECK(ok);
+    CHECK_EQUAL(20000u, played);
+}
+
 static void alac_streams_exactly_through_the_flac_program_slots(void)
 {
     start_mp4(SMALL_RING_BYTES);
@@ -1789,6 +1899,8 @@ int main(void)
         TEST_CASE(hi_res_blocks_larger_than_a_slot_stream_exactly),
         TEST_CASE(a_16384_sample_track_opened_part_way_starts_on_its_frame),
         TEST_CASE(core_1_equalizes_pieces_exactly_like_the_main_core),
+        TEST_CASE(a_raised_track_is_equalized_with_its_fit_before_the_upsampler),
+        TEST_CASE(a_track_at_its_own_rate_uses_the_fit_for_that_rate),
         TEST_CASE(alac_streams_exactly_through_the_flac_program_slots),
         TEST_CASE(a_program_without_the_codec_reports_an_error),
         TEST_CASE(an_aac_track_streams_through_core_1_like_ffmpeg_decodes_it),

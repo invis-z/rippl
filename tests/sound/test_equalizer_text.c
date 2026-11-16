@@ -281,6 +281,62 @@ static void a_read_error_is_reported(void)
     CHECK_EQUAL(EQUALIZER_TEXT_UNREADABLE, error.problem);
 }
 
+static void a_sample_rate_comment_sets_the_target_rate(void)
+{
+    static const char TEXT[] = "# Sample rate: 44100\n"
+                               "Preamp: -2 dB\n"
+                               "Filter 1: ON PK Fc 1000 Hz Gain -1.5 dB Q 0.7\n";
+    EqualizerCurve curve;
+    EqualizerTextError error;
+    CHECK(parse(TEXT, &curve, &error));
+    CHECK_EQUAL(44100, curve.target_rate);
+    CHECK_EQUAL(44100, equalizer_target_rate(&curve));
+    CHECK_EQUAL(-20, curve.preamp_tenths);
+    CHECK_EQUAL(1, curve.band_count);
+    CHECK_EQUAL(1000, curve.bands[0].frequency_hz);
+}
+
+static void the_comment_takes_other_spacing_case_and_hz(void)
+{
+    static const char TEXT[] = "  #SAMPLE   rate :96000 Hz  \r\n"
+                               "Filter 1: ON PK Fc 1000 Hz Gain -1.5 dB Q 0.7\n";
+    EqualizerCurve curve;
+    EqualizerTextError error;
+    CHECK(parse(TEXT, &curve, &error));
+    CHECK_EQUAL(96000, curve.target_rate);
+}
+
+static void without_the_comment_the_target_is_48_khz(void)
+{
+    static const char TEXT[] = "# a comment\n"
+                               "Filter 1: ON PK Fc 1000 Hz Gain -1.5 dB Q 0.7\n";
+    EqualizerCurve curve;
+    EqualizerTextError error;
+    CHECK(parse(TEXT, &curve, &error));
+    CHECK_EQUAL(0, curve.target_rate);
+    CHECK_EQUAL(48000, equalizer_target_rate(&curve));
+}
+
+static void a_wrong_or_misspelt_comment_is_only_a_comment(void)
+{
+    static const char *const TEXTS[] = {
+        "# Sample rate: 4000\nFilter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1\n",
+        "# Sample rate: 400000\nFilter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1\n",
+        "# Sample rate: 48 kHz\nFilter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1\n",
+        "# Samplerate: 44100\nFilter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1\n",
+        "# Sample rates: 44100\nFilter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1\n",
+        "# Sample rate 44100\nFilter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1\n",
+        "Filter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1 # Sample rate: 44100\n"};
+    for (size_t index = 0; index < sizeof TEXTS / sizeof TEXTS[0]; index++) {
+        EqualizerCurve curve;
+        EqualizerTextError error;
+        CHECK(parse(TEXTS[index], &curve, &error));
+        CHECK_EQUAL(0, curve.target_rate);
+        CHECK_EQUAL(1, curve.band_count);
+        CHECK_EQUAL(10, curve.bands[0].gain_tenths);
+    }
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
@@ -298,6 +354,10 @@ int main(void)
         TEST_CASE(a_long_line_is_rejected),
         TEST_CASE(a_line_of_the_longest_length_is_read_whole_even_after_a_bom),
         TEST_CASE(a_read_error_is_reported),
+        TEST_CASE(a_sample_rate_comment_sets_the_target_rate),
+        TEST_CASE(the_comment_takes_other_spacing_case_and_hz),
+        TEST_CASE(without_the_comment_the_target_is_48_khz),
+        TEST_CASE(a_wrong_or_misspelt_comment_is_only_a_comment),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

@@ -13,6 +13,7 @@ enum {
     OPUS_OUTPUT_BITS = 16,
     OPUS_FRAME_SAMPLES = 960,
     EQUALIZED_BITS = 24,
+    UPSAMPLE_CHUNK = 32,
     WORD_CHANNELS = 2,
     WORD_SHIFT = 8,
     SAMPLE_MAX = 8388607,
@@ -161,16 +162,33 @@ void core1_stream_set_equalizer(Core1Stream *stream, Equalizer *equalizer,
     stream->share_version = 0;
 }
 
+static bool fit_for(const volatile EqualizerFit *shared, uint32_t rate, EqualizerFit *fit)
+{
+    *fit = *(const EqualizerFit *)(uintptr_t)shared;
+    return fit->stage_count > 0 && fit->rate == rate;
+}
+
 static void follow_share(Core1Stream *stream)
 {
     uint32_t version = stream->share->version;
-    if (version == stream->share_version) {
+    if (version == stream->share_version && !stream->replace_equalizer) {
         return;
     }
     observe();
-    EqualizerCurve curve = stream->share->curve;
     stream->share_version = version;
+    stream->replace_equalizer = false;
+    EqualizerCurve curve = stream->share->curve;
+    uint32_t rate = stream->region.control->sample_rate;
+    uint32_t factor = stream->upsampler.factor;
+    EqualizerFit fit;
+    bool first =
+        upsampler_active(&stream->upsampler) && fit_for(&stream->share->before_fit, rate, &fit);
+    bool fitted = first || fit_for(&stream->share->after_fit, rate * factor, &fit);
+    stream->equalize_first = first;
+    equalizer_set_fit(stream->equalizer, NULL);
+    equalizer_set_rate(stream->equalizer, first ? rate : rate * factor);
     equalizer_set_curve(stream->equalizer, &curve);
+    equalizer_set_fit(stream->equalizer, fitted ? &fit : NULL);
 }
 
 static void widen(int32_t *samples, uint32_t count, uint32_t shift)
@@ -283,6 +301,8 @@ static void adopt(Core1Stream *stream, uint32_t generation)
     control->slot_offset = stream->slot_offset;
     control->slot_samples = stream->slot_samples;
     if (stream->equalizer != NULL) {
+        stream->replace_equalizer = true;
+        stream->equalize_first = false;
         equalizer_set_rate(stream->equalizer, info.sample_rate * stream->upsampler.factor);
         if (control->equalizer_reset != 0) {
             control->equalizer_reset = 0;
@@ -422,6 +442,41 @@ static uint32_t upsampled_bits(const Core1Stream *stream)
     return bits <= EQUALIZED_BITS ? EQUALIZED_BITS : bits;
 }
 
+static bool equalizes_first(Core1Stream *stream)
+{
+    if (stream->equalizer == NULL || stream->share->enabled == 0) {
+        return false;
+    }
+    follow_share(stream);
+    uint32_t bits = source_bits(stream);
+    return stream->equalize_first && equalizer_active(stream->equalizer) && bits != 0 &&
+           bits <= EQUALIZED_BITS;
+}
+
+static void gather(Core1Stream *stream, uint32_t from, uint32_t count, bool silence,
+                   int32_t (*values)[UPSAMPLE_CHUNK])
+{
+    const Core1Block *block = &stream->pending;
+    uint32_t stride = block->stride > 0 ? block->stride : 1;
+    uint32_t widen = upsampled_bits(stream) - source_bits(stream);
+    for (uint32_t index = 0; index < count; index++) {
+        uint32_t at = (from + index) * stride;
+        int32_t pair[FLAC_MAX_CHANNELS] = {0, 0};
+        if (!silence) {
+            for (uint32_t channel = 0; channel < stream->channels; channel++) {
+                const int16_t *narrow = block->narrow[channel];
+                pair[channel] = narrow != NULL ? narrow[at] : block->channels[channel][at];
+            }
+            if (block->join != FLAC_JOIN_NONE) {
+                flac_join_pair((FlacJoin)block->join, pair[0], pair[1], &pair[0], &pair[1]);
+            }
+        }
+        for (uint32_t channel = 0; channel < FLAC_MAX_CHANNELS; channel++) {
+            values[channel][index] = pair[channel] * (int32_t)(1u << widen);
+        }
+    }
+}
+
 static uint32_t render_rows(Core1Stream *stream, uint32_t slot, uint32_t produced)
 {
     int32_t *right = stream->channels > 1 ? stream_row(stream, slot, 1) + produced : NULL;
@@ -444,28 +499,26 @@ static uint32_t render_frames(Core1Stream *stream, uint32_t slot, uint32_t produ
 
 static uint32_t upsample(Core1Stream *stream, uint32_t slot, uint32_t count, bool silence)
 {
-    const Core1Block *block = &stream->pending;
-    uint32_t stride = block->stride > 0 ? block->stride : 1;
-    uint32_t widen = upsampled_bits(stream) - source_bits(stream);
+    bool first = equalizes_first(stream);
+    stream->equalized_first = first;
     uint32_t produced = 0;
-    for (uint32_t index = 0; index < count; index++) {
-        uint32_t at = (stream->emitted + index) * stride;
-        int32_t values[FLAC_MAX_CHANNELS] = {0, 0};
-        if (!silence) {
+    int32_t values[FLAC_MAX_CHANNELS][UPSAMPLE_CHUNK];
+    for (uint32_t done = 0; done < count; done += UPSAMPLE_CHUNK) {
+        uint32_t chunk = smaller(count - done, UPSAMPLE_CHUNK);
+        gather(stream, stream->emitted + done, chunk, silence, values);
+        if (first) {
+            equalizer_process_block(
+                stream->equalizer,
+                (EqualizerBlock){values[0], stream->channels > 1 ? values[1] : NULL, chunk, 1});
+        }
+        for (uint32_t index = 0; index < chunk; index++) {
             for (uint32_t channel = 0; channel < stream->channels; channel++) {
-                const int16_t *narrow = block->narrow[channel];
-                values[channel] = narrow != NULL ? narrow[at] : block->channels[channel][at];
+                upsampler_put(&stream->upsampler, channel, values[channel][index]);
             }
-            if (block->join != FLAC_JOIN_NONE) {
-                flac_join_pair((FlacJoin)block->join, values[0], values[1], &values[0], &values[1]);
-            }
+            produced += stream->words ? render_frames(stream, slot, produced)
+                                      : render_rows(stream, slot, produced);
+            upsampler_advance(&stream->upsampler);
         }
-        for (uint32_t channel = 0; channel < stream->channels; channel++) {
-            upsampler_put(&stream->upsampler, channel, values[channel] * (int32_t)(1u << widen));
-        }
-        produced += stream->words ? render_frames(stream, slot, produced)
-                                  : render_rows(stream, slot, produced);
-        upsampler_advance(&stream->upsampler);
     }
     return produced;
 }
@@ -477,10 +530,12 @@ static void hand_over_upsampled(Core1Stream *stream, uint32_t produced)
     uint32_t bits = upsampled_bits(stream);
     if (stream->words) {
         int32_t *frames = stream_row(stream, stream->slot, 0);
-        slot->equalized = equalize_frames(stream, frames, produced, bits);
+        slot->equalized =
+            stream->equalized_first ? 1u : equalize_frames(stream, frames, produced, bits);
         to_words(frames, produced, bits, stream->channels);
     } else {
-        slot->equalized = equalize_slot(stream, stream->slot, produced, bits);
+        slot->equalized =
+            stream->equalized_first ? 1u : equalize_slot(stream, stream->slot, produced, bits);
     }
     slot->bits = bits;
     slot->words = stream->words ? 1u : 0u;

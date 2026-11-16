@@ -4,8 +4,9 @@
 
 enum {
     COEFFICIENT_BITS = 14,
+    FINE_G_BITS = 20,
+    FINE_C_BITS = 18,
     M1_BITS = 13,
-    LOW_MASK = (1 << COEFFICIENT_BITS) - 1,
     HALF = 1 << (COEFFICIENT_BITS - 1),
     PREAMP_BITS = 30,
     HEADROOM_BITS = 4,
@@ -46,14 +47,22 @@ static int32_t doubled_minus(int32_t value, int32_t previous)
     return (int32_t)(2U * (uint32_t)value - (uint32_t)previous);
 }
 
+static inline __attribute__((always_inline)) int32_t scaled_carried_by(int32_t coefficient,
+                                                                       int32_t value,
+                                                                       uint32_t *carry, int bits)
+{
+    uint32_t mask = (1U << bits) - 1U;
+    uint32_t low = (uint32_t)value & mask;
+    int32_t high = value >> bits;
+    uint32_t low_product = (uint32_t)coefficient * low + *carry;
+    *carry = low_product & mask;
+    return (int32_t)((uint32_t)coefficient * (uint32_t)high +
+                     (uint32_t)((int32_t)low_product >> bits));
+}
+
 static int32_t scaled_carried(int32_t coefficient, int32_t value, uint32_t *carry)
 {
-    uint32_t low = (uint32_t)value & LOW_MASK;
-    int32_t high = value >> COEFFICIENT_BITS;
-    uint32_t low_product = (uint32_t)coefficient * low + *carry;
-    *carry = low_product & LOW_MASK;
-    return (int32_t)((uint32_t)coefficient * (uint32_t)high +
-                     (uint32_t)((int32_t)low_product >> COEFFICIENT_BITS));
+    return scaled_carried_by(coefficient, value, carry, COEFFICIENT_BITS);
 }
 
 typedef struct Run {
@@ -63,7 +72,7 @@ typedef struct Run {
 } Run;
 
 static inline __attribute__((always_inline)) void filter_run(EqualizerStage stage, int32_t *history,
-                                                             Run run, bool shelf)
+                                                             Run run, bool shelf, bool fine)
 {
     int32_t band = history[0];
     int32_t low = history[1];
@@ -72,9 +81,14 @@ static inline __attribute__((always_inline)) void filter_run(EqualizerStage stag
     int32_t *samples = run.samples;
     for (uint32_t index = 0; index < run.count * run.stride; index += run.stride) {
         int32_t x = samples[index];
-        int32_t drive = scaled_carried(stage.g, minus(x, low), &carry_band);
-        int32_t next_band = scaled(stage.a1, plus(band, drive));
-        int32_t next_low = plus(low, scaled_carried(stage.g, next_band, &carry_low));
+        int32_t drive = fine ? scaled_carried_by(stage.g, minus(x, low), &carry_band, FINE_G_BITS)
+                             : scaled_carried(stage.g, minus(x, low), &carry_band);
+        int32_t lifted = plus(band, drive);
+        int32_t next_band = fine ? minus(lifted, scaled_by(stage.a1, lifted, FINE_C_BITS))
+                                 : scaled(stage.a1, lifted);
+        int32_t next_low =
+            plus(low, fine ? scaled_carried_by(stage.g, next_band, &carry_low, FINE_G_BITS)
+                           : scaled_carried(stage.g, next_band, &carry_low));
         band = doubled_minus(next_band, band);
         low = doubled_minus(next_low, low);
         int32_t y = plus(x, scaled_by(stage.m1, next_band, M1_BITS));
@@ -88,17 +102,35 @@ static inline __attribute__((always_inline)) void filter_run(EqualizerStage stag
 
 static __attribute__((noinline)) void filter_peak(EqualizerStage stage, int32_t *history, Run run)
 {
-    filter_run(stage, history, run, false);
+    filter_run(stage, history, run, false, false);
 }
 
 static __attribute__((noinline)) void filter_shelf(EqualizerStage stage, int32_t *history, Run run)
 {
-    filter_run(stage, history, run, true);
+    filter_run(stage, history, run, true, false);
+}
+
+static __attribute__((noinline)) void filter_fine_peak(EqualizerStage stage, int32_t *history,
+                                                       Run run)
+{
+    filter_run(stage, history, run, false, true);
+}
+
+static __attribute__((noinline)) void filter_fine_shelf(EqualizerStage stage, int32_t *history,
+                                                        Run run)
+{
+    filter_run(stage, history, run, true, true);
 }
 
 static void filter_channel(EqualizerStage stage, int32_t *history, Run run)
 {
-    if (stage.m2 != 0) {
+    if (stage.fine) {
+        if (stage.m2 != 0) {
+            filter_fine_shelf(stage, history, run);
+        } else {
+            filter_fine_peak(stage, history, run);
+        }
+    } else if (stage.m2 != 0) {
         filter_shelf(stage, history, run);
     } else {
         filter_peak(stage, history, run);

@@ -27,8 +27,8 @@ The first Rippl release.
 - **Library:** stored in segment files that grow with the music, with 32-bit counts. Rescans read only new or changed files; resume, Up Next and covers survive them. Paths up to 1,024 bytes play.
 - **Screen:** sent through the LCD controller by DMA while the next part is drawn, so sending a frame costs almost no time.
 - **USB DAC:** packets are taken in an interrupt, so a busy screen can't drop audio; the stream fades out when the computer stops; a new screen shows the format and volume, and holding ≡ shows stream counters.
-- **Equaliser:** presets come from `.txt` files in `/EQ` (Equalizer APO, AutoEQ). All formats are equalised on the second processor, which now decodes WAV and FLAC too.
-- **Upsampling:** 32 kHz plays natively; 8–24 kHz is raised with a 64-tap filter instead of straight lines.
+- **Equaliser:** presets come from `.txt` files in `/EQ` (Equalizer APO, AutoEQ), up to 100. Each is fitted to every rate from 8 to 96 kHz after a scan, so it sounds the same at every rate; hold ▶ on a preset to refit it. All formats are equalised on the second processor, which now decodes WAV and FLAC too.
+- **Upsampling:** 32 kHz plays natively; 8 and 16 kHz are raised to 32 kHz, and 11–24 kHz to 44.1 or 48 kHz, with a 64-tap filter instead of straight lines.
 - **Volume:** 85 steps of exactly 1 dB; Bluetooth gets the 3.5 mm jack's level. Filter names the DAC's five filters.
 - **Faces:** fill the whole screen; Turntable shows the cover as its turning label, and Cassette and Turntable progress across the whole album.
 - **Settings:** Start screen moves to System, Lyrics to Display.

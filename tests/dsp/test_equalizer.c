@@ -342,8 +342,9 @@ static int worst_error_against_a_double_model(EqualizerCurve curve, uint32_t rat
         double x = sample * 16.0 * preamp;
         for (int index = 0; index < chain->stage_count; index++) {
             EqualizerStage stage = chain->stages[index];
-            double g = stage.g / 16384.0;
-            double v1 = stage.a1 / 16384.0 * (band[index] + g * (x - low[index]));
+            double g = stage.fine ? stage.g / 1048576.0 : stage.g / 16384.0;
+            double a1 = stage.fine ? 1.0 - stage.a1 / 262144.0 : stage.a1 / 16384.0;
+            double v1 = a1 * (band[index] + g * (x - low[index]));
             double v2 = low[index] + g * v1;
             band[index] = 2.0 * v1 - band[index];
             low[index] = 2.0 * v2 - low[index];

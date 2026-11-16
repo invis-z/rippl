@@ -154,6 +154,58 @@ static int tokenize(char *line, Token *tokens)
     return count;
 }
 
+static const char *after_word(const char *cursor, const char *word)
+{
+    for (; *word != '\0'; word++, cursor++) {
+        char letter = *cursor >= 'A' && *cursor <= 'Z' ? (char)(*cursor - 'A' + 'a') : *cursor;
+        if (letter != *word) {
+            return NULL;
+        }
+    }
+    return cursor;
+}
+
+static const char *after_blanks(const char *cursor)
+{
+    while (*cursor == ' ' || *cursor == '\t') {
+        cursor++;
+    }
+    return cursor;
+}
+
+static void read_rate_comment(const char *line, EqualizerCurve *curve)
+{
+    const char *cursor = after_blanks(line);
+    if (*cursor != '#') {
+        return;
+    }
+    cursor = after_word(after_blanks(cursor + 1), "sample");
+    if (cursor == NULL || (*cursor != ' ' && *cursor != '\t')) {
+        return;
+    }
+    cursor = after_word(after_blanks(cursor), "rate");
+    cursor = cursor != NULL ? after_blanks(cursor) : NULL;
+    if (cursor == NULL || *cursor != ':') {
+        return;
+    }
+    cursor = after_blanks(cursor + 1);
+    uint32_t rate = 0;
+    int digits = 0;
+    while (*cursor >= '0' && *cursor <= '9' && digits < 7) {
+        rate = rate * 10 + (uint32_t)(*cursor - '0');
+        cursor++;
+        digits++;
+    }
+    cursor = after_blanks(cursor);
+    const char *unit = after_word(cursor, "hz");
+    cursor = after_blanks(unit != NULL ? unit : cursor);
+    if (digits == 0 || *cursor != '\0' || rate < EQUALIZER_TARGET_RATE_MIN ||
+        rate > EQUALIZER_TARGET_RATE_MAX) {
+        return;
+    }
+    curve->target_rate = rate;
+}
+
 static bool normalize_line(char *line, bool *has_colon)
 {
     int colons = 0;
@@ -380,6 +432,7 @@ static bool parse_line(char *line, uint32_t line_number, EqualizerCurve *curve, 
                        uint16_t *ids, int *filter_count, EqualizerTextError *error)
 {
     bool has_colon = false;
+    read_rate_comment(line, curve);
     if (!normalize_line(line, &has_colon)) {
         error->line = line_number;
         error->problem = EQUALIZER_TEXT_SYNTAX;

@@ -10,6 +10,10 @@ enum {
     RESPONSE_BITS = EQUALIZER_BAND_RESPONSE_BITS,
     PRODUCT_SHIFT = 8,
     TABLE_BITS = EQUALIZER_BAND_TABLE_BITS,
+    FINE_G_BITS = EQUALIZER_BAND_FINE_G_BITS,
+    FINE_C_BITS = EQUALIZER_BAND_FINE_C_BITS,
+    FINE_G_LIMIT = EQUALIZER_BAND_FINE_G_LIMIT,
+    FINE_C_LIMIT = EQUALIZER_BAND_FINE_C_LIMIT,
     GAIN_TABLE_OFFSET = 24,
     SINE_LAST_TERM = 12,
     COSINE_LAST_TERM = 13,
@@ -131,6 +135,41 @@ static int64_t effective_damping(int32_t a1, int64_t g)
     return divided((inverse - ONE) << (TABLE_BITS - 4), g >> 4) - g;
 }
 
+static EqualizerStage core_of(int64_t tangent, int64_t damping)
+{
+    int64_t fine_g = divided(tangent, INT64_C(1) << (TABLE_BITS - FINE_G_BITS));
+    if (fine_g > 0 && fine_g < FINE_G_LIMIT) {
+        int64_t g_wide = fine_g << (TABLE_BITS - FINE_G_BITS);
+        int64_t spread = product(g_wide, g_wide + damping);
+        int64_t complement = divided(spread << TABLE_BITS, ONE + spread);
+        int64_t fine_c = divided(complement, INT64_C(1) << (TABLE_BITS - FINE_C_BITS));
+        if (fine_c > 0 && fine_c < FINE_C_LIMIT) {
+            return (EqualizerStage){.g = (int32_t)fine_g, .a1 = (int32_t)fine_c, .fine = 1};
+        }
+    }
+    int32_t g = coefficient(tangent);
+    int64_t g_wide = widened(g);
+    int64_t denominator = ONE + product(g_wide, g_wide + damping);
+    return (EqualizerStage){
+        .g = g, .a1 = (int32_t)divided(INT64_C(1) << (TABLE_BITS + COEFFICIENT_BITS), denominator)};
+}
+
+static int64_t stage_g_wide(const EqualizerStage *stage)
+{
+    return stage->fine ? (int64_t)stage->g << (TABLE_BITS - FINE_G_BITS) : widened(stage->g);
+}
+
+static int64_t stage_damping(const EqualizerStage *stage)
+{
+    int64_t g_wide = stage_g_wide(stage);
+    if (!stage->fine) {
+        return effective_damping(stage->a1, g_wide);
+    }
+    int64_t complement = (int64_t)stage->a1 << (TABLE_BITS - FINE_C_BITS);
+    int64_t spread = divided(complement << TABLE_BITS, ONE - complement);
+    return divided(spread << TABLE_BITS, g_wide) - g_wide;
+}
+
 EqualizerStage equalizer_band_design(EqualizerBand band, uint32_t rate)
 {
     Angle half = half_angle_of(band.frequency_hz, rate);
@@ -148,20 +187,30 @@ EqualizerStage equalizer_band_design(EqualizerBand band, uint32_t rate)
     if (shelf) {
         tangent = multiply(tangent, equalizer_band_amplitude(-gain * TENTHS / 2));
     }
-    int32_t g = coefficient(tangent);
-    int64_t g_wide = widened(g);
-    int64_t denominator = ONE + product(g_wide, g_wide + damping);
-    int32_t a1 = (int32_t)divided(INT64_C(1) << (TABLE_BITS + COEFFICIENT_BITS), denominator);
+    EqualizerStage stage = core_of(tangent, damping);
     int64_t squared_minus_one = product(amplitude, amplitude) - ONE;
-    int64_t effective = effective_damping(a1, g_wide);
+    int64_t effective = stage_damping(&stage);
     if (!shelf) {
-        return (EqualizerStage){
-            .g = g, .a1 = a1, .m1 = coefficient_m1(product(effective, squared_minus_one))};
+        stage.m1 = coefficient_m1(product(effective, squared_minus_one));
+        return stage;
     }
-    return (EqualizerStage){.g = g,
-                            .a1 = a1,
-                            .m1 = coefficient_m1(product(effective, amplitude - ONE)),
-                            .m2 = coefficient(squared_minus_one)};
+    stage.m1 = coefficient_m1(product(effective, amplitude - ONE));
+    stage.m2 = coefficient(squared_minus_one);
+    return stage;
+}
+
+EqualizerStage equalizer_band_stage(int64_t g, int64_t k, int64_t m1, int64_t m2)
+{
+    EqualizerStage stage = core_of(g, k);
+    stage.m1 = coefficient_m1(m1);
+    stage.m2 = coefficient(m2);
+    return stage;
+}
+
+int64_t equalizer_band_tangent(uint32_t frequency, uint32_t rate)
+{
+    Angle half = half_angle_of(frequency, rate);
+    return divided(half.sine << RESPONSE_BITS, half.cosine);
 }
 
 int64_t equalizer_band_times(int64_t first, int64_t second)
@@ -176,16 +225,17 @@ int64_t equalizer_band_times(int64_t first, int64_t second)
 
 EqualizerShape equalizer_band_shape(const EqualizerStage *stage)
 {
-    int64_t g = widened(stage->g);
-    return (EqualizerShape){.g = g >> (TABLE_BITS - RESPONSE_BITS),
-                            .k = effective_damping(stage->a1, g) >> (TABLE_BITS - RESPONSE_BITS),
+    int64_t g = stage_g_wide(stage);
+    return (EqualizerShape){.g_wide = g,
+                            .g = g >> (TABLE_BITS - RESPONSE_BITS),
+                            .k = stage_damping(stage) >> (TABLE_BITS - RESPONSE_BITS),
                             .m1 = (int64_t)stage->m1 * (1 << (RESPONSE_BITS - M1_BITS)),
                             .m2 = (int64_t)stage->m2 * (1 << (RESPONSE_BITS - COEFFICIENT_BITS))};
 }
 
 int64_t equalizer_band_response_squared(const EqualizerShape *shape, int64_t tangent)
 {
-    int64_t omega = divided(tangent << RESPONSE_BITS, shape->g);
+    int64_t omega = divided(tangent << TABLE_BITS, shape->g_wide);
     if (omega < OMEGA_MIN) {
         return equalizer_band_times(R_ONE + shape->m2, R_ONE + shape->m2);
     }

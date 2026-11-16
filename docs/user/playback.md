@@ -14,7 +14,7 @@ Now Playing, the queue, lyrics, the equaliser and the formats Rippl plays.
 | Opus | `.opus` | 48 kHz | — | Mono and stereo, packets up to 60 ms |
 | QOA | `.qoa` | 8–48 kHz | 16-bit | Names come from the path; QOA has no tags |
 
-- Files at 8–24 kHz are raised 2, 3, 4 or 6 times to 44.1 or 48 kHz with a 64-tap filter; 32 kHz plays natively.
+- Files at 8–24 kHz are raised with a 64-tap filter: 8 and 16 kHz to 32 kHz, 11.025, 12, 22.05 and 24 kHz to 44.1 or 48 kHz, each 2 or 4 times. 32 kHz plays natively.
 - `.m4b` audiobooks play as AAC or ALAC, with chapters ([audiobooks and podcasts](audiobooks-podcasts.md)).
 - APE, WMA, DSF, DFF and Ogg Vorbis appear in the library but don't play; Rippl says so. WebM isn't supported: `ffmpeg -i in.webm -c copy out.opus` turns WebM with Opus audio into a file Rippl plays.
 - AAC, Opus, 32-bit FLAC and ALAC, and FLAC and ALAC above 96 kHz run the second processor at full speed, which may cost some battery.
@@ -53,8 +53,18 @@ Put a `.lrc` file next to a song with the same name (`01 Come Together.flac` and
 
 ## Equaliser
 
-The equaliser plays presets from files. Put up to eight `.txt` presets in an `EQ` folder on the card, in Equalizer APO's parametric format; AutoEQ's `ParametricEQ.txt` works as it is (a `Preamp:` line and up to ten `PK`, `LSC` or `HSC` filters, gain ±12 dB, Q 0.1–10).
+The equaliser plays presets from files. Put up to 100 `.txt` presets in an `EQ` folder on the card, in Equalizer APO's parametric format; AutoEQ's `ParametricEQ.txt` works as it is (a `Preamp:` line and up to ten `PK`, `LSC` or `HSC` filters, gain ±12 dB, Q 0.1–10).
 
 Open it from Settings → Equaliser or by holding ≡ on Now Playing. Moving through the list plays each preset; ▶ or ↩ keeps the one you're on. A file the player can't use stays in the list and says why. With no presets on the card, Settings has no Equaliser row.
+
+### Fitted presets
+
+A preset's filters are designed for one sample rate. Played at another rate, the same filters drift near the top of each band, by several dB at worst. The player fits every preset to each rate from 8 to 96 kHz, finding filters for that rate that sound like the preset at its own rate, and plays the fit for each track's rate.
+
+- **Target rate:** 48 kHz, the rate graph.hangout.audio builds its filters at. A preset made at another rate can say so in a comment, for example `# Sample rate: 44100`, which Equalizer APO ignores.
+- **When:** after a library scan, and after USB when the music hasn't changed, for each preset without a fit. "Preparing preset 1 of 2..." shows with a progress bar; a preset takes about half a minute. Until then the preset plays with its usual filters.
+- **Refit:** hold ▶ on a preset for *Refit preset* or *Refit all presets*. Playback pauses while it runs.
+- Tracks at 8–24 kHz are equalised at their own rate before they're raised.
+- Fits are kept in `/.rippl/equaliser`; deleting the folder only means the presets are fitted again.
 
 The player remembers the preset by file name. It applies to Bluetooth too. It's off for 176.4 kHz and above, for 32-bit tracks and in USB DAC mode. Turning it on mid-track restarts the second processor, so the music pauses for a moment.
