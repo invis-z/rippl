@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-FACTORS = (2, 3, 4, 6)
+FACTORS = (2, 4)
 TAPS = 64
 PASS_EDGE = 0.41
 STOP_EDGE = 0.5

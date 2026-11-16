@@ -6,7 +6,10 @@
 #include "device/core1_control.h"
 #include "device/core1_stream.h"
 #include "device/image_crc.h"
+#include "dsp/equalizer_fit.h"
+#include "dsp/upsampler.h"
 #include "emmc.h"
+#include "hal/audio.h"
 #include "hal/clock.h"
 #include "hal/system.h"
 #include "registers.h"
@@ -24,6 +27,8 @@ enum {
     FLAC_PROGRAM_OFFSET = 0x280000,
     AAC_PROGRAM_OFFSET = 0x2A0200,
     OPUS_PROGRAM_OFFSET = 0x218000,
+    FIT_PROGRAM_OFFSET = 0x454000,
+    FIT_TIMEOUT_MS = 600000,
     PROGRAM_MAGIC = 0x4D314345,
     STAGING_SECTORS = STAGING_WORDS * WORD_BYTES / SECTOR_BYTES
 };
@@ -39,6 +44,9 @@ static uint32_t streaming_divider;
 static uint32_t streaming_rate;
 static EqualizerCurve equalizer_curve;
 static uint32_t equalizer_version;
+static HalEqualizerFitReader fit_reader;
+static uint32_t fit_slot;
+static uint32_t fit_key;
 
 static uint32_t bus_read(void *context, uint32_t address)
 {
@@ -121,6 +129,8 @@ static Core1Result place_program(Core1Program program)
         offset = AAC_PROGRAM_OFFSET;
     } else if (program == CORE1_PROGRAM_OPUS) {
         offset = OPUS_PROGRAM_OFFSET;
+    } else if (program == CORE1_PROGRAM_FIT) {
+        offset = FIT_PROGRAM_OFFSET;
     }
     uint32_t header_sector = info.layout.slot_1 + offset / SECTOR_BYTES;
     if (!emmc_read(NULL, header_sector, 1, staging)) {
@@ -169,10 +179,25 @@ static uint32_t stream_divider(Core1Program program, uint32_t rate, bool wide, u
     return heavy && pll_mhz <= FULL_SPEED_MHZ ? 1 : core1_divider_for(pll_mhz);
 }
 
-static void share_equalizer(bool enabled)
+static EqualizerFit fit_for(uint32_t rate)
+{
+    EqualizerFit fit = {0};
+    if (fit_reader == NULL || !fit_reader(fit_slot, fit_key, rate, &fit)) {
+        return (EqualizerFit){0};
+    }
+    return fit;
+}
+
+static void share_equalizer(uint32_t rate, bool enabled)
 {
     volatile Core1EqualizerShare *share =
         (volatile Core1EqualizerShare *)(uintptr_t)CORE1_SHARED_EQUALIZER;
+    uint32_t factor = upsampler_factor(rate);
+    EqualizerFit none = {0};
+    EqualizerFit before = factor > 1 ? fit_for(rate) : none;
+    EqualizerFit after = fit_for(rate * factor);
+    *(EqualizerFit *)(uintptr_t)&share->before_fit = before;
+    *(EqualizerFit *)(uintptr_t)&share->after_fit = after;
     share->curve = equalizer_curve;
     share->enabled = enabled ? 1u : 0u;
     __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -183,8 +208,16 @@ void board_core1_set_equalizer(const EqualizerCurve *curve)
 {
     equalizer_curve = *curve;
     if (streaming) {
-        share_equalizer(equalizing(streaming_program, streaming_rate) && streaming_divider == 1);
+        share_equalizer(streaming_rate,
+                        equalizing(streaming_program, streaming_rate) && streaming_divider == 1);
     }
+}
+
+void board_core1_set_equalizer_fits(HalEqualizerFitReader reader, uint32_t slot, uint32_t key)
+{
+    fit_reader = reader;
+    fit_slot = slot;
+    fit_key = key;
 }
 
 static void share_sleep(void)
@@ -218,7 +251,7 @@ bool board_core1_start_stream(Core1Program program, uint32_t rate, bool wide)
 {
     if (streaming && !board_core1_needs_restart(program, rate, wide)) {
         streaming_rate = rate;
-        share_equalizer(equalizing(program, rate) && streaming_divider == 1);
+        share_equalizer(rate, equalizing(program, rate) && streaming_divider == 1);
         return true;
     }
     board_core1_stop();
@@ -239,7 +272,7 @@ bool board_core1_start_stream(Core1Program program, uint32_t rate, bool wide)
     if (result == CORE1_OK) {
         register_write(CORE1_SHARED_COMMAND, CORE1_COMMAND_STREAM);
         register_write(CORE1_SHARED_ACCEL_CLASSES, accel_classes);
-        share_equalizer(equalizing(program, rate) && divider == 1);
+        share_equalizer(rate, equalizing(program, rate) && divider == 1);
         share_sleep();
         result = core1_run(&BUS, REPLY_TIMEOUT_MS);
     }
@@ -385,4 +418,71 @@ void hal_system_return_scratch(void)
         core1_stop(&BUS);
         lent = false;
     }
+}
+
+static bool fitting;
+static uint32_t fit_started_ms;
+
+static volatile Core1FitJob *fit_job(void)
+{
+    return (volatile Core1FitJob *)(uintptr_t)CORE1_SHARED_FIT;
+}
+
+bool hal_system_fit_start(const EqualizerCurve *curve, uint32_t rate, const EqualizerFit *seed,
+                          uint32_t part, uint32_t parts)
+{
+    if (fitting || hal_system_restart_pending()) {
+        return false;
+    }
+    board_core1_stop();
+    uint32_t pll_mhz = hal_system_clock_mhz();
+    if (pll_mhz < LOWEST_PLL_MHZ) {
+        return false;
+    }
+    uint32_t divider = pll_mhz <= FULL_SPEED_MHZ ? 1 : core1_divider_for(pll_mhz);
+    Core1Result result = core1_power_up(&BUS, pll_mhz, divider);
+    if (result == CORE1_OK) {
+        result = place_program(CORE1_PROGRAM_FIT);
+    }
+    if (result == CORE1_OK) {
+        Core1FitJob job = {.rate = rate, .part = part, .parts = parts, .curve = *curve};
+        if (seed != NULL) {
+            job.seed = *seed;
+        }
+        *(Core1FitJob *)(uintptr_t)fit_job() = job;
+        __atomic_thread_fence(__ATOMIC_RELEASE);
+        register_write(CORE1_SHARED_COMMAND, CORE1_COMMAND_FIT);
+        result = core1_run(&BUS, REPLY_TIMEOUT_MS);
+    }
+    if (result != CORE1_OK) {
+        core1_stop(&BUS);
+        return false;
+    }
+    fitting = true;
+    fit_started_ms = hal_clock_milliseconds();
+    return true;
+}
+
+HalFitState hal_system_fit_poll(EqualizerFit *candidate, bool *found)
+{
+    *found = false;
+    if (!fitting) {
+        return HAL_FIT_FAILED;
+    }
+    if (fit_job()->done == 0) {
+        if (hal_clock_milliseconds() - fit_started_ms < FIT_TIMEOUT_MS) {
+            return HAL_FIT_RUNNING;
+        }
+        core1_stop(&BUS);
+        fitting = false;
+        return HAL_FIT_FAILED;
+    }
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+    *found = fit_job()->found != 0;
+    if (*found) {
+        *candidate = *(const EqualizerFit *)(uintptr_t)&fit_job()->fit;
+    }
+    core1_stop(&BUS);
+    fitting = false;
+    return HAL_FIT_DONE;
 }

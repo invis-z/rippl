@@ -17,6 +17,7 @@
 #include "dac_screen.h"
 #include "default_theme.h"
 #include "draw_profile.h"
+#include "equalizer_fits.h"
 #include "equalizer_store.h"
 #include "error_log.h"
 #include "favorites_store.h"
@@ -895,6 +896,56 @@ static void report_card_files(CardFilesReport files, uint32_t now_ms)
     }
 }
 
+static void number_text(char *text, size_t capacity, uint32_t value);
+
+static void show_fit_progress(void *context, uint32_t preset, uint32_t presets, uint32_t step,
+                              uint32_t steps)
+{
+    (void)context;
+    char text[PROGRESS_TEXT_CAPACITY];
+    char done[NUMBER_CAPACITY];
+    char total[NUMBER_CAPACITY];
+    number_text(done, sizeof done, preset);
+    number_text(total, sizeof total, presets);
+    const char *arguments[] = {done, total};
+    StringBuilder builder = string_builder_make(text, sizeof text);
+    i18n_format(&builder, STR_SETTINGS_EQ_PREPARING, arguments, 2);
+    app_show_progress(i18n_text(STR_SETTINGS_EQUALIZER), text, step, steps);
+}
+
+static EqualizerFitsReport fit_equalizer_presets(const char *only, bool all)
+{
+    EqualizerFitsReport report = {0, 0, 0};
+    const EqualizerFitsEntry *entry = hal_system_load_fit_code();
+    if (entry == NULL || entry->magic != EQUALIZER_FITS_MAGIC) {
+        return report;
+    }
+    EqualizerFitsRequest request = {.only = only, .all = all, .log = app.options.log_fits};
+    report = entry->refresh((EqualizerFitsProgress){show_fit_progress, NULL}, request);
+    if (report.fitted + report.failed > 0) {
+        app_show_notice(i18n_text(STR_SETTINGS_EQUALIZER), i18n_text(STR_RESCAN_CHECKING));
+        app_wake();
+    }
+    return report;
+}
+
+static void prepare_equalizer_fits(void)
+{
+    fit_equalizer_presets(NULL, false);
+}
+
+bool app_refit_equalizer_preset(const char *name)
+{
+    if (player_status(&app.player).state == PLAYER_PLAYING) {
+        player_toggle_pause(&app.player);
+    }
+    player_release_output(&app.player);
+    EqualizerFitsReport report = fit_equalizer_presets(name, name == NULL);
+    equalizer_store_apply(&app.equalizer);
+    app_wake();
+    return report.fitted > 0;
+}
+
 static void show_card_setup(void)
 {
     app_show_notice("Rippl", i18n_text(STR_BOOT_CARD_SETUP));
@@ -935,7 +986,8 @@ void app_start(void)
     frame_stats_reset(&app.update_stats);
     frame_stats_reset(&app.draw_stats);
     frame_stats_reset(&app.send_stats);
-    app.options = (AppOptions){.show_frame_time = false, .ignore_power_taps = false};
+    app.options =
+        (AppOptions){.show_frame_time = false, .ignore_power_taps = false, .log_fits = false};
     app.toast = (Toast){.visible = false};
     app.powered_off = false;
     app.charging = false;
@@ -1031,6 +1083,7 @@ static void run_rescan(void)
     const char *text = library_rescan_message(outcome, message, sizeof message);
     if (outcome.result == SCAN_OK) {
         music_check_remember(music_check_fingerprint());
+        prepare_equalizer_fits();
         app_start();
     }
     app_wake();
@@ -1326,7 +1379,12 @@ void app_step(void)
             changed = !music_check_unchanged() || !library_store_open(&app.library);
         }
         if (!changed) {
+            prepare_equalizer_fits();
+            equalizer_store_apply(&app.equalizer);
+        }
+        if (!changed) {
             music_check_note_firmware();
+            app_wake();
         }
         app.rescan_requested |= changed;
     }
@@ -1396,15 +1454,30 @@ bool app_charging(void)
     return app.charging;
 }
 
-static void show_notice(const char *title, const char *message, void (*draw)(void *, Canvas *))
+static void show_progress_notice(const char *title, const char *message,
+                                 void (*draw)(void *, Canvas *), uint32_t done, uint32_t total)
 {
-    MessageConfig config = {.title = title, .message = message, .theme = current_theme()};
+    MessageConfig config = {.title = title,
+                            .message = message,
+                            .theme = current_theme(),
+                            .progress = (uint16_t)done,
+                            .progress_total = (uint16_t)total};
     Screen *screen = message_screen_init(&app.notice, config);
     if (!app.display_on) {
         set_display(true);
     }
     render((FrameDrawer){.draw = draw, .context = screen}, false, NOTICE_STRIP_HEIGHT);
     light_after_first_frame();
+}
+
+static void show_notice(const char *title, const char *message, void (*draw)(void *, Canvas *))
+{
+    show_progress_notice(title, message, draw, 0, 0);
+}
+
+void app_show_progress(const char *title, const char *message, uint32_t done, uint32_t total)
+{
+    show_progress_notice(title, message, draw_notice, done, total);
 }
 
 void app_show_notice(const char *title, const char *message)

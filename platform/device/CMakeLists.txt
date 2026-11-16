@@ -131,6 +131,39 @@ add_custom_command(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
+add_executable(rippl_core1_fit
+    core1/fit_main.c
+    core1/startup.c
+    board/libc.c
+    ${PROJECT_SOURCE_DIR}/src/dsp/equalizer_fit.c
+    ${PROJECT_SOURCE_DIR}/src/dsp/equalizer_band.c
+)
+set(RIPPL_CORE1_FIT_LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/core1/core1_fit.ld)
+set_target_properties(rippl_core1_fit PROPERTIES
+    SUFFIX .elf
+    LINK_DEPENDS ${RIPPL_CORE1_FIT_LINKER_SCRIPT}
+)
+target_include_directories(rippl_core1_fit PRIVATE
+    board
+    ${PROJECT_SOURCE_DIR}/src/dsp
+    $<TARGET_PROPERTY:rippl_dsp,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:rippl_device_logic_plain,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_compile_options(rippl_core1_fit PRIVATE -O2)
+target_link_libraries(rippl_core1_fit PRIVATE rippl_options gcc)
+target_link_options(rippl_core1_fit PRIVATE
+    -fno-lto
+    -T${RIPPL_CORE1_FIT_LINKER_SCRIPT}
+    -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/rippl_core1_fit.map
+)
+set(RIPPL_CORE1_FIT_BINARY ${CMAKE_CURRENT_BINARY_DIR}/core1_fit.bin)
+add_custom_command(
+    OUTPUT ${RIPPL_CORE1_FIT_BINARY}
+    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:rippl_core1_fit> core1_fit.bin
+    DEPENDS rippl_core1_fit
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
 set(RIPPL_CORE1_BINARY ${CMAKE_CURRENT_BINARY_DIR}/core1.bin)
 add_custom_command(
     OUTPUT ${RIPPL_CORE1_BINARY}
@@ -141,6 +174,8 @@ add_custom_command(
 )
 
 set(RIPPL_OVERLAY_IMPORTS
+    EQUALIZER_FITS_FOLDER
+    EQUALIZER_STORE_PATH
     app_dac_keys_start
     app_dac_keys_stop
     app_dac_next_key
@@ -169,6 +204,17 @@ set(RIPPL_OVERLAY_IMPORTS
     emmc_volume_read
     emmc_volume_write
     emmc_write
+    equalizer_curve_fittable
+    equalizer_curve_key
+    equalizer_files_next
+    equalizer_files_open
+    equalizer_fit_file_size
+    equalizer_fits_open_slot
+    equalizer_fits_slot_path
+    equalizer_map_clear
+    equalizer_map_put
+    equalizer_map_seal
+    equalizer_store_file_curve
     fat_mount
     fat_open
     fat_read
@@ -176,9 +222,24 @@ set(RIPPL_OVERLAY_IMPORTS
     hal_audio_set_volume
     hal_clock_microseconds
     hal_clock_milliseconds
+    hal_dir_close
+    hal_dir_next
+    hal_dir_open
     hal_display_set_power
+    hal_file_close
+    hal_file_grow
+    hal_file_open
+    hal_file_read
+    hal_file_reserve
+    hal_file_write
+    hal_file_write_at
     hal_input_next_transition
     hal_power_battery
+    hal_system_borrow_listing
+    hal_system_clock_mhz
+    hal_system_fit_poll
+    hal_system_fit_start
+    hal_system_keep_alive
     hash64_update
     hash_update
     i18n_format
@@ -283,6 +344,39 @@ target_link_options(rippl_rescan_overlay PRIVATE
     -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/rippl_rescan_overlay.map
 )
 
+set(RIPPL_FIT_OVERLAY_LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/overlay/fit_overlay.ld)
+add_executable(rippl_fit_overlay
+    overlay/fit_overlay.c
+    ${PROJECT_SOURCE_DIR}/src/app/equalizer_fits_refresh.c
+    ${PROJECT_SOURCE_DIR}/src/sound/equalizer_fit_file_write.c
+    ${PROJECT_SOURCE_DIR}/src/dsp/equalizer_fit.c
+    ${PROJECT_SOURCE_DIR}/src/dsp/equalizer_band.c
+)
+set_target_properties(rippl_fit_overlay PROPERTIES
+    SUFFIX .elf
+    LINK_DEPENDS "${RIPPL_FIT_OVERLAY_LINKER_SCRIPT};$<TARGET_FILE:rippl_device>"
+)
+add_dependencies(rippl_fit_overlay rippl_device)
+target_include_directories(rippl_fit_overlay PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/app
+    ${PROJECT_SOURCE_DIR}/src/dsp
+    $<TARGET_PROPERTY:rippl_app,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:rippl_sound,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:rippl_dsp,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:rippl_core,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:rippl_settings,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:rippl_library,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_compile_options(rippl_fit_overlay PRIVATE -Os)
+target_link_libraries(rippl_fit_overlay PRIVATE rippl_options gcc)
+target_link_options(rippl_fit_overlay PRIVATE
+    -fno-lto
+    -T${RIPPL_FIT_OVERLAY_LINKER_SCRIPT}
+    -Wl,--just-symbols=$<TARGET_FILE:rippl_device>
+    -Wl,--allow-multiple-definition
+    -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/rippl_fit_overlay.map
+)
+
 set(RIPPL_USB_OVERLAY_LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/overlay/usb_overlay.ld)
 add_executable(rippl_usb_overlay
     overlay/usb_overlay.c
@@ -325,12 +419,14 @@ set(RIPPL_IMAGE_ARGUMENTS
     --nm ${CMAKE_NM}
     --overlay $<TARGET_FILE:rippl_rescan_overlay>
     --usb-overlay $<TARGET_FILE:rippl_usb_overlay>
+    --fit-overlay $<TARGET_FILE:rippl_fit_overlay>
     --core1-mp3 ${RIPPL_CORE1_MP3_BINARY}
     --core1-flac ${RIPPL_CORE1_BINARY}
     --core1-aac ${RIPPL_CORE1_AAC_BINARY}
     --core1-opus ${RIPPL_CORE1_OPUS_BINARY}
+    --core1-fit ${RIPPL_CORE1_FIT_BINARY}
 )
-set(RIPPL_IMAGE_DEPENDS rippl_device rippl_rescan_overlay rippl_usb_overlay ${RIPPL_CORE1_MP3_BINARY} ${RIPPL_CORE1_BINARY}
+set(RIPPL_IMAGE_DEPENDS rippl_device rippl_rescan_overlay rippl_usb_overlay rippl_fit_overlay ${RIPPL_CORE1_FIT_BINARY} ${RIPPL_CORE1_MP3_BINARY} ${RIPPL_CORE1_BINARY}
     ${RIPPL_CORE1_AAC_BINARY} ${RIPPL_CORE1_OPUS_BINARY}
     ${PROJECT_SOURCE_DIR}/tools/make_image.py
 )
@@ -351,7 +447,7 @@ add_custom_target(rippl_device_image ALL
 add_custom_target(rippl_size_report
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/size_report.py
         --build ${CMAKE_BINARY_DIR} --nm ${CMAKE_NM}
-    DEPENDS rippl_device rippl_rescan_overlay rippl_usb_overlay
+    DEPENDS rippl_device rippl_rescan_overlay rippl_usb_overlay rippl_fit_overlay
     VERBATIM
     USES_TERMINAL
 )

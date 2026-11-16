@@ -4,6 +4,7 @@
 
 #include "core/string_builder.h"
 
+#include "equalizer_fits.h"
 #include "error_log.h"
 #include "hal/audio.h"
 #include "hal/storage.h"
@@ -89,6 +90,11 @@ static bool unchanged(const EqualizerStore *store, const uint8_t *bytes)
         }
     }
     return store->has_saved;
+}
+
+static void use_fits(const EqualizerCurve *curve)
+{
+    equalizer_fits_apply(curve);
 }
 
 static bool read_preset(void *context, uint32_t offset, char *buffer, uint32_t length)
@@ -205,6 +211,7 @@ bool equalizer_store_apply(EqualizerStore *store)
 {
     if (store->choice.preset != EQUALIZER_PRESET_FILE) {
         EqualizerCurve flat = {0};
+        use_fits(&flat);
         hal_audio_set_equalizer(&flat);
         return true;
     }
@@ -214,9 +221,11 @@ bool equalizer_store_apply(EqualizerStore *store)
         store->choice.preset = EQUALIZER_PRESET_OFF;
         store->choice.preset_name[0] = '\0';
         EqualizerCurve flat = {0};
+        use_fits(&flat);
         hal_audio_set_equalizer(&flat);
         return false;
     }
+    use_fits(&curve);
     hal_audio_set_equalizer(&curve);
     return true;
 }
@@ -229,6 +238,7 @@ bool equalizer_store_select_file(EqualizerStore *store, const char *name, Equali
     }
     store->choice.preset = EQUALIZER_PRESET_FILE;
     copy_name(store->choice.preset_name, name);
+    use_fits(&curve);
     hal_audio_set_equalizer(&curve);
     return true;
 }

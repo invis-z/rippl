@@ -12,8 +12,8 @@ typedef struct RateFactor {
     uint32_t factor;
 } RateFactor;
 
-static const RateFactor RATE_FACTORS[] = {{8000, 6},  {11025, 4}, {12000, 4},
-                                          {16000, 3}, {22050, 2}, {24000, 2}};
+static const RateFactor RATE_FACTORS[] = {{8000, 4},  {11025, 4}, {12000, 4},
+                                          {16000, 2}, {22050, 2}, {24000, 2}};
 
 uint32_t upsampler_factor(uint32_t sample_rate)
 {

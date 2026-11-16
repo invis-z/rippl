@@ -13,6 +13,8 @@ typedef struct MessageConfig {
     const char *title;
     const char *message;
     const Theme *theme;
+    uint16_t progress;
+    uint16_t progress_total;
 } MessageConfig;
 
 typedef struct MessageLayout {

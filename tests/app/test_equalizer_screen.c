@@ -225,6 +225,58 @@ static Screen *open_two(void)
     return picker;
 }
 
+static char refitted[EQUALIZER_FILES_NAME_CAPACITY];
+static int refits;
+
+static bool remember_refit(const char *name)
+{
+    snprintf(refitted, sizeof refitted, "%s", name != NULL ? name : "(all)");
+    refits++;
+    return true;
+}
+
+static Screen *open_two_with_refit(void)
+{
+    Screen *picker = open_two();
+    equalizer.config.refit = remember_refit;
+    refitted[0] = '\0';
+    refits = 0;
+    return picker;
+}
+
+static void holding_play_on_a_preset_offers_to_refit_it(void)
+{
+    Screen *picker = open_two_with_refit();
+    tap(picker, KEY_VOLUME_UP);
+    tap(picker, KEY_VOLUME_UP);
+    ScreenAction open = press(picker, KEY_PLAY, KEY_GESTURE_LONG_PRESS);
+    CHECK_EQUAL(SCREEN_ACTION_PUSH, open.type);
+    CHECK(open.target == &equalizer.actions.screen);
+    CHECK(strcmp("B", equalizer.actions.config.title) == 0);
+    CHECK_EQUAL(2, equalizer.actions.config.item_count);
+    CHECK(strcmp("Refit preset", equalizer.actions.config.items[0].label) == 0);
+    CHECK(strcmp("Refit all presets", equalizer.actions.config.items[1].label) == 0);
+    ScreenAction done =
+        equalizer.actions.config.items[0].select(equalizer.actions.config.items[0].context);
+    CHECK_EQUAL(SCREEN_ACTION_POP, done.type);
+    CHECK_EQUAL(1, refits);
+    CHECK(strcmp("B.txt", refitted) == 0);
+    press(picker, KEY_PLAY, KEY_GESTURE_LONG_PRESS);
+    ScreenAction all =
+        equalizer.actions.config.items[1].select(equalizer.actions.config.items[1].context);
+    CHECK_EQUAL(SCREEN_ACTION_POP, all.type);
+    CHECK_EQUAL(2, refits);
+    CHECK(strcmp("(all)", refitted) == 0);
+}
+
+static void holding_play_on_off_opens_nothing(void)
+{
+    Screen *picker = open_two_with_refit();
+    ScreenAction open = press(picker, KEY_PLAY, KEY_GESTURE_LONG_PRESS);
+    CHECK_EQUAL(SCREEN_ACTION_NONE, open.type);
+    CHECK_EQUAL(0, refits);
+}
+
 static void the_picker_lists_off_before_the_files(void)
 {
     open_two();
@@ -318,6 +370,8 @@ int main(void)
 {
     static const TestCase cases[] = {
         TEST_CASE(the_picker_lists_off_before_the_files),
+        TEST_CASE(holding_play_on_a_preset_offers_to_refit_it),
+        TEST_CASE(holding_play_on_off_opens_nothing),
         TEST_CASE(moving_through_the_list_plays_each_preset),
         TEST_CASE(leaving_the_picker_saves_what_is_playing),
         TEST_CASE(choosing_off_closes_the_picker),

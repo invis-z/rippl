@@ -8,7 +8,9 @@
 
 enum {
     LINE_CAPACITY = 128,
-    LINE_GAP = 2
+    LINE_GAP = 2,
+    BAR_HEIGHT = 3,
+    BAR_GAP = 8
 };
 
 static ScreenAction handle_key(void *context, KeyEvent event, uint32_t now_ms)
@@ -138,6 +140,20 @@ static void draw(void *context, Canvas *canvas)
         copy_span(line, message->config.message + layout->start[index], layout->length[index]);
         Rect area = label_centered_area(style.font, row, line);
         label_draw(canvas, style, (Label){.area = area, .text = line});
+    }
+    if (message->config.progress_total > 0) {
+        uint32_t done = message->config.progress < message->config.progress_total
+                            ? message->config.progress
+                            : message->config.progress_total;
+        int bar_top = top + layout->count * line_height + BAR_GAP;
+        int lowest = content.y + content.height - BAR_HEIGHT;
+        Rect bar = {content.x + padding, bar_top < lowest ? bar_top : lowest, width, BAR_HEIGHT};
+        canvas_fill_rect(canvas, bar, theme->colors.divider);
+        canvas_fill_rect(canvas,
+                         (Rect){bar.x, bar.y,
+                                (int)((uint32_t)width * done / message->config.progress_total),
+                                bar.height},
+                         theme->colors.selection_background);
     }
 }
 

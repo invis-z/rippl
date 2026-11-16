@@ -709,8 +709,9 @@ class NpFacesTest(unittest.TestCase):
         with self.assertRaises(make_image.ImageError):
             make_image.firmware_from_elf(firmware_elf(parts, [section]))
 
-    def test_the_new_field_is_last_in_the_image_parts(self):
-        self.assertEqual("np_faces", list(make_image.ImageParts.__dataclass_fields__)[-1])
+    def test_the_new_fields_come_last_in_the_image_parts(self):
+        self.assertEqual(["usb_overlay", "np_faces", "fit_overlay", "core1_fit"],
+                         list(make_image.ImageParts.__dataclass_fields__)[-4:])
 
 
 class WindowReferenceTest(unittest.TestCase):
@@ -965,6 +966,7 @@ class GlyphFaceTest(unittest.TestCase):
                  (make_image.NP_FACES_OFFSET,
                   make_image.NP_FACES_OFFSET + make_image.NP_FACES_CAPACITY),
                  (make_image.USB_OVERLAY_OFFSET, make_image.FW_SIZE),
+                 (make_image.FIT_OVERLAY_OFFSET, make_image.CORE1_FIT_END),
                  (make_image.FW_SIZE, make_image.IMAGE_SIZE),
                  (0, make_image.GLYPH_PAYLOAD_LIMIT)]
         placed = sorted(zip(offsets, sizes))

@@ -67,14 +67,37 @@ static void use_preset(const EqualizerConfig *config, EqualizerPreset preset)
 static bool preview_file(EqualizerScreen *equalizer, int index);
 static bool same_name(const char *first, const char *second);
 
-static bool file_is(const EqualizerScreen *equalizer, int file, const char *name)
+static void forget_names(EqualizerScreen *equalizer)
 {
-    if (file < 0 || file >= equalizer->files.count) {
-        return false;
+    for (int slot = 0; slot < EQUALIZER_NAME_CACHE; slot++) {
+        equalizer->names.files[slot] = -1;
     }
-    char full[EQUALIZER_PRESET_NAME_CAPACITY];
-    equalizer_files_name(&equalizer->files, file, full);
-    return same_name(full, name);
+    equalizer->names.next = 0;
+}
+
+static const char *stem_of(const EqualizerScreen *screen, int file)
+{
+    EqualizerScreen *equalizer = (EqualizerScreen *)(uintptr_t)screen;
+    EqualizerNameCache *names = &equalizer->names;
+    for (int slot = 0; slot < EQUALIZER_NAME_CACHE; slot++) {
+        if (names->files[slot] == file) {
+            return names->stems[slot];
+        }
+    }
+    uint32_t slot = names->next++ % EQUALIZER_NAME_CACHE;
+    names->files[slot] = file;
+    equalizer_files_stem(&equalizer->files, file, names->stems[slot]);
+    return names->stems[slot];
+}
+
+static bool stem_is(const char *stem, const char *name)
+{
+    uint32_t length = equalizer_files_stem_length(name);
+    uint32_t index = 0;
+    while (index < length && stem[index] == name[index]) {
+        index++;
+    }
+    return index == length && stem[index] == '\0';
 }
 
 static int preset_count(const void *context)
@@ -90,7 +113,7 @@ static const char *preset_label(const void *context, int index)
         return i18n_text(STR_OFF);
     }
     int file = index - EQUALIZER_PRESET_FILE;
-    return file < equalizer->files.count ? equalizer->files.names[file] : "";
+    return file < equalizer->files.count ? stem_of(equalizer, file) : "";
 }
 
 static const char *preset_mark(const void *context, int index)
@@ -101,7 +124,8 @@ static const char *preset_mark(const void *context, int index)
         return (int)choice->preset == index ? CHECK_MARK : NULL;
     }
     int file = index - EQUALIZER_PRESET_FILE;
-    return choice->preset == EQUALIZER_PRESET_FILE && file_is(equalizer, file, choice->preset_name)
+    return choice->preset == EQUALIZER_PRESET_FILE && file < equalizer->files.count &&
+                   stem_is(stem_of(equalizer, file), choice->preset_name)
                ? CHECK_MARK
                : NULL;
 }
@@ -118,10 +142,57 @@ static ScreenAction choose_preset(void *context, int index)
     return screen_action_pop();
 }
 
+static ScreenAction refit_preset(void *context)
+{
+    EqualizerScreen *equalizer = context;
+    char name[EQUALIZER_FILES_NAME_CAPACITY];
+    if (equalizer->config.refit != NULL &&
+        equalizer_files_name(&equalizer->files, equalizer->action_file, name)) {
+        equalizer->config.refit(name);
+    }
+    return screen_action_pop();
+}
+
+static ScreenAction refit_all_presets(void *context)
+{
+    EqualizerScreen *equalizer = context;
+    if (equalizer->config.refit != NULL) {
+        equalizer->config.refit(NULL);
+    }
+    return screen_action_pop();
+}
+
+static ScreenAction open_preset_actions(void *context, int index)
+{
+    EqualizerScreen *equalizer = context;
+    int file = index - EQUALIZER_PRESET_FILE;
+    if (file < 0 || file >= equalizer->files.count || equalizer->config.refit == NULL) {
+        return screen_action_none();
+    }
+    equalizer->action_file = file;
+    const char *stem = stem_of(equalizer, file);
+    uint32_t length = 0;
+    for (; stem[length] != '\0'; length++) {
+        equalizer->action_title[length] = stem[length];
+    }
+    equalizer->action_title[length] = '\0';
+    equalizer->action_items[0] = (MenuItem){
+        .label = i18n_text(STR_SETTINGS_EQ_REFIT), .select = refit_preset, .context = equalizer};
+    equalizer->action_items[1] = (MenuItem){.label = i18n_text(STR_SETTINGS_EQ_REFIT_ALL),
+                                            .select = refit_all_presets,
+                                            .context = equalizer};
+    MenuConfig config = {.title = equalizer->action_title,
+                         .items = equalizer->action_items,
+                         .item_count = EQUALIZER_ACTIONS,
+                         .theme = equalizer->config.theme};
+    return screen_action_push(menu_screen_init(&equalizer->actions, config));
+}
+
 static ScreenAction handle_picker_key(void *context, KeyEvent event, uint32_t now_ms)
 {
     EqualizerScreen *equalizer = context;
-    ListSelection selection = {.select = choose_preset, .hold = NULL, .context = equalizer};
+    ListSelection selection = {
+        .select = choose_preset, .hold = open_preset_actions, .context = equalizer};
     NavigationIntent intent = navigation_from_key(event).intent;
     ScreenAction action = list_navigation_handle(&equalizer->list, event, now_ms, selection);
     int selected = equalizer->list.selected;
@@ -200,12 +271,8 @@ static void enter_picker(void *context, uint32_t now_ms)
     const EqualizerChoice *choice = choice_of(&equalizer->config);
     int selected = (int)choice->preset;
     if (choice->preset == EQUALIZER_PRESET_FILE) {
-        selected = EQUALIZER_PRESET_FILE;
-        for (int index = 0; index < equalizer->files.count; index++) {
-            if (file_is(equalizer, index, choice->preset_name)) {
-                selected = EQUALIZER_PRESET_FILE + index;
-            }
-        }
+        selected =
+            EQUALIZER_PRESET_FILE + (equalizer->chosen_file >= 0 ? equalizer->chosen_file : 0);
     }
     list_view_select(&equalizer->list, selected, now_ms);
     equalizer->file_preview = selected >= EQUALIZER_PRESET_FILE ? selected : -1;
@@ -234,10 +301,13 @@ static bool preview_file(EqualizerScreen *equalizer, int index)
     if (file < 0 || file >= equalizer->files.count) {
         return false;
     }
-    char name[EQUALIZER_PRESET_NAME_CAPACITY];
-    equalizer_files_name(&equalizer->files, file, name);
+    char name[EQUALIZER_FILES_NAME_CAPACITY];
+    if (!equalizer_files_name(&equalizer->files, file, name)) {
+        return false;
+    }
     EqualizerChoice *choice = choice_of(&equalizer->config);
     if (choice->preset == EQUALIZER_PRESET_FILE && same_name(choice->preset_name, name)) {
+        equalizer->chosen_file = file;
         return true;
     }
     EqualizerTextError error;
@@ -248,6 +318,7 @@ static bool preview_file(EqualizerScreen *equalizer, int index)
     if (error.skipped > 0) {
         show_skipped(equalizer, error.skipped);
     }
+    equalizer->chosen_file = file;
     return true;
 }
 
@@ -257,6 +328,7 @@ Screen *equalizer_screen_init(EqualizerScreen *equalizer, EqualizerConfig config
     equalizer->model = (ListModel){
         .context = equalizer, .count = preset_count, .label = preset_label, .detail = preset_mark};
     list_view_init(&equalizer->list, &equalizer->model, config.theme, 0);
+    forget_names(equalizer);
     equalizer->screen = (Screen){
         .title = i18n_text(STR_SETTINGS_EQUALIZER),
         .context = equalizer,
@@ -271,6 +343,11 @@ Screen *equalizer_screen_init(EqualizerScreen *equalizer, EqualizerConfig config
 void equalizer_screen_refresh(EqualizerScreen *equalizer)
 {
     equalizer_files_scan(&equalizer->files);
+    forget_names(equalizer);
+    const EqualizerChoice *choice = choice_of(&equalizer->config);
+    equalizer->chosen_file = choice->preset == EQUALIZER_PRESET_FILE
+                                 ? equalizer_files_find(&equalizer->files, choice->preset_name)
+                                 : -1;
 }
 
 bool equalizer_screen_has_presets(const void *context)

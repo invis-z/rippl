@@ -87,6 +87,33 @@ static void another_version_is_rejected(void)
     }
 }
 
+static void the_map_finds_each_key_it_holds(void)
+{
+    uint8_t map[EQUALIZER_MAP_SIZE];
+    equalizer_map_clear(map);
+    equalizer_map_put(map, 0, 0x11111111u);
+    equalizer_map_put(map, 57, 0x22222222u);
+    equalizer_map_put(map, 99, 0x33333333u);
+    equalizer_map_seal(map);
+    CHECK_EQUAL(0, equalizer_map_find(map, 0x11111111u));
+    CHECK_EQUAL(57, equalizer_map_find(map, 0x22222222u));
+    CHECK_EQUAL(99, equalizer_map_find(map, 0x33333333u));
+    CHECK_EQUAL(EQUALIZER_MAP_ABSENT, equalizer_map_find(map, 0x44444444u));
+}
+
+static void a_damaged_map_or_key_zero_is_unknown(void)
+{
+    uint8_t map[EQUALIZER_MAP_SIZE];
+    equalizer_map_clear(map);
+    equalizer_map_put(map, 3, 0x11111111u);
+    equalizer_map_seal(map);
+    CHECK_EQUAL(EQUALIZER_MAP_UNKNOWN, equalizer_map_find(map, 0));
+    map[12] ^= 1;
+    CHECK_EQUAL(EQUALIZER_MAP_UNKNOWN, equalizer_map_find(map, 0x11111111u));
+    equalizer_map_clear(map);
+    CHECK_EQUAL(EQUALIZER_MAP_UNKNOWN, equalizer_map_find(map, 0x11111111u));
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
@@ -95,6 +122,8 @@ int main(void)
         TEST_CASE(a_corrupted_or_short_file_is_rejected),
         TEST_CASE(out_of_range_values_are_rejected),
         TEST_CASE(another_version_is_rejected),
+        TEST_CASE(the_map_finds_each_key_it_holds),
+        TEST_CASE(a_damaged_map_or_key_zero_is_unknown),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

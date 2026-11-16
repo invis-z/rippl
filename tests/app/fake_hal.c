@@ -21,7 +21,7 @@ extern const NowPlayingFaces NOW_PLAYING_FACES;
 enum {
     TRANSITION_CAPACITY = 16,
     FILE_CAPACITY = 64,
-    DIR_CAPACITY = 48,
+    DIR_CAPACITY = 128,
     WRITTEN_CAPACITY = 1100,
     PATH_CAPACITY = 260
 };
@@ -681,6 +681,19 @@ void hal_audio_set_output(HalAudioOutput output)
     fake.audio.output = output;
 }
 
+static uint32_t equalizer_fit_slot;
+
+void hal_audio_set_equalizer_fits(HalEqualizerFitReader reader, uint32_t slot, uint32_t key)
+{
+    (void)key;
+    equalizer_fit_slot = reader != NULL ? slot : 0;
+}
+
+uint32_t fake_hal_equalizer_fit_slot(void)
+{
+    return equalizer_fit_slot;
+}
+
 static bool core0_output;
 
 void hal_audio_set_word_output(bool words)
@@ -905,17 +918,45 @@ static void register_written(const char *path, uint32_t length)
     fake_hal_add_file(slot->path, slot->bytes, length);
 }
 
+static bool is_segment_path(const char *path);
+static FakeFile *fake_file(const char *path);
+static uint8_t *store_for(FakeFile *file);
+
 bool hal_file_write(const char *path, const void *bytes, uint32_t length)
 {
+    if (is_segment_path(path) && !fake.card_missing) {
+        FakeFile *file = fake_file(path);
+        uint8_t *store = file != NULL && length <= file->size ? store_for(file) : NULL;
+        if (store == NULL) {
+            return false;
+        }
+        memcpy(store, bytes, length);
+        fake.write_count++;
+        return true;
+    }
     WrittenFile *slot = written_slot(path);
     if (fake.card_missing || slot == NULL || length > WRITTEN_CAPACITY) {
         return false;
+    }
+    FakeFile *existing = fake_file(path);
+    uint32_t size = length;
+    if (strcmp(path, "/.rippl/equaliser.bin") == 0 && existing != NULL && existing->size > length) {
+        size = existing->size < WRITTEN_CAPACITY ? existing->size : WRITTEN_CAPACITY;
+        if (existing->bytes != slot->bytes) {
+            uint32_t kept = existing->bytes == NULL   ? 0
+                            : existing->stored < size ? existing->stored
+                                                      : size;
+            memset(slot->bytes, 0, size);
+            if (kept > 0) {
+                memcpy(slot->bytes, existing->bytes, kept);
+            }
+        }
     }
     copy_path(slot->path, path);
     if (length > 0) {
         memcpy(slot->bytes, bytes, length);
     }
-    register_written(path, length);
+    register_written(path, size);
     fake.write_count++;
     return true;
 }
@@ -1288,7 +1329,9 @@ static FakeFile *fake_file(const char *path)
 static bool is_segment_path(const char *path)
 {
     return strncmp(path, "/.rippl/library/", 16) == 0 ||
-           strncmp(path, "/.rippl/covers/", 15) == 0 || strcmp(path, "/.rippl/manifest.bin") == 0;
+           strncmp(path, "/.rippl/covers/", 15) == 0 ||
+           strncmp(path, "/.rippl/equaliser/", 18) == 0 ||
+           strcmp(path, "/.rippl/manifest.bin") == 0;
 }
 
 static uint8_t *owned_store_for(FakeFile *file)
@@ -1303,6 +1346,16 @@ static uint8_t *owned_store_for(FakeFile *file)
             memcpy(owned_stores[index], file->bytes, file->stored);
         }
         file->bytes = owned_stores[index];
+        file->stored = file->size;
+    }
+    if (file->stored < file->size) {
+        uint8_t *grown = realloc(owned_stores[index], file->size);
+        if (grown == NULL) {
+            return NULL;
+        }
+        memset(grown + file->stored, 0, file->size - file->stored);
+        owned_stores[index] = grown;
+        file->bytes = grown;
         file->stored = file->size;
     }
     return owned_stores[index];
@@ -1496,6 +1549,32 @@ bool hal_language_pack(uint32_t language, const uint8_t **pack, uint32_t *size)
 const void *hal_system_load_rescan_code(void)
 {
     return &LIBRARY_SCAN_ENTRY;
+}
+
+struct EqualizerFitsEntry;
+extern const struct EqualizerFitsEntry EQUALIZER_FITS_ENTRY;
+
+const void *hal_system_load_fit_code(void)
+{
+    return &EQUALIZER_FITS_ENTRY;
+}
+
+bool hal_system_fit_start(const EqualizerCurve *curve, uint32_t rate, const EqualizerFit *seed,
+                          uint32_t part, uint32_t parts)
+{
+    (void)curve;
+    (void)rate;
+    (void)seed;
+    (void)part;
+    (void)parts;
+    return false;
+}
+
+HalFitState hal_system_fit_poll(EqualizerFit *candidate, bool *found)
+{
+    (void)candidate;
+    *found = false;
+    return HAL_FIT_FAILED;
 }
 
 void fake_hal_set_np_faces(bool present)

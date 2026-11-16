@@ -143,6 +143,11 @@ const void *hal_system_load_rescan_code(void)
     return load_window(RESCAN_OVERLAY_IMAGE_OFFSET, RESCAN_OVERLAY_MAGIC);
 }
 
+const void *hal_system_load_fit_code(void)
+{
+    return load_window(FIT_OVERLAY_IMAGE_OFFSET, FIT_OVERLAY_MAGIC);
+}
+
 void board_np_faces_forget(void)
 {
     np_faces_gate_forget(&np_faces_gate);
