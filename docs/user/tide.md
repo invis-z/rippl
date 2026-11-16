@@ -34,6 +34,7 @@ Tide reads the whole card as the player does and writes the library, covers and 
 - **Music folders:** folders left out in Settings → Library → Music folders are left out here too.
 - **Internal storage:** with the card in the connected player, Tide reads internal storage only if it finds a drive named RIPPL. The drive is named ECHO MINI until you rename it, so rename it once on the computer, or pass `--internal F:`. Without it, Tide builds from the card only and the player rescans afterwards to add internal storage's music.
 - **Clock:** Tide writes the computer's time and daylight saving rule, which the player takes when the USB session ends. A card synced in a card reader doesn't set the clock.
+- **EQ presets:** Tide fits each preset in `/EQ` that has no fit yet to every sample rate, as the player would but more closely, and deletes the fits of presets that are gone, so the player has nothing left to fit. A preset takes a few seconds. Without numpy (running from the source), the player fits them itself.
 
 ### Why the player doesn't rescan
 
@@ -56,6 +57,7 @@ After a USB session the player compares the music's names, sizes and times with 
 | `--no-fingerprint` | Leave `scan.bin` alone |
 | `--internal DRIVE` | The internal storage drive, when it isn't named RIPPL |
 | `--no-clock` | Don't set the player's clock |
+| `--no-eq` | Don't fit the EQ presets; the player fits them itself |
 | `--check` | Only compare fingerprints |
 | `--yes` | Create `/.rippl` without asking |
 | `--verbose` | List albums without art |
