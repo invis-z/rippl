@@ -115,6 +115,7 @@ class SyncOptions:
     covers: bool = True
     fingerprint: bool = True
     clock: bool = True
+    equaliser: bool = True
     dry_run: bool = False
     verbose: bool = False
 
@@ -771,7 +772,24 @@ def sync(card, volume, options, internal=None, internal_missing=False, excluded=
                                                          internal, excluded)
     if options.clock:
         write_clock(rippl, options)
+    if options.equaliser:
+        fit_presets(card, rippl, options)
     return recorded
+
+
+def fit_presets(card, rippl, options):
+    if importlib.util.find_spec("numpy") is None:
+        print("EQ presets: numpy is missing, so the player fits them itself.")
+        return None
+    from tide import eq_files
+
+    def progress(number, total, name):
+        print(f"Fitting EQ preset {number} of {total}: {name}", flush=True)
+
+    report = eq_files.refresh(card, rippl, options.dry_run, progress=progress)
+    if report.presets:
+        print(f"EQ presets: {report.fitted} fitted, {report.kept} kept, {report.deleted} removed")
+    return report
 
 
 def print_next_steps(options, recorded, volume, seconds):
@@ -827,7 +845,8 @@ def describe(fingerprint):
 def options_from(arguments):
     return SyncOptions(covers=not arguments.no_covers,
                        fingerprint=not arguments.no_fingerprint, clock=not arguments.no_clock,
-                       dry_run=arguments.dry_run, verbose=arguments.verbose)
+                       equaliser=not arguments.no_eq, dry_run=arguments.dry_run,
+                       verbose=arguments.verbose)
 
 
 def parse_arguments(argv):
@@ -849,6 +868,8 @@ def parse_arguments(argv):
                              "rescan")
     parser.add_argument("--no-clock", action="store_true",
                         help="don't write clock.bin, so the player keeps its own time")
+    parser.add_argument("--no-eq", action="store_true",
+                        help="don't fit the EQ presets, so the player fits them itself")
     parser.add_argument("--check", action="store_true",
                         help="only compare this computer's music fingerprint with the player's")
     parser.add_argument("--dry-run", action="store_true",
