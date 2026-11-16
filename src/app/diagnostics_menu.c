@@ -29,6 +29,19 @@ static const char *frame_time_value(const void *context)
     return i18n_text(options->show_frame_time ? STR_ON : STR_OFF);
 }
 
+static ScreenAction toggle_fit_log(void *context)
+{
+    AppOptions *options = context;
+    options->log_fits = !options->log_fits;
+    return screen_action_none();
+}
+
+static const char *fit_log_value(const void *context)
+{
+    const AppOptions *options = context;
+    return i18n_text(options->log_fits ? STR_ON : STR_OFF);
+}
+
 static ScreenAction toggle_power_taps(void *context)
 {
     AppOptions *options = context;
@@ -164,6 +177,7 @@ void diagnostics_menu_build(AppScreens *screens, AppOptions *options, const Them
     items[count++] = app_screens_open_item(i18n_text(STR_DIAG_KEY_TEST),
                                            test_pattern_screen_init(&screens->test_pattern));
     items[count++] = action_item(STR_DIAG_FRAME_TIME, toggle_frame_time, options, frame_time_value);
+    items[count++] = action_item(STR_DIAG_FIT_LOG, toggle_fit_log, options, fit_log_value);
     items[count++] = value_item(STR_DIAG_FIRMWARE, diagnostics_row_firmware);
     items[count++] = action_item(STR_DIAG_CPU_CLOCK, cycle_clock, &screens->clock, clock_value);
     items[count++] = action_item(STR_DIAG_CORE1, run_core1_test, &screens->core1, core1_value);

@@ -14,6 +14,9 @@ enum {
     EQUALIZER_PREAMP_MIN_TENTHS = -240,
     EQUALIZER_PREAMP_MAX_TENTHS = 120,
     EQUALIZER_MAX_RATE = 96000,
+    EQUALIZER_TARGET_RATE = 48000,
+    EQUALIZER_TARGET_RATE_MIN = 8000,
+    EQUALIZER_TARGET_RATE_MAX = 384000,
     EQUALIZER_MAX_BITS = 24,
     EQUALIZER_HISTORY = 4,
     EQUALIZER_FADE_FRAMES = 256,
@@ -37,6 +40,7 @@ typedef struct EqualizerCurve {
     uint8_t band_count;
     uint8_t preamp_set;
     int16_t preamp_tenths;
+    uint32_t target_rate;
     EqualizerBand bands[EQUALIZER_MAX_BANDS];
 } EqualizerCurve;
 
@@ -46,7 +50,16 @@ typedef struct EqualizerStage {
     int32_t m1;
     int32_t m2;
     uint8_t band;
+    uint8_t fine;
 } EqualizerStage;
+
+typedef struct EqualizerFit {
+    uint32_t rate;
+    uint32_t target_rate;
+    uint16_t worst_hundredths;
+    uint8_t stage_count;
+    EqualizerStage stages[EQUALIZER_MAX_BANDS];
+} EqualizerFit;
 
 typedef struct EqualizerChain {
     EqualizerCurve curve;
@@ -67,6 +80,7 @@ typedef struct EqualizerBlock {
 
 typedef struct Equalizer {
     uint32_t rate;
+    EqualizerFit fit;
     EqualizerChain current;
     EqualizerCurve pending_curve;
     uint8_t has_pending;
@@ -78,6 +92,8 @@ void equalizer_init(Equalizer *equalizer);
 void equalizer_reset(Equalizer *equalizer);
 void equalizer_set_curve(Equalizer *equalizer, const EqualizerCurve *curve);
 void equalizer_set_rate(Equalizer *equalizer, uint32_t rate);
+void equalizer_set_fit(Equalizer *equalizer, const EqualizerFit *fit);
+bool equalizer_fitted(const Equalizer *equalizer);
 void equalizer_apply_pending(Equalizer *equalizer);
 bool equalizer_active(const Equalizer *equalizer);
 bool equalizer_valid(const Equalizer *equalizer);
@@ -86,3 +102,7 @@ void equalizer_process_block(Equalizer *equalizer, EqualizerBlock block);
 int equalizer_preamp_tenths(const EqualizerCurve *curve, uint32_t rate);
 bool equalizer_curve_valid(const EqualizerCurve *curve, uint32_t rate);
 bool equalizer_band_audible(EqualizerBand band, uint32_t rate);
+static inline uint32_t equalizer_target_rate(const EqualizerCurve *curve)
+{
+    return curve->target_rate != 0 ? curve->target_rate : EQUALIZER_TARGET_RATE;
+}

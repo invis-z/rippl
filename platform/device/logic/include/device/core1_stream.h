@@ -70,7 +70,20 @@ typedef struct Core1EqualizerShare {
     uint32_t version;
     uint32_t enabled;
     EqualizerCurve curve;
+    EqualizerFit before_fit;
+    EqualizerFit after_fit;
 } Core1EqualizerShare;
+
+typedef struct Core1FitJob {
+    uint32_t done;
+    uint32_t found;
+    uint32_t rate;
+    uint32_t part;
+    uint32_t parts;
+    EqualizerCurve curve;
+    EqualizerFit seed;
+    EqualizerFit fit;
+} Core1FitJob;
 
 typedef struct StreamRegion {
     volatile StreamControl *control;
@@ -146,6 +159,9 @@ typedef struct Core1Stream {
     Equalizer *equalizer;
     volatile Core1EqualizerShare *share;
     uint32_t share_version;
+    bool replace_equalizer;
+    bool equalize_first;
+    bool equalized_first;
     void (*wait)(void);
     bool finished;
     bool starved;

@@ -159,8 +159,14 @@ static int32_t within_headroom(const EqualizerChain *chain, int64_t preamp)
     return (int32_t)preamp;
 }
 
+static bool fit_applies(const EqualizerFit *fit, const EqualizerCurve *curve, uint32_t rate)
+{
+    return fit != NULL && fit->stage_count > 0 && fit->stage_count <= EQUALIZER_MAX_BANDS &&
+           fit->rate == rate && fit->target_rate == equalizer_target_rate(curve);
+}
+
 static void design_chain(EqualizerChain *chain, const EqualizerCurve *curve, uint32_t rate,
-                         bool keep_history)
+                         bool keep_history, const EqualizerFit *fit)
 {
     chain->curve = *curve;
     if (chain->curve.band_count > EQUALIZER_MAX_BANDS) {
@@ -179,6 +185,16 @@ static void design_chain(EqualizerChain *chain, const EqualizerCurve *curve, uin
         return;
     }
     chain->valid = 1;
+    if (fit_applies(fit, curve, rate)) {
+        for (int index = 0; index < fit->stage_count; index++) {
+            chain->stages[chain->stage_count++] = fit->stages[index];
+        }
+        uint32_t target = fit->target_rate;
+        int preamp = equalizer_preamp_tenths(&chain->curve, target) +
+                     shelf_lift_tenths(&chain->curve, target);
+        chain->preamp = within_headroom(chain, linear_for_preamp_tenths(preamp));
+        return;
+    }
     for (int band = 0; band < chain->curve.band_count; band++) {
         if (!equalizer_band_audible(chain->curve.bands[band], rate)) {
             continue;
@@ -221,9 +237,11 @@ void equalizer_reset(Equalizer *equalizer)
     EqualizerCurve curve =
         equalizer->has_pending ? equalizer->pending_curve : equalizer->current.curve;
     uint32_t rate = equalizer->rate;
+    EqualizerFit fit = equalizer->fit;
     *equalizer = (Equalizer){0};
     equalizer->rate = rate;
-    design_chain(&equalizer->current, &curve, rate, false);
+    equalizer->fit = fit;
+    design_chain(&equalizer->current, &curve, rate, false, &equalizer->fit);
 }
 
 void equalizer_set_curve(Equalizer *equalizer, const EqualizerCurve *curve)
@@ -231,11 +249,11 @@ void equalizer_set_curve(Equalizer *equalizer, const EqualizerCurve *curve)
     bool keep_history = !equalizer->has_pending && chain_active(&equalizer->current) &&
                         same_layout(&equalizer->current.curve, curve);
     if (keep_history) {
-        design_chain(&equalizer->current, curve, equalizer->rate, true);
+        design_chain(&equalizer->current, curve, equalizer->rate, true, &equalizer->fit);
         return;
     }
     if (!equalizer->has_pending && !chain_active(&equalizer->current)) {
-        design_chain(&equalizer->current, curve, equalizer->rate, false);
+        design_chain(&equalizer->current, curve, equalizer->rate, false, &equalizer->fit);
         return;
     }
     if (!equalizer->has_pending) {
@@ -250,7 +268,8 @@ void equalizer_set_curve(Equalizer *equalizer, const EqualizerCurve *curve)
 
 void equalizer_apply_pending(Equalizer *equalizer)
 {
-    design_chain(&equalizer->current, &equalizer->pending_curve, equalizer->rate, false);
+    design_chain(&equalizer->current, &equalizer->pending_curve, equalizer->rate, false,
+                 &equalizer->fit);
     equalizer->fading_out = 0;
     equalizer->fade_remaining = EQUALIZER_FADE_FRAMES;
 }
@@ -262,13 +281,13 @@ void equalizer_set_rate(Equalizer *equalizer, uint32_t rate)
     }
     equalizer->rate = rate;
     if (equalizer->has_pending) {
-        design_chain(&equalizer->current, &equalizer->pending_curve, rate, false);
+        design_chain(&equalizer->current, &equalizer->pending_curve, rate, false, &equalizer->fit);
         equalizer->has_pending = 0;
         equalizer->fading_out = 0;
         equalizer->fade_remaining = 0;
         return;
     }
-    design_chain(&equalizer->current, &equalizer->current.curve, rate, false);
+    design_chain(&equalizer->current, &equalizer->current.curve, rate, false, &equalizer->fit);
 }
 
 bool equalizer_active(const Equalizer *equalizer)
@@ -279,4 +298,21 @@ bool equalizer_active(const Equalizer *equalizer)
 bool equalizer_valid(const Equalizer *equalizer)
 {
     return equalizer->current.valid != 0;
+}
+
+void equalizer_set_fit(Equalizer *equalizer, const EqualizerFit *fit)
+{
+    equalizer->fit = fit != NULL ? *fit : (EqualizerFit){0};
+    if (!equalizer->has_pending && equalizer->rate != 0) {
+        design_chain(&equalizer->current, &equalizer->current.curve, equalizer->rate, true,
+                     &equalizer->fit);
+    }
+}
+
+bool equalizer_fitted(const Equalizer *equalizer)
+{
+    return fit_applies(&equalizer->fit,
+                       equalizer->has_pending ? &equalizer->pending_curve
+                                              : &equalizer->current.curve,
+                       equalizer->rate);
 }

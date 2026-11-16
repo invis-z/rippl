@@ -5,6 +5,7 @@
 
 #include "device/battery_gauge.h"
 #include "dsp/equalizer.h"
+#include "hal/audio.h"
 #include "hal/system.h"
 
 #define BOARD_AUDIO_STREAM_STOPPED 0xFFFFFFFFu
@@ -53,13 +54,15 @@ typedef enum Core1Program {
     CORE1_PROGRAM_FLAC,
     CORE1_PROGRAM_MP3,
     CORE1_PROGRAM_AAC,
-    CORE1_PROGRAM_OPUS
+    CORE1_PROGRAM_OPUS,
+    CORE1_PROGRAM_FIT
 } Core1Program;
 
 bool board_core1_needs_restart(Core1Program program, uint32_t rate, bool wide);
 bool board_core1_equalizer_waits(void);
 bool board_core1_start_stream(Core1Program program, uint32_t rate, bool wide);
 void board_core1_set_equalizer(const EqualizerCurve *curve);
+void board_core1_set_equalizer_fits(HalEqualizerFitReader reader, uint32_t slot, uint32_t key);
 void board_core1_stop(void);
 bool board_core1_streaming(void);
 uint8_t board_core1_load_percent(void);

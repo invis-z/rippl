@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <math.h>
 
+#include "dsp/equalizer_fit.h"
 #include "hal/audio.h"
 #include "sim_decoder.h"
 #include "sim_storage.h"
@@ -127,9 +128,33 @@ static int32_t to_fixed(float sample)
                                      : (int32_t)scaled;
 }
 
+static HalEqualizerFitReader fit_reader;
+static uint32_t fit_slot;
+static uint32_t fit_key;
+static EqualizerFit current_fit;
+static bool fits_changed;
+
+static const EqualizerFit *fit_for(uint32_t rate)
+{
+    if (fit_reader == NULL || !fit_reader(fit_slot, fit_key, rate, &current_fit)) {
+        return NULL;
+    }
+    return &current_fit;
+}
+
+static void follow_fits(uint32_t rate)
+{
+    if (!fits_changed && audio.equalizer.rate == rate) {
+        return;
+    }
+    fits_changed = false;
+    equalizer_set_rate(&audio.equalizer, rate);
+    equalizer_set_fit(&audio.equalizer, fit_for(rate));
+}
+
 static void equalize_chunk(uint64_t frames, uint32_t rate)
 {
-    equalizer_set_rate(&audio.equalizer, rate);
+    follow_fits(rate);
     if (!equalizer_active(&audio.equalizer)) {
         return;
     }
@@ -333,6 +358,16 @@ void hal_audio_set_balance(uint8_t balance)
 void hal_audio_set_dre(HalAudioDre dre)
 {
     (void)dre;
+}
+
+void hal_audio_set_equalizer_fits(HalEqualizerFitReader reader, uint32_t slot, uint32_t key)
+{
+    lock();
+    fit_reader = reader;
+    fit_slot = slot;
+    fit_key = key;
+    fits_changed = true;
+    unlock();
 }
 
 static bool core0_output;

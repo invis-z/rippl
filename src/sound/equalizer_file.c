@@ -1,6 +1,7 @@
 #include "sound/equalizer_file.h"
 
 #include "core/hash.h"
+#include "core/resident.h"
 
 enum {
     VERSION = 1,
@@ -87,4 +88,54 @@ bool equalizer_file_decode(const uint8_t *bytes, uint32_t length, EqualizerChoic
     }
     choice->preset_name[name_length] = '\0';
     return true;
+}
+
+RIPPL_CODE2 static uint32_t map_word(const uint8_t *bytes)
+{
+    uint32_t value = 0;
+    for (int index = 3; index >= 0; index--) {
+        value = value << BITS_PER_BYTE | bytes[index];
+    }
+    return value;
+}
+
+RIPPL_CODE2 static void put_map_word(uint8_t *bytes, uint32_t value)
+{
+    for (int index = 0; index < 4; index++) {
+        bytes[index] = (uint8_t)(value >> (BITS_PER_BYTE * index));
+    }
+}
+
+RIPPL_CODE2 void equalizer_map_clear(uint8_t *map)
+{
+    for (int index = 0; index < EQUALIZER_MAP_SIZE; index++) {
+        map[index] = 0;
+    }
+}
+
+RIPPL_CODE2 void equalizer_map_put(uint8_t *map, int slot, uint32_t key)
+{
+    if (slot >= 0 && slot < EQUALIZER_MAP_SLOTS) {
+        put_map_word(map + 4 * slot, key);
+    }
+}
+
+RIPPL_CODE2 void equalizer_map_seal(uint8_t *map)
+{
+    uint32_t keys = 4 * EQUALIZER_MAP_SLOTS;
+    put_map_word(map + keys, hash_update(HASH_START, map, keys));
+}
+
+RIPPL_CODE2 int equalizer_map_find(const uint8_t *map, uint32_t key)
+{
+    uint32_t keys = 4 * EQUALIZER_MAP_SLOTS;
+    if (key == 0 || map_word(map + keys) != hash_update(HASH_START, map, keys)) {
+        return EQUALIZER_MAP_UNKNOWN;
+    }
+    for (int slot = 0; slot < EQUALIZER_MAP_SLOTS; slot++) {
+        if (map_word(map + 4 * slot) == key) {
+            return slot;
+        }
+    }
+    return EQUALIZER_MAP_ABSENT;
 }

@@ -98,6 +98,32 @@ const void *hal_system_load_rescan_code(void)
     return &LIBRARY_SCAN_ENTRY;
 }
 
+struct EqualizerFitsEntry;
+extern const struct EqualizerFitsEntry EQUALIZER_FITS_ENTRY;
+
+const void *hal_system_load_fit_code(void)
+{
+    return &EQUALIZER_FITS_ENTRY;
+}
+
+bool hal_system_fit_start(const EqualizerCurve *curve, uint32_t rate, const EqualizerFit *seed,
+                          uint32_t part, uint32_t parts)
+{
+    (void)curve;
+    (void)rate;
+    (void)seed;
+    (void)part;
+    (void)parts;
+    return false;
+}
+
+HalFitState hal_system_fit_poll(EqualizerFit *candidate, bool *found)
+{
+    (void)candidate;
+    *found = false;
+    return HAL_FIT_FAILED;
+}
+
 HalHighRamTest hal_system_high_ram_test(void)
 {
     return (HalHighRamTest){.status = HAL_HIGH_RAM_UNAVAILABLE};

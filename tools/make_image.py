@@ -24,6 +24,12 @@ OVERLAY_MAGIC = b"EOVL"
 USB_OVERLAY_OFFSET = 0x43C000
 USB_OVERLAY_CAPACITY = 0x10000
 USB_OVERLAY_MAGIC = b"EUSB"
+FIT_OVERLAY_OFFSET = 0x44C000
+FIT_OVERLAY_CAPACITY = 0x8000
+FIT_OVERLAY_MAGIC = b"EEQF"
+CORE1_FIT_OFFSET = FIT_OVERLAY_OFFSET + FIT_OVERLAY_CAPACITY
+CORE1_FIT_CAPACITY = 0x10000
+CORE1_FIT_END = CORE1_FIT_OFFSET + 512 + CORE1_FIT_CAPACITY
 CORE1_MP3_OFFSET = 0x240000
 CORE1_FLAC_OFFSET = 0x280000
 CORE1_AAC_OFFSET = 0x2A0200
@@ -66,7 +72,7 @@ def glyph_regions(fw_size):
         (CORE1_MP3_OFFSET + CORE1_MODULE_HEADER_SIZE + CORE1_MODULE_CAPACITY, CORE1_FLAC_OFFSET),
     ]
     if fw_size > FW_SIZE:
-        regions.append((FW_SIZE, fw_size))
+        regions.append((CORE1_FIT_END, fw_size))
     return tuple(regions)
 
 
@@ -155,6 +161,8 @@ class ImageParts:
     usb_overlay: bytes = b""
     np_faces: bytes = b""
     code2: bytes = b""
+    fit_overlay: bytes = b""
+    core1_fit: bytes = b""
 
 
 def crc_table():
@@ -247,6 +255,13 @@ def assemble(parts, shape=SHAPES[5]):
     place_overlay(image, parts, parts.overlay, OVERLAY_OFFSET, OVERLAY_CAPACITY, OVERLAY_MAGIC)
     place_overlay(image, parts, parts.usb_overlay, USB_OVERLAY_OFFSET, USB_OVERLAY_CAPACITY,
                   USB_OVERLAY_MAGIC)
+    if parts.fit_overlay and shape.fw_size < FIT_OVERLAY_OFFSET + FIT_OVERLAY_CAPACITY:
+        raise ImageError("the equaliser fit overlay needs the 8 MiB image")
+    place_overlay(image, parts, parts.fit_overlay, FIT_OVERLAY_OFFSET, FIT_OVERLAY_CAPACITY,
+                  FIT_OVERLAY_MAGIC)
+    if parts.core1_fit and shape.fw_size < CORE1_FIT_END:
+        raise ImageError("the core 1 fit program needs the 8 MiB image")
+    place_core1_module(image, parts.core1_fit, CORE1_FIT_OFFSET, CORE1_FIT_CAPACITY)
     place_resident(image, parts)
     place_np_faces(image, parts)
     place_code2(image, parts)
@@ -517,7 +532,7 @@ def generated_header(version, fw_size=FW_SIZE):
 
 def build_image(firmware, brand, build_tag, date, overlay=b"", core1_mp3=b"", core1_flac=b"",
                 version=DEFAULT_VERSION, glyph_faces=(), core1_aac=b"", core1_opus=b"",
-                usb_overlay=b"", shape=SHAPES[5]):
+                usb_overlay=b"", shape=SHAPES[5], fit_overlay=b"", core1_fit=b""):
     check_firmware(firmware)
     code_size, data_size = len(firmware.code), len(firmware.data)
     header = generated_header(version, shape.fw_size)
@@ -534,7 +549,8 @@ def build_image(firmware, brand, build_tag, date, overlay=b"", core1_mp3=b"", co
     rows += [(0, 0, 0, 0)] * (TABLE_CAPACITY - len(rows))
     return assemble(ImageParts(bytes(header), tuple(rows), payload, bytes(MARKER_SIZE), overlay,
                                core1_mp3, core1_flac, tuple(glyph_faces), core1_aac, core1_opus,
-                               firmware.resident, usb_overlay, firmware.np_faces, firmware.code2),
+                               firmware.resident, usb_overlay, firmware.np_faces, firmware.code2,
+                               fit_overlay, core1_fit),
                     shape)
 
 
@@ -789,7 +805,9 @@ def parse_arguments(argv):
                         help="USB and update overlay ELF linked at 0x0307A000")
     parser.add_argument("--core1-mp3", type=Path, help="core 1 MP3 program, a raw binary")
     parser.add_argument("--core1-flac", type=Path, help="core 1 FLAC program, a raw binary")
+    parser.add_argument("--fit-overlay", type=Path, help="equaliser fit overlay ELF")
     parser.add_argument("--core1-aac", type=Path, help="core 1 AAC program, a raw binary")
+    parser.add_argument("--core1-fit", type=Path, help="core 1 equaliser fit program, a raw binary")
     parser.add_argument("--core1-opus", type=Path, help="core 1 Opus program, a raw binary")
     parser.add_argument("--glyph-face", type=Path, action="append", default=[],
                         help="glyph pack face, in face order; a missing file is an empty face")
@@ -814,7 +832,7 @@ def main(argv=None):
     try:
         main_elf = arguments.elf.read_bytes()
         firmware = with_symbol_checks(firmware_from_elf(main_elf), arguments.elf, arguments.nm)
-        overlay = usb_overlay = b""
+        overlay = usb_overlay = fit_overlay = b""
         if arguments.overlay:
             overlay_elf = arguments.overlay.read_bytes()
             check_overlay_copies(main_elf, overlay_elf, "rescan overlay")
@@ -823,16 +841,21 @@ def main(argv=None):
             usb_overlay_elf = arguments.usb_overlay.read_bytes()
             check_overlay_copies(main_elf, usb_overlay_elf, "USB overlay")
             usb_overlay = overlay_from_elf(usb_overlay_elf, zeroed=True)
+        if arguments.fit_overlay:
+            fit_overlay_elf = arguments.fit_overlay.read_bytes()
+            check_overlay_copies(main_elf, fit_overlay_elf, "equaliser fit overlay")
+            fit_overlay = overlay_from_elf(fit_overlay_elf)
         core1_mp3 = arguments.core1_mp3.read_bytes() if arguments.core1_mp3 else b""
         core1_flac = arguments.core1_flac.read_bytes() if arguments.core1_flac else b""
         core1_aac = arguments.core1_aac.read_bytes() if arguments.core1_aac else b""
         core1_opus = arguments.core1_opus.read_bytes() if arguments.core1_opus else b""
+        core1_fit = arguments.core1_fit.read_bytes() if arguments.core1_fit else b""
         glyph_faces = [path.read_bytes() if path.exists() else b""
                        for path in arguments.glyph_face]
         shape = SHAPES[arguments.image_mib]
         image = build_image(firmware, arguments.brand, build_tag, date, overlay, core1_mp3,
                             core1_flac, arguments.version, glyph_faces, core1_aac, core1_opus,
-                            usb_overlay, shape)
+                            usb_overlay, shape, fit_overlay, core1_fit)
     except ImageError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

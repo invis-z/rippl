@@ -29,13 +29,14 @@ enum {
     HOME_ITEM_COUNT = 6,
     SHELF_COUNT = 2,
     MUSIC_ITEM_COUNT = 9,
-    DIAGNOSTICS_ITEM_COUNT = 26,
+    DIAGNOSTICS_ITEM_COUNT = 27,
     START_PATH_CAPACITY = 2
 };
 
 typedef struct AppOptions {
     bool show_frame_time;
     bool ignore_power_taps;
+    bool log_fits;
 } AppOptions;
 
 typedef struct ClockOption {

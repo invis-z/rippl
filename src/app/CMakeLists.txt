@@ -16,6 +16,8 @@ add_library(rippl_app STATIC
     $<IF:$<BOOL:${RIPPL_RELEASE}>,diagnostics_menu_release.c,diagnostics_menu.c>
     draw_profile.c
     equalizer_files.c
+    equalizer_fits.c
+    equalizer_fits_refresh.c
     equalizer_store.c
     folders_store.c
     frame_overlay.c

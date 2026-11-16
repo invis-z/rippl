@@ -837,6 +837,11 @@ void hal_audio_set_output(HalAudioOutput output)
     apply_volume();
 }
 
+void hal_audio_set_equalizer_fits(HalEqualizerFitReader reader, uint32_t slot, uint32_t key)
+{
+    board_core1_set_equalizer_fits(reader, slot, key);
+}
+
 void hal_audio_set_word_output(bool words)
 {
     core0_output = !words;

@@ -68,6 +68,10 @@ rippl_add_unit_test(NAME test_equalizer
     SOURCES dsp/test_equalizer.c
     LIBRARIES rippl_dsp $<$<PLATFORM_ID:Linux>:m>
 )
+rippl_add_unit_test(NAME test_equalizer_fit
+    SOURCES dsp/test_equalizer_fit.c
+    LIBRARIES rippl_dsp
+)
 rippl_add_unit_test(NAME test_upsampler
     SOURCES dsp/test_upsampler.c
     LIBRARIES rippl_dsp $<$<PLATFORM_ID:Linux>:m>
@@ -250,6 +254,11 @@ rippl_add_unit_test(NAME test_equalizer_files
 rippl_add_unit_test(NAME test_language_files
     SOURCES app/test_language_files.c app/fake_hal.c
     LIBRARIES rippl_app rippl_library_fixtures
+    PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
+)
+rippl_add_unit_test(NAME test_equalizer_fits
+    SOURCES app/test_equalizer_fits.c app/fake_hal.c
+    LIBRARIES rippl_app rippl_library_scan
     PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
 )
 rippl_add_unit_test(NAME test_equalizer_screen

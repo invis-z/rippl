@@ -64,12 +64,12 @@ static double decibels(double ratio)
     return 20 * log10(ratio);
 }
 
-static void rates_below_32_khz_are_raised_to_44_1_or_48(void)
+static void rates_below_32_khz_are_raised_to_32_44_1_or_48(void)
 {
-    CHECK_EQUAL(6u, upsampler_factor(8000));
+    CHECK_EQUAL(4u, upsampler_factor(8000));
     CHECK_EQUAL(4u, upsampler_factor(11025));
     CHECK_EQUAL(4u, upsampler_factor(12000));
-    CHECK_EQUAL(3u, upsampler_factor(16000));
+    CHECK_EQUAL(2u, upsampler_factor(16000));
     CHECK_EQUAL(2u, upsampler_factor(22050));
     CHECK_EQUAL(2u, upsampler_factor(24000));
     CHECK_EQUAL(1u, upsampler_factor(32000));
@@ -81,6 +81,28 @@ static void rates_below_32_khz_are_raised_to_44_1_or_48(void)
     CHECK(upsampler_active(&upsampler));
 }
 
+static void raised_to_32_khz_a_steady_level_passes_unchanged(void)
+{
+    for (uint32_t index = 0; index < INPUT_FRAMES; index++) {
+        input[index] = 1000000;
+    }
+    static const uint32_t LOW_RATES[] = {8000, 16000};
+    for (size_t rate = 0; rate < 2; rate++) {
+        upsampler_start(&upsampler, LOW_RATES[rate], BITS);
+        uint32_t produced = 0;
+        for (uint32_t index = 0; index < INPUT_FRAMES; index++) {
+            upsampler_put(&upsampler, 0, input[index]);
+            upsampler_put(&upsampler, 1, input[index]);
+            produced += upsampler_render(&upsampler, &output[0][produced], &output[1][produced]);
+            upsampler_advance(&upsampler);
+        }
+        CHECK_EQUAL((INPUT_FRAMES - UPSAMPLER_DELAY) * upsampler.factor, produced);
+        for (uint32_t index = produced / 2; index < produced; index++) {
+            CHECK(output[0][index] > 999000 && output[0][index] < 1001000);
+        }
+    }
+}
+
 static void every_input_frame_becomes_factor_output_frames(void)
 {
     fill_sine(0.1);
@@ -89,7 +111,7 @@ static void every_input_frame_becomes_factor_output_frames(void)
         CHECK_EQUAL(frames * upsampler_factor(RATES[index]),
                     run(RATES[index], input, input, frames));
     }
-    CHECK_EQUAL(20u * 3, run(16000, input, input, 20));
+    CHECK_EQUAL(20u * 2, run(16000, input, input, 20));
 }
 
 static void a_steady_level_passes_unchanged(void)
@@ -207,13 +229,14 @@ static void the_channels_stay_apart(void)
         quiet = quiet && output[1][at] == 0;
     }
     CHECK(quiet);
-    CHECK(amplitude_at(output[0], SKIP_FRAMES * 3, 3000, 0.2 / 3) > AMPLITUDE * 0.99);
+    CHECK(amplitude_at(output[0], SKIP_FRAMES * 2, 3000, 0.2 / 2) > AMPLITUDE * 0.99);
 }
 
 int main(void)
 {
     static const TestCase cases[] = {
-        TEST_CASE(rates_below_32_khz_are_raised_to_44_1_or_48),
+        TEST_CASE(rates_below_32_khz_are_raised_to_32_44_1_or_48),
+        TEST_CASE(raised_to_32_khz_a_steady_level_passes_unchanged),
         TEST_CASE(every_input_frame_becomes_factor_output_frames),
         TEST_CASE(a_steady_level_passes_unchanged),
         TEST_CASE(the_passband_is_flat_to_0_41_of_the_source_rate),

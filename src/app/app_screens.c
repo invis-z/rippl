@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "app/app.h"
 #include "core/i18n.h"
 #include "diagnostics_values.h"
 #include "hal/power.h"
@@ -260,8 +261,10 @@ Screen *app_screens_init(AppScreens *screens, AppScreensContext context)
                                     .up_next = up_next_screen_init(&screens->up_next, up_next),
                                     .options = context.settings->settings.options,
                                     .orientation = &context.settings->settings.orientation};
-    EqualizerConfig equalizer = {
-        .store = context.equalizer, .toast = context.toast, .theme = theme};
+    EqualizerConfig equalizer = {.store = context.equalizer,
+                                 .toast = context.toast,
+                                 .theme = theme,
+                                 .refit = app_refit_equalizer_preset};
     now_playing.equalizer = equalizer_screen_init(&screens->equalizer, equalizer);
     message_screen_init(&screens->no_library, no_library);
     bluetooth_screen_init(&screens->bluetooth, context.bluetooth, theme, context.toast);

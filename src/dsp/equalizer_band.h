@@ -10,13 +10,18 @@ enum {
     EQUALIZER_BAND_M1_BITS = 13,
     EQUALIZER_BAND_M1_MAX = (1 << 18) - 1,
     EQUALIZER_BAND_RESPONSE_BITS = 16,
-    EQUALIZER_BAND_TABLE_BITS = 30
+    EQUALIZER_BAND_TABLE_BITS = 30,
+    EQUALIZER_BAND_FINE_G_BITS = 20,
+    EQUALIZER_BAND_FINE_C_BITS = 18,
+    EQUALIZER_BAND_FINE_G_LIMIT = 1 << (31 - EQUALIZER_BAND_FINE_G_BITS),
+    EQUALIZER_BAND_FINE_C_LIMIT = 1 << (31 - EQUALIZER_BAND_FINE_C_BITS)
 };
 
 static const int64_t EQUALIZER_BAND_ONE = INT64_C(1) << EQUALIZER_BAND_TABLE_BITS;
 static const int64_t EQUALIZER_BAND_R_ONE = INT64_C(1) << EQUALIZER_BAND_RESPONSE_BITS;
 
 typedef struct EqualizerShape {
+    int64_t g_wide;
     int64_t g;
     int64_t k;
     int64_t m1;
@@ -44,5 +49,7 @@ static inline int equalizer_band_clamped_gain(int gain_tenths)
 int64_t equalizer_band_amplitude(int hundredths);
 int64_t equalizer_band_times(int64_t first, int64_t second);
 EqualizerStage equalizer_band_design(EqualizerBand band, uint32_t rate);
+EqualizerStage equalizer_band_stage(int64_t g, int64_t k, int64_t m1, int64_t m2);
+int64_t equalizer_band_tangent(uint32_t frequency, uint32_t rate);
 EqualizerShape equalizer_band_shape(const EqualizerStage *stage);
 int64_t equalizer_band_response_squared(const EqualizerShape *shape, int64_t tangent);

@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "dsp/equalizer.h"
+
 const char *hal_system_version(void);
 uint32_t hal_system_build_day(void);
 uint32_t hal_system_clock_mhz(void);
@@ -125,6 +127,17 @@ void *hal_system_cover_scratch(uint32_t *size);
 bool hal_system_restart_pending(void);
 bool hal_system_code2_ready(void);
 const void *hal_system_load_rescan_code(void);
+const void *hal_system_load_fit_code(void);
+
+typedef enum HalFitState {
+    HAL_FIT_RUNNING,
+    HAL_FIT_DONE,
+    HAL_FIT_FAILED
+} HalFitState;
+
+bool hal_system_fit_start(const EqualizerCurve *curve, uint32_t rate, const EqualizerFit *seed,
+                          uint32_t part, uint32_t parts);
+HalFitState hal_system_fit_poll(EqualizerFit *candidate, bool *found);
 const void *hal_system_load_faces(void);
 void *hal_system_borrow_scratch(uint32_t *size);
 void *hal_system_borrow_listing(uint32_t *size);
