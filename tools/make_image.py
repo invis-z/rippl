@@ -801,7 +801,7 @@ def parse_arguments(argv):
     parser.add_argument("--core1-opus", type=Path, help="core 1 Opus program, a raw binary")
     parser.add_argument("--glyph-face", type=Path, action="append", default=[],
                         help="glyph pack face, in face order; a missing file is an empty face")
-    parser.add_argument("--image-mib", type=int, choices=sorted(SHAPES), default=5,
+    parser.add_argument("--image-mib", type=int, choices=sorted(SHAPES), default=8,
                         help="image size: 5 MiB (fw size 0x44C000) or 8 MiB (fw size 0x74C000)")
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)

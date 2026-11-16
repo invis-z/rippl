@@ -40,7 +40,7 @@ cmake --preset dev && cmake --build --preset dev && ctest --preset dev
 cmake --preset release && cmake --build --preset release
 ```
 
-A firmware build writes `RIPPL.IMG` (8 MiB) and prints how full each memory region is. `--target echopod` also writes `echopod/HIFIEC90.IMG` (5 MiB, without the extended CJK glyphs), for installing from EchoPod. [Device testing](device-testing.md) covers installing them.
+A firmware build writes `RIPPL.IMG` (8 MiB) and prints how full each memory region is. [Device testing](device-testing.md) covers installing it.
 
 ## Tests
 

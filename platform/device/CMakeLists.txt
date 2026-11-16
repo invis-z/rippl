@@ -318,18 +318,9 @@ target_link_options(rippl_usb_overlay PRIVATE
 set(RIPPL_FIRMWARE_VERSION "0.12.0" CACHE STRING "major.minor.patch written to the image header")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(RIPPL_DEVICE_IMAGE ${CMAKE_BINARY_DIR}/RIPPL.IMG)
-set(RIPPL_ECHOPOD_IMAGE ${CMAKE_BINARY_DIR}/echopod/HIFIEC90.IMG)
 set(RIPPL_GLYPH_FACE_ARGUMENTS "")
-set(RIPPL_ECHOPOD_FACE_ARGUMENTS "")
 foreach(face_file ${RIPPL_GLYPH_FACE_FILES} ${RIPPL_BUILTIN_LANGUAGE_PACK_FILES})
     list(APPEND RIPPL_GLYPH_FACE_ARGUMENTS --glyph-face ${face_file})
-    get_filename_component(face_name ${face_file} NAME_WE)
-    if(face_name MATCHES "^cjk_ext_")
-        list(APPEND RIPPL_ECHOPOD_FACE_ARGUMENTS
-            --glyph-face ${CMAKE_BINARY_DIR}/echopod/without-${face_name}.bin)
-    else()
-        list(APPEND RIPPL_ECHOPOD_FACE_ARGUMENTS --glyph-face ${face_file})
-    endif()
 endforeach()
 set(RIPPL_IMAGE_ARGUMENTS
     --version ${RIPPL_FIRMWARE_VERSION}
@@ -361,20 +352,6 @@ add_custom_target(rippl_device_image ALL
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/size_report.py
         --build ${CMAKE_BINARY_DIR} --summary --nm ${CMAKE_NM}
     BYPRODUCTS ${RIPPL_DEVICE_IMAGE}
-    DEPENDS ${RIPPL_IMAGE_DEPENDS}
-    VERBATIM
-)
-
-add_custom_target(echopod
-    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/check_code2.py
-        --elf $<TARGET_FILE:rippl_device> --allowed ${CMAKE_CURRENT_SOURCE_DIR}/code2_entries.txt
-        --objdump ${CMAKE_OBJDUMP} --nm ${CMAKE_NM}
-    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/make_image.py
-        ${RIPPL_IMAGE_ARGUMENTS}
-        --image-mib 5
-        ${RIPPL_ECHOPOD_FACE_ARGUMENTS}
-        --output ${RIPPL_ECHOPOD_IMAGE}
-    BYPRODUCTS ${RIPPL_ECHOPOD_IMAGE}
     DEPENDS ${RIPPL_IMAGE_DEPENDS}
     VERBATIM
 )

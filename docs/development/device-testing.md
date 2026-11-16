@@ -8,11 +8,11 @@ Follow [install](../user/install.md). FiiO's updater hasn't been tried with the 
 
 ### Direct maskrom write
 
-If FiiO's updater won't take the file, maskrom can write the image straight into both firmware slots. Each slot holds the image's first `0x500000` bytes. On the unit tested, slot 1 is at rockusb sector 0 and slot 2 at sector 69632 (`0x11000`); check yours first: `rl 0 1` and `rl 69632 1` must both show `RKnanoFW` at `0x1F8`.
+If FiiO's updater won't take the file, maskrom can write the image straight into both firmware slots. Each slot holds the image's first `0x800000` bytes. On the unit tested, slot 1 is at rockusb sector 0 and slot 2 at sector 69632 (`0x11000`); check yours first: `rl 0 1` and `rl 69632 1` must both show `RKnanoFW` at `0x1F8`.
 
 ```sh
-cmake --preset device && cmake --build --preset device --target echopod
-head -c 5242880 build/device/echopod/HIFIEC90.IMG > build/device/slot.bin
+cmake --preset device && cmake --build --preset device
+head -c 8388608 build/device/RIPPL.IMG > build/device/slot.bin
 cd external/rkdeveloptool
 ./rkdeveloptool ld && ./rkdeveloptool td
 ./rkdeveloptool wl 69632 ../../build/device/slot.bin

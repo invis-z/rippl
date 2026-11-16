@@ -11,7 +11,8 @@ Rippl is early firmware made by one person and tested on one player. Read this b
 ## Installing
 
 - Tested on one Echo Mini 8 GB.
-- FiiO's updater hasn't been tried with the 8 MiB `RIPPL.IMG`. From EchoPod, install the 5 MiB `HIFIEC90.IMG` first ([install](install.md)).
+- FiiO's updater hasn't been tried with the 8 MiB `RIPPL.IMG`.
+- Rippl can't be installed from EchoPod, which accepts only 5 MiB images ([install](install.md#from-echopod)).
 - Going back to FiiO's firmware hasn't been tried with Rippl.
 - Another custom firmware can't be installed from Rippl: go back to FiiO first.
 
