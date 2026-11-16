@@ -15,12 +15,7 @@ Settings → About on the player shows its FiiO version.
 
 ## Firmware files
 
-A build produces `RIPPL.IMG`; the `echopod` target also builds a 5 MiB image of the same firmware:
-
-| File | Size | Use |
-|---|---|---|
-| `RIPPL.IMG` | 8 MiB | The full firmware. Rippl's own updater installs it. |
-| `echopod/HIFIEC90.IMG` | 5 MiB | The same firmware without the extended CJK glyphs, for installing from EchoPod, which accepts only 5 MiB images. Delete it from the drive once Rippl is installed. |
+A build produces `RIPPL.IMG`, the 8 MiB firmware image. Rippl's own updater installs it.
 
 Releases don't carry the firmware yet; until they do, build it ([building](../development/building.md)). Check a downloaded file against its `SHA256SUMS.txt` line before installing:
 
@@ -47,9 +42,9 @@ Get-FileHash RIPPL.IMG           # Windows PowerShell
 
 If "Updating" flashes for under a second and FiiO's firmware comes back, the install didn't take: see [troubleshooting](troubleshooting.md#the-install-doesnt-take).
 
-## Install from EchoPod
+## From EchoPod
 
-EchoPod (up to 0.12.0) accepts only 5 MiB images, so install the 5 MiB image first. Copy both `echopod/HIFIEC90.IMG` and `RIPPL.IMG` to internal storage and eject: EchoPod installs `HIFIEC90.IMG`, and after a restart that installs `RIPPL.IMG` at the end of the next USB session. Then delete `HIFIEC90.IMG`: while it's there, deleting `RIPPL.IMG` would make the next eject install the 5 MiB image.
+Rippl can't be installed from EchoPod: EchoPod (up to 0.12.0) accepts only 5 MiB images, and Rippl's is 8 MiB.
 
 ## Update Rippl
 

@@ -9,7 +9,7 @@ The first Rippl release.
 ### Before you update
 
 - **Files move from `/.echo` to `/.rippl`.** The first start sets the card up again: settings, the equaliser, resume, Up Next, favourites, bookmarks, Bluetooth devices, music folder choices and the library start fresh. Old `/.echo` files can be deleted.
-- **The firmware is an 8 MiB `RIPPL.IMG`.** From EchoPod, install the 5 MiB `echopod/HIFIEC90.IMG` (`--target echopod`) first ([install](docs/user/install.md)).
+- **The firmware is an 8 MiB `RIPPL.IMG`.** It can't be installed from EchoPod, which accepts only 5 MiB images ([install](docs/user/install.md#from-echopod)).
 - **Only English and Simplified Chinese are built in.** Install your language's pack first (`tide languages install <code>`), or the player starts in English.
 
 ### Added
