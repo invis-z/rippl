@@ -388,6 +388,9 @@ rippl_add_unit_test(NAME test_cover_grid
     SOURCES image/test_cover_grid.c
     LIBRARIES rippl_image
 )
+add_executable(eq_reference_tool sound/eq_reference_tool.c)
+target_link_libraries(eq_reference_tool PRIVATE rippl_dsp rippl_sound rippl_options)
+target_include_directories(eq_reference_tool PRIVATE ${PROJECT_SOURCE_DIR}/src/dsp)
 add_executable(cover_decode_tool image/cover_decode_tool.c)
 target_link_libraries(cover_decode_tool PRIVATE rippl_image rippl_options)
 rippl_add_unit_test(NAME test_fat
@@ -534,6 +537,13 @@ if(EXISTS ${RIPPL_TOOLS_PYTHON})
             --work ${CMAKE_CURRENT_BINARY_DIR}/cover_decode
     )
     set_tests_properties(cover_decode_matches_pillow PROPERTIES TIMEOUT 1200)
+    add_test(NAME eq_fit_matches_player
+        COMMAND ${RIPPL_TOOLS_PYTHON} ${PROJECT_SOURCE_DIR}/tools/check_eq_fit.py
+            --tool $<TARGET_FILE:eq_reference_tool>
+            --presets ${PROJECT_SOURCE_DIR}/tools/tests/eq_presets
+            --work ${CMAKE_CURRENT_BINARY_DIR}/eq_fit
+    )
+    set_tests_properties(eq_fit_matches_player PROPERTIES TIMEOUT 1800)
     add_test(NAME fonts_up_to_date
         COMMAND ${RIPPL_TOOLS_PYTHON} ${PROJECT_SOURCE_DIR}/tools/font_build.py
             --config ${PROJECT_SOURCE_DIR}/assets/fonts/fonts.json

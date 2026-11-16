@@ -10,9 +10,9 @@ The files Rippl keeps in `/.rippl` on the card. Everything is little-endian. Che
 | `library/` | Player, Tide | 1 MiB segment files: the library, scan records, builder scratch |
 | `covers/` | Player, Tide | 4 MiB segment files: album covers |
 | `scan.bin` | Player, Tide | The music fingerprint the player compares after USB |
-| `equaliser/` | Player | Equaliser presets fitted to each sample rate, and the fit log |
+| `equaliser/` | Player, Tide | Equaliser presets fitted to each sample rate, and the fit log |
 | `settings.bin`, `bluetooth.bin` | Player | Settings, remembered headphones |
-| `equaliser.bin` | Player | The last preset, and which fit slot holds each preset's key |
+| `equaliser.bin` | Player, Tide | The last preset, and which fit slot holds each preset's key |
 | `resume.bin`, `upnext.bin` | Player | The playing track and queue, and Up Next |
 | `favourites.bin`, `bookmarks.bin` | Player | Favourite albums, audiobook and podcast positions |
 | `folders.bin` | Player | Top-level folders left out of the library |
@@ -118,7 +118,7 @@ A bookmark is `u32 key`, `u32 track key`, `u32 position_ms`, `u16 chapter`, `u8 
 
 ## Equaliser fits
 
-`equaliser/E00.BIN` to `E99.BIN` each hold one preset's fits: one per sample rate where the fit beats the preset's usual filters. A slot is 4 KB. The player takes the lowest slot that's missing, zero-filled or holds a preset no longer in `/EQ`, and zero-fills the slots of presets that are gone.
+`equaliser/E00.BIN` to `E99.BIN` each hold one preset's fits: one per sample rate where the fit beats the preset's usual filters. A slot is 4 KB. The player takes the lowest slot that's missing, zero-filled or holds a preset no longer in `/EQ`, and zero-fills the slots of presets that are gone, since it can't delete files; Tide deletes them.
 
 | Offset | Size | Field |
 |---|---|---|
@@ -134,7 +134,7 @@ The curve key is FNV-1a over the fit method (2) and the target rate, then each f
 
 An entry is the rate (`u32`), the worst error in hundredths of a dB (`u16`), the stage count (`u8`), a spare byte, and 10 stages of 17 bytes: `g`, `a1`, `m1` and `m2` as `i32`, then the filter number, with `0x80` set for a stage that uses fine coefficients (`g` in Q20 and `1 − a1` in Q18 instead of Q14).
 
-`equaliser.bin` keeps the chosen preset in its first 75 bytes. From byte 75 it holds the fit map: 100 curve keys as `u32`, one per slot (0 when the slot holds no fit), then a checksum over those 400 bytes. The player writes the map after it has checked every slot, without changing the first part. To use a preset, the player looks its key up in the map and checks that slot's key and checksum. A key the map doesn't hold has no fit. A missing or damaged map, or a slot that fails its check, means the player searches the slots instead.
+`equaliser.bin` keeps the chosen preset in its first 75 bytes. From byte 75 it holds the fit map: 100 curve keys as `u32`, one per slot (0 when the slot holds no fit), then a checksum over those 400 bytes. The player writes the map after it has checked every slot, and Tide after a sync; neither changes the other part. To use a preset, the player looks its key up in the map and checks that slot's key and checksum. A key the map doesn't hold has no fit. A missing or damaged map, or a slot that fails its check, means the player searches the slots instead.
 
 `equaliser/FIT.LOG` is text, written only while Diagnostics → Fit log is on: for each fitted rate its error, the usual filters' error, the time, starts, rounds and CPU clock, and for each preset its slot, rate count, worst error and total time. It stops at 64 KB.
 

@@ -20,7 +20,7 @@ The first Rippl release.
 - Daylight saving for the clock: Europe, US & Canada, Australia, New Zealand, or the computer's rule through Tide.
 - **DRE** setting for the DACs' dynamic range enhancement.
 - `/.rippl/errors.log`, listing files the player couldn't open or use, with the reason.
-- **Tide**, replacing rippl-sync: builds the player's own library files, lists bookmarks and installs language packs. Not yet tested on a real card.
+- **Tide**, replacing rippl-sync: builds the player's own library files, fits the EQ presets, lists bookmarks and installs language packs. Not yet tested on a real card.
 
 ### Changed
 

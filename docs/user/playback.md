@@ -65,6 +65,6 @@ A preset's filters are designed for one sample rate. Played at another rate, the
 - **When:** after a library scan, and after USB when the music hasn't changed, for each preset without a fit. "Preparing preset 1 of 2..." shows with a progress bar; a preset takes about half a minute. Until then the preset plays with its usual filters.
 - **Refit:** hold ▶ on a preset for *Refit preset* or *Refit all presets*. Playback pauses while it runs.
 - Tracks at 8–24 kHz are equalised at their own rate before they're raised.
-- Fits are kept in `/.rippl/equaliser`; deleting the folder only means the presets are fitted again.
+- Fits are kept in `/.rippl/equaliser`; deleting the folder only means the presets are fitted again. [Tide](tide.md) fits them on a computer when it syncs the card, so the player doesn't have to.
 
 The player remembers the preset by file name. It applies to Bluetooth too. It's off for 176.4 kHz and above, for 32-bit tracks and in USB DAC mode. Turning it on mid-track restarts the second processor, so the music pauses for a moment.
