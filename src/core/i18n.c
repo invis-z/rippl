@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "core/bytes.h"
+#include "core/record.h"
 
 enum {
     MAGIC_SIZE = 4,
@@ -67,10 +68,8 @@ bool i18n_header_valid(const uint8_t *header, size_t file_size)
     if (header == NULL || file_size < I18N_HEADER_BYTES) {
         return false;
     }
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        if (header[index] != MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(header, MAGIC, MAGIC_SIZE)) {
+        return false;
     }
     uint32_t declared = bytes_get32(header + SIZE_FIELD);
     return bytes_get16(header + VERSION_FIELD) == I18N_VERSION &&

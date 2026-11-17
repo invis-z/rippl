@@ -2,6 +2,7 @@
 
 #include "core/bytes.h"
 #include "core/hash.h"
+#include "core/record.h"
 
 enum {
     VERSION = 1,
@@ -60,9 +61,7 @@ bool favorites_toggle(Favorites *favorites, uint64_t key)
 
 uint32_t favorites_encode(const Favorites *favorites, uint8_t *bytes)
 {
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        bytes[index] = MAGIC[index];
-    }
+    record_put_magic(bytes, MAGIC, MAGIC_SIZE);
     bytes_put16_at(bytes, VERSION_FIELD, VERSION);
     bytes_put16_at(bytes, COUNT_FIELD, favorites->count);
     uint32_t offset = KEYS_FIELD;
@@ -70,7 +69,7 @@ uint32_t favorites_encode(const Favorites *favorites, uint8_t *bytes)
         bytes_put32_at(bytes, offset, (uint32_t)favorites->keys[index]);
         bytes_put32_at(bytes, offset + 4, (uint32_t)(favorites->keys[index] >> 32));
     }
-    bytes_put32_at(bytes, offset, hash_update(HASH_START, bytes, offset));
+    record_seal(bytes, offset);
     return offset + CHECKSUM_SIZE;
 }
 
@@ -79,10 +78,8 @@ static bool header_valid(const uint8_t *bytes, uint32_t length)
     if (length < KEYS_FIELD + CHECKSUM_SIZE) {
         return false;
     }
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        if (bytes[index] != MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(bytes, MAGIC, MAGIC_SIZE)) {
+        return false;
     }
     uint32_t count = bytes_get16_at(bytes, COUNT_FIELD);
     return bytes_get16_at(bytes, VERSION_FIELD) == VERSION && count <= FAVORITES_CAPACITY &&
@@ -97,7 +94,7 @@ bool favorites_decode(const uint8_t *bytes, uint32_t length, Favorites *favorite
     }
     uint16_t count = bytes_get16_at(bytes, COUNT_FIELD);
     uint32_t checksum_field = KEYS_FIELD + (uint32_t)count * KEY_SIZE;
-    if (bytes_get32_at(bytes, checksum_field) != hash_update(HASH_START, bytes, checksum_field)) {
+    if (!record_checksum_ok(bytes, checksum_field)) {
         return false;
     }
     for (uint16_t index = 0; index < count; index++) {

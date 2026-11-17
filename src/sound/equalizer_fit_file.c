@@ -1,5 +1,6 @@
 #include "sound/equalizer_fit_file.h"
 
+#include "core/record.h"
 #include "equalizer_fit_layout.h"
 
 #include <stddef.h>
@@ -70,10 +71,8 @@ RIPPL_CODE2 uint32_t equalizer_fit_file_stored_checksum(const uint8_t *bytes)
 
 RIPPL_CODE2 bool equalizer_fit_file_read_header(const uint8_t *bytes, EqualizerFitHeader *header)
 {
-    for (int index = 0; index < FIT_MAGIC_SIZE; index++) {
-        if (bytes[index] != FIT_MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(bytes, FIT_MAGIC, FIT_MAGIC_SIZE)) {
+        return false;
     }
     if (bytes[VERSION_FIELD] != FIT_VERSION || bytes[ENTRIES_FIELD] > EQUALIZER_FIT_RATES) {
         return false;
