@@ -1,7 +1,7 @@
 #include "playback/up_next.h"
 
 #include "core/bytes.h"
-#include "core/hash.h"
+#include "core/record.h"
 
 enum {
     VERSION = 1,
@@ -15,11 +15,6 @@ enum {
 };
 
 static const uint8_t MAGIC[MAGIC_SIZE] = {'E', 'M', 'U', 'N'};
-
-static uint32_t checksum_of(const uint8_t *bytes)
-{
-    return hash_update(HASH_START, bytes, CHECKSUM_FIELD);
-}
 
 void up_next_clear(UpNext *up_next)
 {
@@ -85,19 +80,17 @@ void up_next_encode(const UpNext *up_next, const Library *library, uint8_t *byte
         }
     }
     bytes_put16_at(bytes, COUNT_FIELD, count);
-    bytes_put32_at(bytes, CHECKSUM_FIELD, checksum_of(bytes));
+    record_seal(bytes, CHECKSUM_FIELD);
 }
 
 static bool header_valid(const uint8_t *bytes)
 {
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        if (bytes[MAGIC_FIELD + index] != MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(bytes + MAGIC_FIELD, MAGIC, MAGIC_SIZE)) {
+        return false;
     }
     return bytes_get16_at(bytes, VERSION_FIELD) == VERSION &&
            bytes_get16_at(bytes, COUNT_FIELD) <= UP_NEXT_CAPACITY &&
-           bytes_get32_at(bytes, CHECKSUM_FIELD) == checksum_of(bytes);
+           record_checksum_ok(bytes, CHECKSUM_FIELD);
 }
 
 bool up_next_decode(const uint8_t *bytes, uint32_t length, const Library *library, UpNext *up_next)
