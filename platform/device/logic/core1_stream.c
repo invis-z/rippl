@@ -322,49 +322,65 @@ static void adopt(Core1Stream *stream, uint32_t generation)
     control->acked_generation = generation;
 }
 
-static void copy_channels(Core1Stream *stream, uint32_t slot, uint32_t samples)
+typedef struct ChannelOut {
+    int32_t *left;
+    int32_t *right;
+    uint32_t step;
+    uint32_t shift;
+} ChannelOut;
+
+static void read_channels(const Core1Stream *stream, uint32_t from, uint32_t count, ChannelOut out,
+                          bool silence)
 {
     const Core1Block *block = &stream->pending;
     uint32_t stride = block->stride > 0 ? block->stride : 1;
-    uint32_t first = stream->emitted * stride;
-    if (stream->channels == FLAC_MAX_CHANNELS && stride == 1 && block->narrow[0] == NULL &&
+    bool stereo = stream->channels == FLAC_MAX_CHANNELS && out.right != NULL;
+    FlacJoin join = (FlacJoin)block->join;
+    if (!silence && stereo && out.shift == 0 && stride == 1 && block->narrow[0] == NULL &&
         block->narrow[1] == NULL) {
-        flac_join((FlacJoin)block->join, block->channels[0] + first, block->channels[1] + first,
-                  stream_row(stream, slot, 0), stream_row(stream, slot, 1), samples);
-        return;
-    }
-    for (uint32_t channel = 0; channel < stream->channels; channel++) {
-        const int32_t *from = block->channels[channel];
-        const int16_t *narrow = block->narrow[channel];
-        int32_t *to = stream_row(stream, slot, channel);
-        for (uint32_t index = 0; index < samples; index++) {
-            uint32_t at = first + index * stride;
-            to[index] = narrow != NULL ? narrow[at] : from[at];
+        const int32_t *first = block->channels[0] + from;
+        const int32_t *second = block->channels[1] + from;
+        if (out.step == 1) {
+            flac_join(join, first, second, out.left, out.right, count);
+            return;
+        }
+        if (out.step == WORD_CHANNELS && out.right == out.left + 1) {
+            flac_join_interleaved(join, first, second, out.left, count);
+            return;
         }
     }
+    int32_t scale = (int32_t)(1u << out.shift);
+    for (uint32_t index = 0; index < count; index++) {
+        uint32_t at = (from + index) * stride;
+        int32_t pair[FLAC_MAX_CHANNELS] = {0, 0};
+        for (uint32_t channel = 0; !silence && channel < stream->channels; channel++) {
+            const int16_t *narrow = block->narrow[channel];
+            pair[channel] = narrow != NULL ? narrow[at] : block->channels[channel][at];
+        }
+        if (!silence && stereo && join != FLAC_JOIN_NONE) {
+            flac_join_pair(join, pair[0], pair[1], &pair[0], &pair[1]);
+        }
+        out.left[index * out.step] = pair[0] * scale;
+        if (out.right != NULL) {
+            out.right[index * out.step] = pair[1] * scale;
+        }
+    }
+}
+
+static void copy_channels(Core1Stream *stream, uint32_t slot, uint32_t samples)
+{
+    int32_t *right = stream->channels > 1 ? stream_row(stream, slot, 1) : NULL;
+    read_channels(stream, stream->emitted, samples,
+                  (ChannelOut){stream_row(stream, slot, 0), right, 1, 0}, false);
 }
 
 static uint32_t source_bits(const Core1Stream *stream);
 
 static void interleave_channels(Core1Stream *stream, int32_t *frames, uint32_t samples)
 {
-    const Core1Block *block = &stream->pending;
-    uint32_t stride = block->stride > 0 ? block->stride : 1;
-    uint32_t first = stream->emitted * stride;
-    if (stream->channels == FLAC_MAX_CHANNELS && stride == 1 && block->narrow[0] == NULL &&
-        block->narrow[1] == NULL) {
-        flac_join_interleaved((FlacJoin)block->join, block->channels[0] + first,
-                              block->channels[1] + first, frames, samples);
-        return;
-    }
-    for (uint32_t channel = 0; channel < stream->channels; channel++) {
-        const int32_t *from = block->channels[channel];
-        const int16_t *narrow = block->narrow[channel];
-        for (uint32_t index = 0; index < samples; index++) {
-            uint32_t at = first + index * stride;
-            frames[WORD_CHANNELS * index + channel] = narrow != NULL ? narrow[at] : from[at];
-        }
-    }
+    int32_t *right = stream->channels > 1 ? frames + 1 : NULL;
+    read_channels(stream, stream->emitted, samples, (ChannelOut){frames, right, WORD_CHANNELS, 0},
+                  false);
 }
 
 static uint32_t equalize_frames(Core1Stream *stream, int32_t *frames, uint32_t samples,
@@ -456,25 +472,9 @@ static bool equalizes_first(Core1Stream *stream)
 static void gather(Core1Stream *stream, uint32_t from, uint32_t count, bool silence,
                    int32_t (*values)[UPSAMPLE_CHUNK])
 {
-    const Core1Block *block = &stream->pending;
-    uint32_t stride = block->stride > 0 ? block->stride : 1;
     uint32_t widen = upsampled_bits(stream) - source_bits(stream);
-    for (uint32_t index = 0; index < count; index++) {
-        uint32_t at = (from + index) * stride;
-        int32_t pair[FLAC_MAX_CHANNELS] = {0, 0};
-        if (!silence) {
-            for (uint32_t channel = 0; channel < stream->channels; channel++) {
-                const int16_t *narrow = block->narrow[channel];
-                pair[channel] = narrow != NULL ? narrow[at] : block->channels[channel][at];
-            }
-            if (block->join != FLAC_JOIN_NONE) {
-                flac_join_pair((FlacJoin)block->join, pair[0], pair[1], &pair[0], &pair[1]);
-            }
-        }
-        for (uint32_t channel = 0; channel < FLAC_MAX_CHANNELS; channel++) {
-            values[channel][index] = pair[channel] * (int32_t)(1u << widen);
-        }
-    }
+    int32_t *right = stream->channels > 1 ? values[1] : NULL;
+    read_channels(stream, from, count, (ChannelOut){values[0], right, 1, widen}, silence);
 }
 
 static uint32_t render_rows(Core1Stream *stream, uint32_t slot, uint32_t produced)
