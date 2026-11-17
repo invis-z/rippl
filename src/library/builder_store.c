@@ -2,38 +2,6 @@
 
 #include "builder_internal.h"
 
-uint16_t builder_get16(const uint8_t *bytes)
-{
-    return (uint16_t)(bytes[0] | bytes[1] << 8);
-}
-
-uint32_t builder_get32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
-void builder_put16(uint8_t *bytes, uint32_t value)
-{
-    bytes[0] = (uint8_t)value;
-    bytes[1] = (uint8_t)(value >> 8);
-}
-
-void builder_put32(uint8_t *bytes, uint32_t value)
-{
-    builder_put16(bytes, value & 0xFFFF);
-    builder_put16(bytes + 2, value >> 16);
-}
-
-uint32_t builder_text_length(const char *text)
-{
-    uint32_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
 static void copy_bytes(uint8_t *to, const uint8_t *from, uint32_t length)
 {
     for (uint32_t index = 0; index < length; index++) {
@@ -204,7 +172,7 @@ bool in_record(In *in, uint8_t *record)
     if (!in_get(in, header, 2)) {
         return false;
     }
-    uint32_t length = builder_get16(header);
+    uint32_t length = (uint16_t)bytes_get16(header);
     record[0] = header[0];
     record[1] = header[1];
     return length >= 2 && length <= BUILDER_MAX_RECORD && in_get(in, record + 2, length - 2);
@@ -279,49 +247,49 @@ bool cache_read(Cache *cache, uint32_t offset, void *bytes, uint32_t length)
 void builder_row_encode(const TrackRow *row, uint8_t *bytes)
 {
     for (int field = 0; field < BUILDER_FIELDS; field++) {
-        builder_put32(bytes + 4 * field, row->text[field]);
-        builder_put16(bytes + 24 + 2 * field, row->length[field]);
+        bytes_put32(bytes + 4 * field, row->text[field]);
+        bytes_put16(bytes + 24 + 2 * field, row->length[field]);
     }
-    builder_put32(bytes + 36, row->folder);
-    builder_put16(bytes + 40, row->year);
+    bytes_put32(bytes + 36, row->folder);
+    bytes_put16(bytes + 40, row->year);
     bytes[42] = row->disc;
     bytes[43] = row->number;
     bytes[44] =
         (uint8_t)(row->spoken * BUILDER_ROW_SPOKEN_BIT | row->guessed * BUILDER_ROW_GUESSED_BIT);
     bytes[45] = row->chapters;
-    builder_put16(bytes + 46, 0);
-    builder_put32(bytes + 48, row->duration_ms);
+    bytes_put16(bytes + 46, 0);
+    bytes_put32(bytes + 48, row->duration_ms);
 }
 
 void builder_row_decode(const uint8_t *bytes, TrackRow *row)
 {
     for (int field = 0; field < BUILDER_FIELDS; field++) {
-        row->text[field] = builder_get32(bytes + 4 * field);
-        row->length[field] = builder_get16(bytes + 24 + 2 * field);
+        row->text[field] = bytes_get32(bytes + 4 * field);
+        row->length[field] = (uint16_t)bytes_get16(bytes + 24 + 2 * field);
     }
-    row->folder = builder_get32(bytes + 36);
-    row->year = builder_get16(bytes + 40);
+    row->folder = bytes_get32(bytes + 36);
+    row->year = (uint16_t)bytes_get16(bytes + 40);
     row->disc = bytes[42];
     row->number = bytes[43];
     row->spoken = (bytes[44] & BUILDER_ROW_SPOKEN_BIT) != 0;
     row->guessed = (bytes[44] & BUILDER_ROW_GUESSED_BIT) != 0;
     row->chapters = bytes[45];
-    row->duration_ms = builder_get32(bytes + 48);
+    row->duration_ms = bytes_get32(bytes + 48);
 }
 
 void builder_folder_encode(const FolderRow *row, uint8_t *bytes)
 {
-    builder_put32(bytes, row->name);
-    builder_put16(bytes + 4, row->length);
-    builder_put16(bytes + 6, 0);
-    builder_put32(bytes + 8, row->parent);
+    bytes_put32(bytes, row->name);
+    bytes_put16(bytes + 4, row->length);
+    bytes_put16(bytes + 6, 0);
+    bytes_put32(bytes + 8, row->parent);
 }
 
 void builder_folder_decode(const uint8_t *bytes, FolderRow *row)
 {
-    row->name = builder_get32(bytes);
-    row->length = builder_get16(bytes + 4);
-    row->parent = builder_get32(bytes + 8);
+    row->name = bytes_get32(bytes);
+    row->length = (uint16_t)bytes_get16(bytes + 4);
+    row->parent = bytes_get32(bytes + 8);
 }
 
 bool builder_read_row(Cache *rows, const BuilderState *state, uint32_t track, TrackRow *row)

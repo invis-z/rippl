@@ -58,7 +58,7 @@ static bool track_at(Prepared *prepared, uint32_t position, uint32_t *track)
                     sizeof bytes)) {
         return false;
     }
-    *track = builder_get32(bytes);
+    *track = bytes_get32(bytes);
     return true;
 }
 
@@ -139,22 +139,22 @@ static bool same_folded_path(BuilderState *state, Prepared *prepared, uint32_t p
 static int by_hash_then_position(const uint8_t *left, const uint8_t *right, const void *context)
 {
     (void)context;
-    uint32_t a = builder_get32(left + 2);
-    uint32_t b = builder_get32(right + 2);
+    uint32_t a = bytes_get32(left + 2);
+    uint32_t b = bytes_get32(right + 2);
     if (a != b) {
         return a < b ? -1 : 1;
     }
-    uint32_t c = builder_get32(left + 6);
-    uint32_t d = builder_get32(right + 6);
+    uint32_t c = bytes_get32(left + 6);
+    uint32_t d = bytes_get32(right + 6);
     return c < d ? -1 : c > d ? 1 : 0;
 }
 
 static bool put_index_entry(Out *out, uint32_t hash, uint32_t position)
 {
     uint8_t entry[INDEX_ENTRY];
-    builder_put16(entry, INDEX_ENTRY);
-    builder_put32(entry + 2, hash);
-    builder_put32(entry + 6, position);
+    bytes_put16(entry, INDEX_ENTRY);
+    bytes_put32(entry + 2, hash);
+    bytes_put32(entry + 6, position);
     return out_put(out, entry, sizeof entry);
 }
 
@@ -173,7 +173,7 @@ static bool emit_index_entries(BuilderState *state, Prepared *prepared, Out *exa
         if (!in_get(&places, place, sizeof place)) {
             return false;
         }
-        uint32_t position = builder_get32(place);
+        uint32_t position = bytes_get32(place);
         uint32_t length = folded_track_path(state, prepared, track, scratch->folded);
         uint32_t path_hash = hash_update(HASH_START, scratch->folded, length);
         uint32_t name_hash = folded_name_hash(state, prepared, track, scratch->folded);
@@ -226,8 +226,8 @@ static bool index_entry(Prepared *prepared, Region table, uint32_t index, uint32
     if (!cache_read(&prepared->lookup, table.offset + index * INDEX_ENTRY, entry, sizeof entry)) {
         return false;
     }
-    *hash = builder_get32(entry + 2);
-    *position = builder_get32(entry + 6);
+    *hash = bytes_get32(entry + 2);
+    *position = bytes_get32(entry + 6);
     return true;
 }
 

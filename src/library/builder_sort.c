@@ -98,7 +98,7 @@ static bool write_run(const Chunk *chunk, const BorrowedWord *order, const SortJ
     out_open(&out, job->store, region, buffer, STREAM_BUFFER);
     for (uint32_t index = 0; index < chunk->count; index++) {
         const uint8_t *record = chunk->memory + order[index];
-        if (!out_put(&out, record, builder_get16(record))) {
+        if (!out_put(&out, record, (uint16_t)bytes_get16(record))) {
             return false;
         }
     }
@@ -131,7 +131,7 @@ static bool make_runs(const SortJob *job, Runs *runs)
                 return false;
             }
         }
-        uint32_t length = builder_get16(pending);
+        uint32_t length = (uint16_t)bytes_get16(pending);
         have_pending = false;
         if (!fits(&chunk, length)) {
             if (chunk.count == 0) {
@@ -208,7 +208,7 @@ static bool merge_group(const SortJob *job, const Region *group, uint32_t count,
         if (best < 0) {
             break;
         }
-        if (!out_put(&out, heads[best].record, builder_get16(heads[best].record)) ||
+        if (!out_put(&out, heads[best].record, (uint16_t)bytes_get16(heads[best].record)) ||
             !advance(&heads[best])) {
             return false;
         }
@@ -252,16 +252,16 @@ bool sort_records(const SortJob *job, Region *output)
 static int by_scatter_index(const uint8_t *left, const uint8_t *right, const void *context)
 {
     (void)context;
-    uint32_t a = builder_get32(left + 2);
-    uint32_t b = builder_get32(right + 2);
+    uint32_t a = bytes_get32(left + 2);
+    uint32_t b = bytes_get32(right + 2);
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
 bool builder_put_entry(Out *out, uint32_t index, const uint8_t *values, uint32_t size)
 {
     uint8_t entry[BUILDER_ENTRY_HEADER + BUILDER_ENTRY_VALUES];
-    builder_put16(entry, BUILDER_ENTRY_HEADER + size);
-    builder_put32(entry + 2, index);
+    bytes_put16(entry, BUILDER_ENTRY_HEADER + size);
+    bytes_put32(entry + 2, index);
     for (uint32_t byte = 0; byte < size; byte++) {
         entry[BUILDER_ENTRY_HEADER + byte] = values[byte];
     }
@@ -271,7 +271,7 @@ bool builder_put_entry(Out *out, uint32_t index, const uint8_t *values, uint32_t
 bool builder_put_pair(Out *out, uint32_t index, uint32_t value)
 {
     uint8_t bytes[4];
-    builder_put32(bytes, value);
+    bytes_put32(bytes, value);
     return builder_put_entry(out, index, bytes, sizeof bytes);
 }
 
@@ -308,8 +308,7 @@ bool builder_scatter_values(BuilderState *state, Region pairs, Region column, ui
     for (uint32_t index = 0; index < count; index++) {
         uint8_t entry[BUILDER_ENTRY_HEADER + BUILDER_ENTRY_VALUES];
         if (in_done(&in) || !in_get(&in, entry, BUILDER_ENTRY_HEADER + size) ||
-            builder_get32(entry + 2) != index ||
-            !out_put(&out, entry + BUILDER_ENTRY_HEADER, size)) {
+            bytes_get32(entry + 2) != index || !out_put(&out, entry + BUILDER_ENTRY_HEADER, size)) {
             state->arena.failed = !state->store.io_failed && !state->store.failed;
             return false;
         }
