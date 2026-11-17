@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -43,6 +45,22 @@ typedef struct UsbReply {
     UsbAction action;
     uint16_t value;
 } UsbReply;
+
+static inline UsbReply usb_reply_stall(void)
+{
+    return (UsbReply){USB_REPLY_STALL, NULL, 0, USB_ACTION_NONE, 0};
+}
+
+static inline UsbReply usb_reply_status(UsbAction action, uint16_t value)
+{
+    return (UsbReply){USB_REPLY_STATUS, NULL, 0, action, value};
+}
+
+static inline UsbReply usb_reply_data(const uint8_t *bytes, uint16_t length, UsbSetup setup)
+{
+    uint16_t sent = length < setup.length ? length : setup.length;
+    return (UsbReply){USB_REPLY_DATA, bytes, sent, USB_ACTION_NONE, 0};
+}
 
 typedef enum UsbSpeed {
     USB_SPEED_FULL,
