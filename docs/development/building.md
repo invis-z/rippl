@@ -32,12 +32,11 @@ Install CMake, Clang or GCC, SDL2's development package, `clang-format`, and Arm
 | Preset | Output | Purpose |
 |---|---|---|
 | `dev` | `build/dev` | Simulator and host tests, Debug with sanitisers |
-| `device` | `build/device` | Firmware with the developer Diagnostics rows |
-| `release` | `build/release` | Firmware as released |
+| `device` | `build/device` | Firmware |
 
 ```sh
 cmake --preset dev && cmake --build --preset dev && ctest --preset dev
-cmake --preset release && cmake --build --preset release
+cmake --preset device && cmake --build --preset device
 ```
 
 A firmware build writes `RIPPL.IMG` (8 MiB) and prints how full each memory region is. [Device testing](device-testing.md) covers installing it.

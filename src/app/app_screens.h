@@ -29,7 +29,8 @@ enum {
     HOME_ITEM_COUNT = 6,
     SHELF_COUNT = 2,
     MUSIC_ITEM_COUNT = 9,
-    DIAGNOSTICS_ITEM_COUNT = 27,
+    DIAGNOSTICS_ITEM_COUNT = 28,
+    DIAGNOSTICS_GROUP_COUNT = 7,
     START_PATH_CAPACITY = 2
 };
 
@@ -64,7 +65,19 @@ typedef struct BrowseEntry {
     bool present;
 } BrowseEntry;
 
-typedef struct AppScreens {
+typedef struct DiagnosticsGate {
+    const uint8_t *options;
+    bool debug_file;
+} DiagnosticsGate;
+
+typedef struct AppScreens AppScreens;
+
+typedef struct DiagnosticsGroupEntry {
+    AppScreens *screens;
+    uint32_t group;
+} DiagnosticsGroupEntry;
+
+struct AppScreens {
     MenuScreen home;
     MenuScreen music;
     SettingsScreens settings;
@@ -85,10 +98,15 @@ typedef struct AppScreens {
     Core1Option core1;
     Core1AccelOption core1_accel;
     MenuItem home_items[HOME_ITEM_COUNT];
+    DiagnosticsGate diagnostics_gate;
     HomeArt home_art;
     MenuItem music_items[MUSIC_ITEM_COUNT];
     MenuItem diagnostics_items[DIAGNOSTICS_ITEM_COUNT];
-} AppScreens;
+    MenuItem diagnostics_groups[DIAGNOSTICS_GROUP_COUNT];
+    DiagnosticsGroupEntry diagnostics_entries[DIAGNOSTICS_GROUP_COUNT];
+    MenuScreen diagnostics_group;
+    const Theme *diagnostics_theme;
+};
 
 typedef struct AppScreensContext {
     AppOptions *options;

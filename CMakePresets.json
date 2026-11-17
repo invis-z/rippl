@@ -22,15 +22,6 @@
         "RIPPL_BUILD_TESTS": "OFF",
         "RIPPL_BUILD_DEVICE": "ON"
       }
-    },
-    {
-      "name": "release",
-      "displayName": "Release firmware (device build without developer Diagnostics)",
-      "inherits": "device",
-      "binaryDir": "${sourceDir}/build/release",
-      "cacheVariables": {
-        "RIPPL_RELEASE": "ON"
-      }
     }
   ],
   "buildPresets": [
@@ -41,10 +32,6 @@
     {
       "name": "device",
       "configurePreset": "device"
-    },
-    {
-      "name": "release",
-      "configurePreset": "release"
     }
   ],
   "testPresets": [

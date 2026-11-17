@@ -21,7 +21,7 @@
 | Page | Covers |
 |---|---|
 | [Building](development/building.md) | Toolchains, presets, tests, the simulator, packaging Tide |
-| [Testing on a player](development/device-testing.md) | Installing builds, checks, developer Diagnostics |
+| [Testing on a player](development/device-testing.md) | Installing builds, checks, Diagnostics |
 | [USB recovery](development/recovery.md) | Writing FiiO's firmware back to a player that won't start |
 | [Library internals](development/library-internals.md) | Scanning, tags, building, covers and their tests |
 | [Conventions](development/conventions.md) | Code style, tests, translations, commits and documentation |

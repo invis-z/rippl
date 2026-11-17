@@ -85,6 +85,7 @@ typedef enum SettingOption {
     OPTION_NOW_PLAYING_FACE,
     OPTION_DRE,
     OPTION_DAYLIGHT,
+    OPTION_DIAGNOSTICS,
     SETTINGS_OPTION_COUNT
 } SettingOption;
 
@@ -198,7 +199,7 @@ enum {
     SCREEN_TIMEOUT_OPTION_COUNT = 7,
     SLEEP_TIMER_OPTION_COUNT = 7,
     AUTO_OFF_OPTION_COUNT = 4,
-    SETTINGS_FILE_SIZE = 44
+    SETTINGS_FILE_SIZE = 45
 };
 
 typedef struct Settings {

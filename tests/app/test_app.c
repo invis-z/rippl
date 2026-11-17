@@ -38,14 +38,16 @@ enum {
     KEY_HOLD_MS = 30,
     FULL_FRAME_PIXELS = HAL_DISPLAY_WIDTH * HAL_DISPLAY_HEIGHT,
     HOME_DIAGNOSTICS_INDEX = 2,
-    DIAGNOSTICS_FRAME_TIME_INDEX = 4,
-    DIAGNOSTICS_FIRMWARE_INDEX = 6,
+    DIAGNOSTICS_PERFORMANCE_INDEX = 6,
+    DIAGNOSTICS_FIRMWARE_INDEX = 15,
+    DIAGNOSTICS_POWER_GROUP = 4,
+    DIAGNOSTICS_SYSTEM_GROUP = 5,
     MUSIC_ARTISTS_INDEX = 1,
     MUSIC_ALBUMS_INDEX = 3,
     MUSIC_FOLDERS_INDEX = 5,
     BJORK_POSITION = 3,
     HOME_SETTINGS_INDEX = 1,
-    HOME_NOW_PLAYING_INDEX = 3,
+    HOME_NOW_PLAYING_INDEX = 2,
     SETTINGS_REPEAT_INDEX = 1,
     SETTINGS_BLUETOOTH_INDEX = 2,
     SETTINGS_EQUALIZER_INDEX = 3,
@@ -85,11 +87,11 @@ enum {
     DEFAULT_TIMEOUT_MS = 30000,
     SHORT_TIMEOUT_MS = 10000,
     IDLE_MS = 20000,
-    DIAGNOSTICS_KEY_TEST_INDEX = 3,
-    DIAGNOSTICS_CPU_CLOCK_INDEX = 7,
-    DIAGNOSTICS_CORE1_INDEX = 8,
-    DIAGNOSTICS_POWER_TAPS_INDEX = 15,
-    DIAGNOSTICS_ACCEL_INDEX = 18,
+    DIAGNOSTICS_KEY_TEST_INDEX = 5,
+    DIAGNOSTICS_CPU_CLOCK_INDEX = 1,
+    DIAGNOSTICS_CORE1_INDEX = 2,
+    DIAGNOSTICS_POWER_TAPS_INDEX = 3,
+    DIAGNOSTICS_ACCEL_INDEX = 3,
     FIFTEEN_MINUTES_MS = 15 * 60 * 1000,
     GOODBYE_MS = 1000,
     SPLASH_FADE_MS = 300,
@@ -103,12 +105,28 @@ static const char SHOOTS_PATH[] = "/acloudyskye/This Won't Be The Last Time/01 -
 
 static uint32_t now_ms;
 
+static bool with_debug_file;
+
+static void add_debug_file(void)
+{
+    if (with_debug_file) {
+        fake_hal_add_file("/:internal/debug", NULL, 0);
+    }
+}
+
 static void start_app(void)
 {
     fake_hal_reset();
+    add_debug_file();
     now_ms = START_MS;
     fake_hal_set_milliseconds(now_ms);
     app_start();
+}
+static void start_app_with_diagnostics(void)
+{
+    with_debug_file = true;
+    start_app();
+    with_debug_file = false;
 }
 
 static void install_library(const uint8_t *bytes, uint32_t size)
@@ -134,6 +152,7 @@ static void start_app_with_library(void)
     uint32_t size = 0;
     const uint8_t *bytes = fixture_bytes(&size);
     fake_hal_reset();
+    add_debug_file();
     install_library(bytes, size);
     segment_store_open(&store, library_store_files());
     CHECK(fixture_covers_write(&store, fixture_library_open(&fixture)));
@@ -227,7 +246,14 @@ static bool title_is(const char *expected)
 static bool overlay_visible(void)
 {
     Rect area = frame_overlay_area(&DEFAULT_THEME);
-    return fake_hal_pixel(area.x, area.y) == frame_overlay_background();
+    for (int y = area.y; y < area.y + area.height; y++) {
+        for (int x = area.x; x < area.x + area.width; x++) {
+            if (fake_hal_pixel(x, y) == frame_overlay_text_color()) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 static void audio_gets_a_turn_after_every_strip(void)
@@ -290,15 +316,37 @@ static void a_long_back_returns_home_from_deep_screens(void)
 
 static void the_frame_overlay_is_off_until_enabled_in_diagnostics(void)
 {
-    start_app();
+    start_app_with_diagnostics();
     step();
     CHECK(!overlay_visible());
     move_down(HOME_DIAGNOSTICS_INDEX);
     tap(KEY_PLAY);
     CHECK(title_is("Diagnostics"));
-    move_down(DIAGNOSTICS_FRAME_TIME_INDEX);
+    move_down(DIAGNOSTICS_SYSTEM_GROUP);
+    tap(KEY_PLAY);
+    CHECK(title_is("System"));
+    move_down(DIAGNOSTICS_PERFORMANCE_INDEX);
     tap(KEY_PLAY);
     CHECK(overlay_visible());
+}
+
+static void diagnostics_are_hidden_until_turned_on(void)
+{
+    start_app();
+    move_down(HOME_DIAGNOSTICS_INDEX);
+    tap(KEY_PLAY);
+    CHECK(!title_is("Diagnostics"));
+}
+
+static void a_debug_file_on_internal_storage_shows_diagnostics(void)
+{
+    start_app_with_diagnostics();
+    move_down(HOME_DIAGNOSTICS_INDEX);
+    tap(KEY_PLAY);
+    CHECK(title_is("Diagnostics"));
+    move_down(DIAGNOSTICS_SYSTEM_GROUP);
+    tap(KEY_PLAY);
+    CHECK(title_is("System"));
 }
 
 static void the_frame_overlay_splits_the_frame_time(void)
@@ -2503,10 +2551,14 @@ static void idling_in_the_menus_stays_put_while_playing(void)
 
 static void the_key_test_stays_open_after_waking(void)
 {
+    with_debug_file = true;
     start_app_with_library();
+    with_debug_file = false;
     play_first_album_track();
     hold_back();
     move_down(HOME_DIAGNOSTICS_INDEX);
+    tap(KEY_PLAY);
+    move_down(DIAGNOSTICS_SYSTEM_GROUP);
     tap(KEY_PLAY);
     move_down(DIAGNOSTICS_KEY_TEST_INDEX);
     tap(KEY_PLAY);
@@ -2539,17 +2591,19 @@ static void waking_while_paused_keeps_the_screen(void)
     CHECK(!title_is("Now Playing"));
 }
 
-static void open_diagnostics_row(int index)
+static void open_diagnostics_row(int group, int index)
 {
     move_down(HOME_DIAGNOSTICS_INDEX);
+    tap(KEY_PLAY);
+    move_down(group);
     tap(KEY_PLAY);
     move_down(index);
 }
 
 static void the_cpu_clock_cycles_through_24_96_and_200_mhz(void)
 {
-    start_app();
-    open_diagnostics_row(DIAGNOSTICS_CPU_CLOCK_INDEX);
+    start_app_with_diagnostics();
+    open_diagnostics_row(DIAGNOSTICS_SYSTEM_GROUP, DIAGNOSTICS_CPU_CLOCK_INDEX);
     CHECK_EQUAL(200, hal_system_clock_mhz());
     tap(KEY_PLAY);
     CHECK_EQUAL(24, hal_system_clock_mhz());
@@ -2561,8 +2615,8 @@ static void the_cpu_clock_cycles_through_24_96_and_200_mhz(void)
 
 static void ignored_power_taps_leave_the_screen_on_but_a_hold_still_switches_off(void)
 {
-    start_app();
-    open_diagnostics_row(DIAGNOSTICS_POWER_TAPS_INDEX);
+    start_app_with_diagnostics();
+    open_diagnostics_row(DIAGNOSTICS_POWER_GROUP, DIAGNOSTICS_POWER_TAPS_INDEX);
     tap(KEY_PLAY);
     tap(KEY_POWER);
     CHECK(fake_hal_display_on());
@@ -2573,32 +2627,32 @@ static void ignored_power_taps_leave_the_screen_on_but_a_hold_still_switches_off
 
 static void the_core_1_test_runs_once_per_press(void)
 {
-    start_app();
-    open_diagnostics_row(DIAGNOSTICS_CORE1_INDEX);
+    start_app_with_diagnostics();
+    open_diagnostics_row(DIAGNOSTICS_SYSTEM_GROUP, DIAGNOSTICS_CORE1_INDEX);
     CHECK_EQUAL(0, fake_hal_core1_test_count());
     tap(KEY_PLAY);
     CHECK_EQUAL(1, fake_hal_core1_test_count());
-    CHECK(title_is("Diagnostics"));
+    CHECK(title_is("System"));
 }
 
 static void the_accelerator_test_runs_once_per_press(void)
 {
-    start_app();
-    open_diagnostics_row(DIAGNOSTICS_ACCEL_INDEX);
+    start_app_with_diagnostics();
+    open_diagnostics_row(DIAGNOSTICS_SYSTEM_GROUP, DIAGNOSTICS_ACCEL_INDEX);
     CHECK_EQUAL(0, fake_hal_core1_accel_count());
     tap(KEY_PLAY);
     CHECK_EQUAL(1, fake_hal_core1_accel_count());
-    CHECK(title_is("Diagnostics"));
+    CHECK(title_is("System"));
 }
 
 static void a_clock_that_does_not_lock_stays_where_it_was(void)
 {
-    start_app();
+    start_app_with_diagnostics();
     fake_hal_refuse_clock_switch();
-    open_diagnostics_row(DIAGNOSTICS_CPU_CLOCK_INDEX);
+    open_diagnostics_row(DIAGNOSTICS_SYSTEM_GROUP, DIAGNOSTICS_CPU_CLOCK_INDEX);
     tap(KEY_PLAY);
     CHECK_EQUAL(200, hal_system_clock_mhz());
-    CHECK(title_is("Diagnostics"));
+    CHECK(title_is("System"));
 }
 
 static void menu_opens_now_playing_from_anywhere_while_playing(void)
@@ -3625,6 +3679,8 @@ int main(void)
         TEST_CASE(back_returns_to_the_previous_screen),
         TEST_CASE(a_long_back_returns_home_from_deep_screens),
         TEST_CASE(the_frame_overlay_is_off_until_enabled_in_diagnostics),
+        TEST_CASE(diagnostics_are_hidden_until_turned_on),
+        TEST_CASE(a_debug_file_on_internal_storage_shows_diagnostics),
         TEST_CASE(the_frame_overlay_splits_the_frame_time),
         TEST_CASE(the_frame_overlay_splits_the_drawing),
         TEST_CASE(the_frame_overlay_shows_the_audio_numbers),

@@ -26,7 +26,7 @@ After 30 s paused the player powers its audio output down to save battery, so re
 
 ## Home
 
-Home lists **Music**, **Now Playing**, **Settings** and **Diagnostics**, plus **Audiobooks** and **Podcasts** when the card has those folders ([audiobooks and podcasts](audiobooks-podcasts.md)). The panel beside the menu shows the current album's cover.
+Home lists **Music**, **Now Playing** and **Settings**, **Diagnostics** when it's turned on ([settings](settings.md#diagnostics)), and **Audiobooks** and **Podcasts** when the card has those folders ([audiobooks and podcasts](audiobooks-podcasts.md)). The panel beside the menu shows the current album's cover.
 
 Music opens Cover Flow, Albums, Artists, Album Artists, Genres, Folders, All Songs, Playlists and Favourites ([library](library.md)).
 

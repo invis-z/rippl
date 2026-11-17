@@ -38,8 +38,8 @@ Before writing, the updater checks the image's shape, load rows, entry vector, h
 
 | Check | Expect |
 |---|---|
-| Home | Music, Now Playing, Settings and Diagnostics |
-| Diagnostics → Firmware | The commit you built (a `+` means uncommitted changes) |
+| Home | Music, Now Playing and Settings, and Diagnostics once it's turned on |
+| Diagnostics → System → Firmware | The commit you built (a `+` means uncommitted changes) |
 | Diagnostics → Key test | Every key registers |
 | Power | A tap toggles the screen; holding 2 s switches off (with a cable, the charge screen) |
 | USB | "Computer found", and the drives mount within about 10 s |
@@ -47,21 +47,21 @@ Before writing, the updater checks the image's shape, load rows, entry vector, h
 
 ## Diagnostics
 
-The `device` build adds developer rows to Diagnostics:
+Turn it on in Settings → System → Diagnostics, or put an empty file named `debug` at the top of the internal drive. Its rows are grouped:
 
-| Row | Shows or does |
+| Group | Rows |
 |---|---|
-| Frame time | The frame-time overlay (below) |
-| Fit log | Write each equaliser fit's times to `/.rippl/equaliser/FIT.LOG` (not saved) |
-| CPU clock | Cycle the clock through 24, 96 and 200 MHz |
-| Core 1, LPC accel | Self-tests of the second core and the FLAC accelerator |
-| Last start, Last step, Last stack, Boot hold | What happened at the last start and where a crash stopped |
-| Last update, Last USB, USB errors | The last install and USB session |
-| Power, Savings | Power readings; turn single power savings off, such as the 96 MHz screen-off clock |
+| Audio | Audio output (which core sends the I2S words), Jack (single-ended), Jack (balanced), Bluetooth, Fit log (write each equaliser fit's times to `/.rippl/equaliser/FIT.LOG`, not saved) |
+| Display | Panel |
+| Storage | SD clock, SD transfers |
+| USB | Last USB, USB errors |
+| Power | Battery, Last battery, Power, Power taps, Savings (turn single power savings off, such as the 96 MHz screen-off clock) |
+| System | Firmware, CPU clock (24, 96 and 200 MHz), Core 1 and LPC accel self-tests, Clock, Key test, Performance (the overlay below) |
+| Boot | Boot hold, Last start, Last step, Last stack, Stack, Last update |
 
-### Frame-time overlay
+### Performance overlay
 
-Four lines, times in milliseconds:
+Four lines in green at the top right, over the status bar, with no background; times in milliseconds:
 
 | Line | Fields |
 |---|---|

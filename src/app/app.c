@@ -13,6 +13,7 @@
 #include "core/low_battery.h"
 #include "core/power_policy.h"
 #include "core/string_builder.h"
+#include "core/volume_path.h"
 #include "cover_cache.h"
 #include "dac_screen.h"
 #include "default_theme.h"
@@ -868,6 +869,18 @@ static void start_screens(uint32_t now_ms)
     use_screen_key_behaviors();
 }
 
+static const char DEBUG_FILE_PATH[] = "/" VOLUME_INTERNAL_NAME "/debug";
+
+static void check_debug_file(void)
+{
+    HalFile file;
+    bool found = hal_file_open(&file, DEBUG_FILE_PATH);
+    if (found) {
+        hal_file_close(&file);
+    }
+    app.screens.diagnostics_gate.debug_file = found;
+}
+
 static void report_card_files(CardFilesReport files, uint32_t now_ms)
 {
     if (files.card_full) {
@@ -1000,6 +1013,7 @@ void app_start(void)
     start_playback();
     start_hardware(now_ms);
     bluetooth_link_start(&app.bluetooth, &app.toast, now_ms);
+    check_debug_file();
     start_screens(now_ms);
     equalizer_screen_refresh(&app.screens.equalizer);
     report_card_files(files, now_ms);
@@ -1361,6 +1375,7 @@ void app_step(void)
     take_computer_clock();
     if (app.music_check_requested && fade_finished(&app.splash, hal_clock_milliseconds())) {
         app.music_check_requested = false;
+        check_debug_file();
         bool changed = hal_system_restart_pending();
         if (!changed) {
             app_show_notice(i18n_text(STR_RESCAN_MUSIC_TITLE), i18n_text(STR_RESCAN_CHECKING));

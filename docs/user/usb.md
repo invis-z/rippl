@@ -15,7 +15,7 @@ macOS leaves `._` files beside what it copies; Rippl ignores them, and `dot_clea
 
 ### USB errors
 
-Diagnostics → **USB errors** shows what went wrong in the last session, or *None*:
+Diagnostics → USB → **USB errors** shows what went wrong in the last session, or *None*:
 
 | Code | Meaning |
 |---|---|

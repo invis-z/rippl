@@ -15,6 +15,7 @@ enum {
 };
 
 static const Color OVERLAY_TEXT = COLOR_RGB(124, 252, 0);
+static const Color OVERLAY_EDGE = COLOR_RGB(0, 0, 0);
 
 Rect frame_overlay_area(const Theme *theme)
 {
@@ -24,7 +25,8 @@ Rect frame_overlay_area(const Theme *theme)
     if (left < 0) {
         left = (width - OVERLAY_WIDTH) / 2;
     }
-    return (Rect){left, height - OVERLAY_HEIGHT - OVERLAY_MARGIN, OVERLAY_WIDTH, OVERLAY_HEIGHT};
+    (void)height;
+    return (Rect){left, 0, OVERLAY_WIDTH, OVERLAY_HEIGHT};
 }
 
 Color frame_overlay_background(void)
@@ -96,9 +98,21 @@ void frame_overlay_format_block_times(HalAudioStats stats, char *text, size_t ca
 
 static void draw_line(Canvas *canvas, const Theme *theme, Rect area, const char *text)
 {
-    TextStyle style = {.font = theme->fonts.small, .color = OVERLAY_TEXT};
-    label_draw(canvas, style,
-               (Label){.area = label_centered_area(style.font, area, text), .text = text});
+    static const int SHIFTS[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+    TextStyle style = {.font = theme->fonts.small, .color = OVERLAY_EDGE};
+    Rect place = label_centered_area(style.font, area, text);
+    for (int shift = 0; shift < 4; shift++) {
+        Rect edge = {place.x + SHIFTS[shift][0], place.y + SHIFTS[shift][1], place.width,
+                     place.height};
+        label_draw(canvas, style, (Label){.area = edge, .text = text});
+    }
+    style.color = OVERLAY_TEXT;
+    label_draw(canvas, style, (Label){.area = place, .text = text});
+}
+
+Color frame_overlay_text_color(void)
+{
+    return OVERLAY_TEXT;
 }
 
 void frame_overlay_draw(Canvas *canvas, const Theme *theme, FrameBreakdown breakdown,
@@ -109,7 +123,6 @@ void frame_overlay_draw(Canvas *canvas, const Theme *theme, FrameBreakdown break
         return;
     }
     char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    canvas_fill_rect(canvas, area, frame_overlay_background());
     Rect line = {area.x, area.y, area.width, OVERLAY_LINE_HEIGHT};
     frame_overlay_format(breakdown, text, sizeof text);
     draw_line(canvas, theme, line, text);

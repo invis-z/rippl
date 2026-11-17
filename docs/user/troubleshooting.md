@@ -21,13 +21,13 @@ If it keeps failing, the only other way in is maskrom ([recovery](../development
 
 ## The player doesn't start
 
-- **After an update:** press the RST hole once and start it. Then photograph Diagnostics → Last update, Last start and Boot hold.
+- **After an update:** press the RST hole once and start it. Then turn on Diagnostics ([settings](settings.md#diagnostics)) and photograph Diagnostics → Boot.
 - **Not at all:** the chip's maskrom mode can write FiiO's firmware back over USB ([recovery](../development/recovery.md)).
 
 ## A STALL or FAULT screen
 
-White text on black with PC and LR lines: photograph it, then press RST rather than holding Power. RST keeps the player's memory, so Diagnostics → Last start and Last stack still show what stopped; holding Power on battery wipes it.
+White text on black with PC and LR lines: photograph it, then press RST rather than holding Power. RST keeps the player's memory, so Diagnostics → Boot → Last start and Last stack still show what stopped; holding Power on battery wipes it.
 
 ## Reporting a problem
 
-Include what you did, your FiiO version before installing, and these Diagnostics lines: Firmware, Last start, Last step, Last stack, Last USB, USB errors and Last update. A photo of the screen helps.
+Include what you did, your FiiO version before installing, and these Diagnostics lines: System → Firmware, the Boot rows, and USB → Last USB and USB errors. A photo of the screen helps.

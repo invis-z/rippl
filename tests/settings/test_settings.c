@@ -214,6 +214,25 @@ static void settings_survive_a_round_trip(void)
     CHECK_EQUAL(original.language, decoded.language);
 }
 
+static void a_file_from_before_the_diagnostics_option_still_reads(void)
+{
+    Settings original = custom_settings();
+    original.options[OPTION_DAYLIGHT] = 1;
+    original.options[OPTION_DIAGNOSTICS] = 1;
+    uint8_t bytes[SETTINGS_FILE_SIZE];
+    settings_encode(&original, bytes);
+    uint32_t earlier = (uint32_t)OPTIONS_FIELD + (uint32_t)OPTION_DIAGNOSTICS;
+    uint32_t checksum = hash_update(HASH_START, bytes, earlier);
+    for (uint32_t index = 0; index < 4; index++) {
+        bytes[earlier + index] = (uint8_t)(checksum >> (8 * index));
+    }
+    Settings decoded;
+    CHECK(settings_decode(bytes, earlier + 4, &decoded));
+    CHECK_EQUAL(original.language, decoded.language);
+    CHECK_EQUAL(1, decoded.options[OPTION_DAYLIGHT]);
+    CHECK_EQUAL(0, decoded.options[OPTION_DIAGNOSTICS]);
+}
+
 static void a_corrupted_file_is_rejected(void)
 {
     Settings settings = custom_settings();
@@ -322,17 +341,18 @@ static void the_animation_speed_scales_animation_times(void)
     CHECK_EQUAL(70u, settings_animation_ms(NULL, 70));
 }
 
-static void a_file_is_44_bytes_with_every_byte_in_use(void)
+static void a_file_is_45_bytes_with_every_byte_in_use(void)
 {
     Settings settings = settings_with_every_option_at_its_top();
     uint8_t bytes[SETTINGS_FILE_SIZE];
     settings_encode(&settings, bytes);
-    CHECK_EQUAL(44, SETTINGS_FILE_SIZE);
+    CHECK_EQUAL(45, SETTINGS_FILE_SIZE);
     CHECK_EQUAL(1, bytes[VERSION_FIELD]);
     CHECK_EQUAL(3, bytes[BRIGHTNESS_FIELD]);
     CHECK_EQUAL(ANIMATION_FASTER, bytes[OPTIONS_FIELD + OPTION_ANIMATION_SPEED]);
     CHECK_EQUAL(SETTINGS_FILE_SIZE - 4, CHECKSUM_FIELD);
-    CHECK_EQUAL(DAYLIGHT_CHOICE_COUNT - 1, bytes[CHECKSUM_FIELD - 1]);
+    CHECK_EQUAL(DAYLIGHT_CHOICE_COUNT - 1, bytes[CHECKSUM_FIELD - 2]);
+    CHECK_EQUAL(1, bytes[CHECKSUM_FIELD - 1]);
     uint32_t checksum = hash_update(HASH_START, bytes, CHECKSUM_FIELD);
     CHECK_EQUAL(checksum, (uint32_t)bytes[CHECKSUM_FIELD] |
                               (uint32_t)bytes[CHECKSUM_FIELD + 1] << 8 |
@@ -439,7 +459,7 @@ int main(void)
         TEST_CASE(the_new_options_are_saved_and_read_back),
         TEST_CASE(the_new_options_default_to_their_first_choice),
         TEST_CASE(the_animation_speed_scales_animation_times),
-        TEST_CASE(a_file_is_44_bytes_with_every_byte_in_use),
+        TEST_CASE(a_file_is_45_bytes_with_every_byte_in_use),
         TEST_CASE(a_new_option_out_of_range_is_rejected),
         TEST_CASE(an_option_out_of_range_is_rejected),
         TEST_CASE(the_now_playing_face_is_saved_in_its_option_byte),
@@ -452,6 +472,7 @@ int main(void)
         TEST_CASE(timeout_options_end_with_never),
         TEST_CASE(sleep_options_start_with_off),
         TEST_CASE(settings_survive_a_round_trip),
+        TEST_CASE(a_file_from_before_the_diagnostics_option_still_reads),
         TEST_CASE(a_corrupted_file_is_rejected),
         TEST_CASE(out_of_range_values_are_rejected),
         TEST_CASE(auto_off_options_are_stocks),

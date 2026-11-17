@@ -57,6 +57,12 @@ static bool player_has_track(const void *context)
     return player_status(context).has_track;
 }
 
+static bool diagnostics_shown(const void *context)
+{
+    const DiagnosticsGate *gate = context;
+    return gate->debug_file || gate->options[OPTION_DIAGNOSTICS] != 0;
+}
+
 MenuItem app_screens_open_item(const char *label, Screen *target)
 {
     return (MenuItem){.label = label,
@@ -226,6 +232,9 @@ static void build_home(AppScreens *screens, AppScreensContext context)
         app_screens_open_item(i18n_text(STR_MENU_SETTINGS), &screens->settings.menu.screen);
     screens->home_items[4] =
         app_screens_open_item(i18n_text(STR_DIAG_TITLE), &screens->diagnostics.screen);
+    screens->diagnostics_gate.options = context.settings->settings.options;
+    screens->home_items[4].shown = diagnostics_shown;
+    screens->home_items[4].shown_context = &screens->diagnostics_gate;
     screens->home_items[5] =
         app_screens_open_item(i18n_text(STR_MENU_NOW_PLAYING), &screens->now_playing.screen);
     screens->home_items[5].shown = player_has_track;
