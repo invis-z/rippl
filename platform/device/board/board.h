@@ -60,6 +60,7 @@ typedef enum Core1Program {
 
 bool board_core1_needs_restart(Core1Program program, uint32_t rate, bool wide);
 bool board_core1_equalizer_waits(void);
+bool board_core1_equalizer_shapes(void);
 bool board_core1_start_stream(Core1Program program, uint32_t rate, bool wide);
 void board_core1_set_equalizer(const EqualizerCurve *curve);
 void board_core1_set_equalizer_fits(HalEqualizerFitReader reader, uint32_t slot, uint32_t key);
