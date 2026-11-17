@@ -1,7 +1,7 @@
 #include "playback/resume_state.h"
 
 #include "core/bytes.h"
-#include "core/hash.h"
+#include "core/record.h"
 
 enum {
     VERSION = 1,
@@ -28,11 +28,6 @@ enum {
 };
 
 static const uint8_t MAGIC[MAGIC_SIZE] = {'E', 'M', 'R', 'S'};
-
-static uint32_t checksum_of(const uint8_t *bytes)
-{
-    return hash_update(HASH_START, bytes, CHECKSUM_FIELD);
-}
 
 static void encode_plan(const PlayQueuePlan *plan, uint8_t *bytes)
 {
@@ -61,18 +56,16 @@ void resume_state_encode(const ResumeState *state, uint8_t *bytes)
     bytes[VOLUME_FIELD] = state->volume;
     bytes_put32_at(bytes, POSITION_FIELD, state->position_ms);
     bytes[FROM_UP_NEXT_FIELD] = state->from_up_next ? 1 : 0;
-    bytes_put32_at(bytes, CHECKSUM_FIELD, checksum_of(bytes));
+    record_seal(bytes, CHECKSUM_FIELD);
 }
 
 static bool header_valid(const uint8_t *bytes)
 {
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        if (bytes[MAGIC_FIELD + index] != MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(bytes + MAGIC_FIELD, MAGIC, MAGIC_SIZE)) {
+        return false;
     }
     return bytes_get16_at(bytes, VERSION_FIELD) == VERSION &&
-           bytes_get32_at(bytes, CHECKSUM_FIELD) == checksum_of(bytes);
+           record_checksum_ok(bytes, CHECKSUM_FIELD);
 }
 
 static bool group_valid(uint8_t group)
