@@ -16,7 +16,6 @@ option(RIPPL_ADDRESS_SANITIZER "Build host code with AddressSanitizer" OFF)
 option(RIPPL_BUILD_SIM "Build the SDL2 simulator" ON)
 option(RIPPL_BUILD_TESTS "Build the host tests" ON)
 option(RIPPL_BUILD_DEVICE "Build the device firmware with cmake/arm-none-eabi.cmake" OFF)
-option(RIPPL_RELEASE "Leave the developer-only Diagnostics rows out of the build" OFF)
 set(RIPPL_APP_RAM_BUDGET_BYTES 136192 CACHE STRING "Static RAM budget for src/ on the device")
 
 include(cmake/project_options.cmake)

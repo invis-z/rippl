@@ -21,6 +21,7 @@ typedef struct FrameBreakdown {
 
 Rect frame_overlay_area(const Theme *theme);
 Color frame_overlay_background(void);
+Color frame_overlay_text_color(void);
 void frame_overlay_format(FrameBreakdown breakdown, char *text, size_t capacity);
 void frame_overlay_format_parts(const uint32_t *parts_us, char *text, size_t capacity);
 void frame_overlay_format_audio(HalAudioStats stats, char *text, size_t capacity);
