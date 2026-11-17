@@ -164,10 +164,10 @@ static bool name_follows(const char *previous, uint32_t previous_length, const c
 static bool put_folder_hash(ScanTime *scan, uint64_t hash, uint32_t node)
 {
     uint8_t record[BUILDER_FOLDER_HASH_SIZE];
-    builder_put16(record, BUILDER_FOLDER_HASH_SIZE);
-    builder_put32(record + 2, (uint32_t)hash);
-    builder_put32(record + 6, (uint32_t)(hash >> 32));
-    builder_put32(record + 10, node);
+    bytes_put16(record, BUILDER_FOLDER_HASH_SIZE);
+    bytes_put32(record + 2, (uint32_t)hash);
+    bytes_put32(record + 6, (uint32_t)(hash >> 32));
+    bytes_put32(record + 10, node);
     return out_put(&scan->folder_hashes, record, sizeof record);
 }
 
@@ -268,7 +268,7 @@ BuilderResult library_builder_add_track(LibraryBuilder *builder, const BuilderTr
                                              track->album, track->genre};
     bool stored = place_path(state, track->path, &row);
     for (int field = 0; stored && field < BUILDER_FIELDS - 1; field++) {
-        stored = store_field(state, field, texts[field], builder_text_length(texts[field]), &row);
+        stored = store_field(state, field, texts[field], text_length(texts[field]), &row);
     }
     uint8_t bytes[BUILDER_ROW_SIZE];
     builder_row_encode(&row, bytes);
@@ -365,8 +365,8 @@ BuilderResult library_builder_begin_playlist(LibraryBuilder *builder, const char
     if (prepared->playlist_count >= BUILDER_MAX_PLAYLISTS) {
         return BUILDER_TOO_MANY;
     }
-    uint32_t length = builder_text_length(name);
-    uint32_t folder_length = builder_text_length(folder);
+    uint32_t length = text_length(name);
+    uint32_t folder_length = text_length(folder);
     if (length >= BUILDER_TEXT_CAPACITY || folder_length >= BUILDER_TEXT_CAPACITY) {
         return BUILDER_OUT_OF_MEMORY;
     }
@@ -402,7 +402,7 @@ BuilderResult library_builder_playlist_entry(LibraryBuilder *builder, const char
         return BUILDER_OK;
     }
     uint8_t bytes[4];
-    builder_put32(bytes, position);
+    bytes_put32(bytes, position);
     if (!out_put(&prepared->playlist_link_out, bytes, sizeof bytes)) {
         return outcome(state);
     }

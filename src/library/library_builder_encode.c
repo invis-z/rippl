@@ -104,16 +104,23 @@ static void put_byte(Writer *writer, uint8_t value)
     }
 }
 
+static void put_little_endian(Writer *writer, uint32_t value, uint32_t count)
+{
+    uint8_t bytes[4];
+    bytes_put_le(bytes, value, count);
+    for (uint32_t index = 0; index < count; index++) {
+        put_byte(writer, bytes[index]);
+    }
+}
+
 static void put_u16(Writer *writer, uint32_t value)
 {
-    put_byte(writer, (uint8_t)value);
-    put_byte(writer, (uint8_t)(value >> 8));
+    put_little_endian(writer, value, 2);
 }
 
 static void put_u32(Writer *writer, uint32_t value)
 {
-    put_u16(writer, value & 0xFFFF);
-    put_u16(writer, value >> 16);
+    put_little_endian(writer, value, 4);
 }
 
 static void put_bytes(Writer *writer, const char *bytes, uint32_t length)
@@ -158,12 +165,12 @@ static bool read_region(Encode *encode, Region region, uint32_t offset, void *by
 static int compare_names(const uint8_t *left, const uint8_t *right, const void *context)
 {
     (void)context;
-    uint32_t left_key = builder_get16(left + 4);
-    uint32_t right_key = builder_get16(right + 4);
+    uint32_t left_key = (uint16_t)bytes_get16(left + 4);
+    uint32_t right_key = (uint16_t)bytes_get16(right + 4);
     const uint8_t *a = left + NAME_HEADER;
     const uint8_t *b = right + NAME_HEADER;
-    uint32_t left_total = builder_get16(left) - (uint32_t)NAME_HEADER;
-    uint32_t right_total = builder_get16(right) - (uint32_t)NAME_HEADER;
+    uint32_t left_total = (uint16_t)bytes_get16(left) - (uint32_t)NAME_HEADER;
+    uint32_t right_total = (uint16_t)bytes_get16(right) - (uint32_t)NAME_HEADER;
     uint32_t shorter = left_key < right_key ? left_key : right_key;
     for (uint32_t index = 0; index < shorter; index++) {
         if (a[index] != b[index]) {
@@ -218,9 +225,9 @@ static bool order_playlists(Encode *encode)
         }
         uint32_t key_length = (uint32_t)sort_key_make(encode->text, key, SORT_KEY_CAPACITY);
         uint8_t header[NAME_HEADER];
-        builder_put16(header, NAME_HEADER + key_length + playlist->length);
-        builder_put16(header + 2, index);
-        builder_put16(header + 4, key_length);
+        bytes_put16(header, NAME_HEADER + key_length + playlist->length);
+        bytes_put16(header + 2, index);
+        bytes_put16(header + 4, key_length);
         if (!out_put(&out, header, sizeof header) || !out_put(&out, key, key_length) ||
             !out_put(&out, encode->text, playlist->length)) {
             return false;
@@ -249,7 +256,7 @@ static bool order_playlists(Encode *encode)
         if (!in_record(&in, record)) {
             return false;
         }
-        encode->playlist_order[index] = builder_get16(record + 2);
+        encode->playlist_order[index] = (uint16_t)bytes_get16(record + 2);
     }
     state->arena.used = mark;
     state->store.end = start;
@@ -266,7 +273,7 @@ static uint32_t string_total(Encode *encode)
         if (!read_region(encode, prepared->albums, album * ALBUM_FINAL, record, sizeof record)) {
             return 0;
         }
-        uint32_t length = builder_get16(record + 4);
+        uint32_t length = (uint16_t)bytes_get16(record + 4);
         total += length > 0 ? length + 1 : 0;
     }
     const GroupTable *tables[3] = {&prepared->artists, &prepared->album_artists, &prepared->genres};
@@ -277,7 +284,7 @@ static uint32_t string_total(Encode *encode)
                              sizeof entry)) {
                 return 0;
             }
-            uint32_t length = builder_get16(entry + 4);
+            uint32_t length = (uint16_t)bytes_get16(entry + 4);
             total += length > 0 ? length + 1 : 0;
         }
     }
@@ -287,7 +294,7 @@ static uint32_t string_total(Encode *encode)
                          sizeof record)) {
             return 0;
         }
-        uint32_t length = builder_get16(record + 4);
+        uint32_t length = (uint16_t)bytes_get16(record + 4);
         total += length > 0 ? length + 1 : 0;
     }
     for (uint32_t playlist = 0; playlist < prepared->playlist_count; playlist++) {
@@ -401,17 +408,17 @@ typedef struct Placed {
 
 static void placed_encode(const Placed *placed, uint8_t *bytes)
 {
-    builder_put32(bytes, placed->title);
-    builder_put16(bytes + 4, placed->title_length);
-    builder_put32(bytes + 6, placed->file);
-    builder_put16(bytes + 10, placed->file_length);
-    builder_put32(bytes + 12, placed->folder);
-    builder_put32(bytes + 16, placed->album);
-    builder_put32(bytes + 20, placed->artist);
-    builder_put32(bytes + 24, placed->genre);
-    builder_put32(bytes + 28, placed->folder_index);
-    builder_put16(bytes + 32, placed->path_length);
-    builder_put32(bytes + 34, placed->duration_ms);
+    bytes_put32(bytes, placed->title);
+    bytes_put16(bytes + 4, placed->title_length);
+    bytes_put32(bytes + 6, placed->file);
+    bytes_put16(bytes + 10, placed->file_length);
+    bytes_put32(bytes + 12, placed->folder);
+    bytes_put32(bytes + 16, placed->album);
+    bytes_put32(bytes + 20, placed->artist);
+    bytes_put32(bytes + 24, placed->genre);
+    bytes_put32(bytes + 28, placed->folder_index);
+    bytes_put16(bytes + 32, placed->path_length);
+    bytes_put32(bytes + 34, placed->duration_ms);
     bytes[38] = placed->disc;
     bytes[39] = placed->number;
     bytes[40] = placed->chapters;
@@ -420,17 +427,17 @@ static void placed_encode(const Placed *placed, uint8_t *bytes)
 
 static void placed_decode(const uint8_t *bytes, Placed *placed)
 {
-    *placed = (Placed){.title = builder_get32(bytes),
-                       .title_length = builder_get16(bytes + 4),
-                       .file = builder_get32(bytes + 6),
-                       .file_length = builder_get16(bytes + 10),
-                       .folder = builder_get32(bytes + 12),
-                       .album = builder_get32(bytes + 16),
-                       .artist = builder_get32(bytes + 20),
-                       .genre = builder_get32(bytes + 24),
-                       .folder_index = builder_get32(bytes + 28),
-                       .path_length = builder_get16(bytes + 32),
-                       .duration_ms = builder_get32(bytes + 34),
+    *placed = (Placed){.title = bytes_get32(bytes),
+                       .title_length = (uint16_t)bytes_get16(bytes + 4),
+                       .file = bytes_get32(bytes + 6),
+                       .file_length = (uint16_t)bytes_get16(bytes + 10),
+                       .folder = bytes_get32(bytes + 12),
+                       .album = bytes_get32(bytes + 16),
+                       .artist = bytes_get32(bytes + 20),
+                       .genre = bytes_get32(bytes + 24),
+                       .folder_index = bytes_get32(bytes + 28),
+                       .path_length = (uint16_t)bytes_get16(bytes + 32),
+                       .duration_ms = bytes_get32(bytes + 34),
                        .disc = bytes[38],
                        .number = bytes[39],
                        .chapters = bytes[40]};
@@ -452,7 +459,7 @@ static bool get_u32(In *in, uint32_t *value)
     if (!in_get(in, bytes, sizeof bytes)) {
         return false;
     }
-    *value = builder_get32(bytes);
+    *value = bytes_get32(bytes);
     return true;
 }
 
@@ -462,7 +469,7 @@ static bool cached_u32(Cache *cache, Region column, uint32_t index, uint32_t *va
     if (!cache_read(cache, column.offset + index * 4, bytes, sizeof bytes)) {
         return false;
     }
-    *value = builder_get32(bytes);
+    *value = bytes_get32(bytes);
     return true;
 }
 
@@ -519,7 +526,7 @@ static bool place_track(Encode *encode, PlaceInputs *inputs)
     placed.file = row.text[BUILDER_FILE];
     placed.file_length = row.length[BUILDER_FILE];
     placed.folder = row.folder;
-    placed.album = builder_get32(place + 4);
+    placed.album = bytes_get32(place + 4);
     placed.path_length = folder_path + row.length[BUILDER_FILE];
     placed.duration_ms = row.duration_ms;
     placed.disc = row.disc;
@@ -527,7 +534,7 @@ static bool place_track(Encode *encode, PlaceInputs *inputs)
     placed.chapters = row.chapters;
     uint8_t value[PLACED_SIZE];
     placed_encode(&placed, value);
-    return builder_put_entry(&inputs->pairs, builder_get32(place), value, sizeof value);
+    return builder_put_entry(&inputs->pairs, bytes_get32(place), value, sizeof value);
 }
 
 static bool place_rows(Encode *encode)
@@ -606,19 +613,19 @@ static bool write_albums(Encode *encode)
             return false;
         }
         Writer *writer = encode->writer;
-        put_u32(writer, take_string(encode, builder_get16(record + 4)));
-        put_index(encode, builder_get32(record + 6));
-        put_index(encode, builder_get32(record + 10));
+        put_u32(writer, take_string(encode, (uint16_t)bytes_get16(record + 4)));
+        put_index(encode, bytes_get32(record + 6));
+        put_index(encode, bytes_get32(record + 10));
         if (encode->wide) {
-            put_u32(writer, builder_get32(record + 16));
-            put_u32(writer, builder_get32(record + 20));
-            put_u16(writer, builder_get16(record + 14));
+            put_u32(writer, bytes_get32(record + 16));
+            put_u32(writer, bytes_get32(record + 20));
+            put_u16(writer, (uint16_t)bytes_get16(record + 14));
             put_u16(writer, 0);
             continue;
         }
-        put_u16(writer, builder_get16(record + 14));
-        put_u16(writer, builder_get32(record + 16));
-        put_u16(writer, builder_get32(record + 20));
+        put_u16(writer, (uint16_t)bytes_get16(record + 14));
+        put_u16(writer, bytes_get32(record + 16));
+        put_u16(writer, bytes_get32(record + 20));
         put_u16(writer, 0xFFFF);
     }
     return true;
@@ -634,9 +641,9 @@ static bool write_groups(Encode *encode, const GroupTable *table, uint32_t first
             return false;
         }
         Writer *writer = encode->writer;
-        put_u32(writer, take_string(encode, builder_get16(display + 4)));
-        put_u32(writer, first_link + builder_get32(entry));
-        put_index(encode, builder_get32(entry + 4));
+        put_u32(writer, take_string(encode, (uint16_t)bytes_get16(display + 4)));
+        put_u32(writer, first_link + bytes_get32(entry));
+        put_index(encode, bytes_get32(entry + 4));
         if (!encode->wide) {
             put_u16(writer, 0);
         }
@@ -653,11 +660,11 @@ static bool write_folders(Encode *encode, uint32_t first_link)
             return false;
         }
         Writer *writer = encode->writer;
-        put_u32(writer, take_string(encode, builder_get16(record + 4)));
-        put_index(encode, builder_get32(record + 6));
-        put_index(encode, builder_get32(record + 10));
-        put_u32(writer, first_link + builder_get32(record + 18));
-        put_index(encode, builder_get32(record + 14));
+        put_u32(writer, take_string(encode, (uint16_t)bytes_get16(record + 4)));
+        put_index(encode, bytes_get32(record + 6));
+        put_index(encode, bytes_get32(record + 10));
+        put_u32(writer, first_link + bytes_get32(record + 18));
+        put_index(encode, bytes_get32(record + 14));
         if (!encode->wide) {
             put_u16(writer, 0);
         }
@@ -675,7 +682,7 @@ static bool copy_indices(Encode *encode, Region region, uint32_t first, uint32_t
             return false;
         }
         for (uint32_t index = 0; index < step; index++) {
-            put_index(encode, builder_get32(chunk + 4 * index));
+            put_index(encode, bytes_get32(chunk + 4 * index));
         }
         done += step;
     }
@@ -840,10 +847,10 @@ static bool emit_track_strings(Encode *encode)
                 library_path_id(HASH64_START, encode->folder_text, encode->folder_text_length);
             id = library_path_id(id, encode->text, placed.file_length);
             uint8_t entry[ID_ENTRY];
-            builder_put16(entry, ID_ENTRY);
-            builder_put32(entry + 2, (uint32_t)(id >> 32));
-            builder_put32(entry + 6, (uint32_t)id);
-            builder_put32(entry + 10, position);
+            bytes_put16(entry, ID_ENTRY);
+            bytes_put32(entry + 2, (uint32_t)(id >> 32));
+            bytes_put32(entry + 6, (uint32_t)id);
+            bytes_put32(entry + 10, position);
             if (!out_put(&ids, entry, sizeof entry)) {
                 return false;
             }
@@ -858,8 +865,8 @@ static int by_id_then_track(const uint8_t *left, const uint8_t *right, const voi
 {
     (void)context;
     for (uint32_t offset = 2; offset <= 10; offset += 4) {
-        uint32_t a = builder_get32(left + offset);
-        uint32_t b = builder_get32(right + offset);
+        uint32_t a = bytes_get32(left + offset);
+        uint32_t b = bytes_get32(right + offset);
         if (a != b) {
             return a < b ? -1 : 1;
         }
@@ -885,12 +892,12 @@ static bool album_key(Encode *encode, uint32_t album, uint64_t *key)
     *key = HASH64_START;
     if (!read_region(encode, prepared->albums, album * ALBUM_FINAL, record, sizeof record) ||
         !read_region(encode, prepared->album_artists.display,
-                     builder_get32(record + 6) * DISPLAY_SIZE, display, sizeof display) ||
-        !hash_text(encode, builder_get32(display), builder_get16(display + 4), key)) {
+                     bytes_get32(record + 6) * DISPLAY_SIZE, display, sizeof display) ||
+        !hash_text(encode, bytes_get32(display), (uint16_t)bytes_get16(display + 4), key)) {
         return false;
     }
     *key = hash64_update(*key, &separator, sizeof separator);
-    return hash_text(encode, builder_get32(record), builder_get16(record + 4), key);
+    return hash_text(encode, bytes_get32(record), (uint16_t)bytes_get16(record + 4), key);
 }
 
 static bool collect_album_keys(Encode *encode, Region *keys)
@@ -912,10 +919,10 @@ static bool collect_album_keys(Encode *encode, Region *keys)
         if (!album_key(encode, album, &key)) {
             return false;
         }
-        builder_put16(entry, ID_ENTRY);
-        builder_put32(entry + 2, (uint32_t)(key >> 32));
-        builder_put32(entry + 6, (uint32_t)key);
-        builder_put32(entry + 10, album);
+        bytes_put16(entry, ID_ENTRY);
+        bytes_put32(entry + 2, (uint32_t)(key >> 32));
+        bytes_put32(entry + 6, (uint32_t)key);
+        bytes_put32(entry + 10, album);
         if (!out_put(&out, entry, sizeof entry)) {
             return false;
         }
@@ -945,9 +952,9 @@ static bool write_sorted(Encode *encode, Region rows, uint32_t start, uint32_t c
         if (!in_get(&in, entry, sizeof entry)) {
             return false;
         }
-        put_u32(encode->writer, builder_get32(entry + 6));
-        put_u32(encode->writer, builder_get32(entry + 2));
-        put_u32(encode->writer, builder_get32(entry + 10));
+        put_u32(encode->writer, bytes_get32(entry + 6));
+        put_u32(encode->writer, bytes_get32(entry + 2));
+        put_u32(encode->writer, bytes_get32(entry + 10));
     }
     state->arena.used = mark;
     return true;
@@ -980,12 +987,12 @@ static bool write_album_keys(Encode *encode, const Layout *layout)
     for (uint32_t position = 0; position < count; position++) {
         uint8_t entry[ID_ENTRY];
         if (!in_get(&in, entry, sizeof entry) ||
-            !builder_put_pair(&out, builder_get32(entry + 10), position)) {
+            !builder_put_pair(&out, bytes_get32(entry + 10), position)) {
             return false;
         }
-        put_u32(encode->writer, builder_get32(entry + 6));
-        put_u32(encode->writer, builder_get32(entry + 2));
-        put_u32(encode->writer, builder_get32(entry + 10));
+        put_u32(encode->writer, bytes_get32(entry + 6));
+        put_u32(encode->writer, bytes_get32(entry + 2));
+        put_u32(encode->writer, bytes_get32(entry + 10));
     }
     bool closed = out_close(&out);
     state->arena.used = mark;
@@ -1009,7 +1016,8 @@ static bool emit_names(Encode *encode)
     for (uint32_t album = 0; album < prepared->album_count; album++) {
         uint8_t record[ALBUM_FINAL];
         if (!read_region(encode, prepared->albums, album * ALBUM_FINAL, record, sizeof record) ||
-            !emit_text(encode, &prepared->heap, builder_get32(record), builder_get16(record + 4))) {
+            !emit_text(encode, &prepared->heap, bytes_get32(record),
+                       (uint16_t)bytes_get16(record + 4))) {
             return false;
         }
     }
@@ -1019,8 +1027,8 @@ static bool emit_names(Encode *encode)
             uint8_t entry[DISPLAY_SIZE];
             if (!read_region(encode, tables[table]->display, group * DISPLAY_SIZE, entry,
                              sizeof entry) ||
-                !emit_text(encode, &prepared->heap, builder_get32(entry),
-                           builder_get16(entry + 4))) {
+                !emit_text(encode, &prepared->heap, bytes_get32(entry),
+                           (uint16_t)bytes_get16(entry + 4))) {
                 return false;
             }
         }
@@ -1029,7 +1037,8 @@ static bool emit_names(Encode *encode)
         uint8_t record[FOLDER_FINAL];
         if (!read_region(encode, prepared->folders_final, folder * FOLDER_FINAL, record,
                          sizeof record) ||
-            !emit_text(encode, &prepared->heap, builder_get32(record), builder_get16(record + 4))) {
+            !emit_text(encode, &prepared->heap, bytes_get32(record),
+                       (uint16_t)bytes_get16(record + 4))) {
             return false;
         }
     }

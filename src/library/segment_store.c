@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "core/bytes.h"
 #include "core/hash.h"
 
 enum {
@@ -235,14 +236,15 @@ static void put_u8(Chunk *chunk, uint8_t value)
 
 static void put_u16(Chunk *chunk, uint16_t value)
 {
-    uint8_t bytes[2] = {(uint8_t)value, (uint8_t)(value >> 8)};
+    uint8_t bytes[2];
+    bytes_put16(bytes, value);
     put_bytes(chunk, bytes, sizeof bytes, true);
 }
 
 static void put_u32(Chunk *chunk, uint32_t value)
 {
-    uint8_t bytes[4] = {(uint8_t)value, (uint8_t)(value >> 8), (uint8_t)(value >> 16),
-                        (uint8_t)(value >> 24)};
+    uint8_t bytes[4];
+    bytes_put32(bytes, value);
     put_bytes(chunk, bytes, sizeof bytes, true);
 }
 
@@ -329,20 +331,14 @@ static uint16_t get_u16(Reader *reader)
 {
     uint8_t bytes[2];
     get_bytes(reader, bytes, sizeof bytes, true);
-    return (uint16_t)(bytes[0] | bytes[1] << 8);
-}
-
-static uint32_t decode_u32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
+    return (uint16_t)bytes_get16(bytes);
 }
 
 static uint32_t get_u32(Reader *reader)
 {
     uint8_t bytes[4];
     get_bytes(reader, bytes, sizeof bytes, true);
-    return decode_u32(bytes);
+    return bytes_get32(bytes);
 }
 
 static bool read_manifest(SegmentStore *store, uint8_t slot, SegmentState *state, bool keep_next)
@@ -384,7 +380,7 @@ static bool read_manifest(SegmentStore *store, uint8_t slot, SegmentState *state
     uint32_t hash = reader.hash;
     uint8_t check[4];
     get_bytes(&reader, check, sizeof check, false);
-    return reader.ok && valid && decode_u32(check) == hash;
+    return reader.ok && valid && bytes_get32(check) == hash;
 }
 
 static bool stream_valid(const SegmentStream *stream)

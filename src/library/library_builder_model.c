@@ -22,15 +22,15 @@ enum {
 
 static int compare_u16(const uint8_t *left, const uint8_t *right, uint32_t offset)
 {
-    uint32_t a = builder_get16(left + offset);
-    uint32_t b = builder_get16(right + offset);
+    uint32_t a = (uint16_t)bytes_get16(left + offset);
+    uint32_t b = (uint16_t)bytes_get16(right + offset);
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
 static int compare_u32(const uint8_t *left, const uint8_t *right, uint32_t offset)
 {
-    uint32_t a = builder_get32(left + offset);
-    uint32_t b = builder_get32(right + offset);
+    uint32_t a = bytes_get32(left + offset);
+    uint32_t b = bytes_get32(right + offset);
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
@@ -60,7 +60,7 @@ static bool next_value(Column *column, uint32_t *value)
     if (!in_get(&column->in, bytes, sizeof bytes)) {
         return false;
     }
-    *value = builder_get32(bytes);
+    *value = bytes_get32(bytes);
     return true;
 }
 
@@ -126,16 +126,16 @@ static bool emit_album_tuples(BuilderState *state, Prepared *prepared, Region *i
         }
         builder_row_decode(bytes, &row);
         uint8_t tuple[ALBUM_TUPLE];
-        builder_put16(tuple, ALBUM_TUPLE);
-        builder_put32(tuple + 2, values[0]);
-        builder_put32(tuple + 6, values[1]);
-        builder_put32(tuple + 10, track);
-        builder_put32(tuple + 14, values[2]);
-        builder_put16(tuple + 18, row.year);
-        builder_put32(tuple + 20, values[3]);
+        bytes_put16(tuple, ALBUM_TUPLE);
+        bytes_put32(tuple + 2, values[0]);
+        bytes_put32(tuple + 6, values[1]);
+        bytes_put32(tuple + 10, track);
+        bytes_put32(tuple + 14, values[2]);
+        bytes_put16(tuple + 18, row.year);
+        bytes_put32(tuple + 20, values[3]);
         tuple[24] = row.disc;
         tuple[25] = row.number;
-        builder_put32(tuple + 26, values[4]);
+        bytes_put32(tuple + 26, values[4]);
         if (!out_put(&tail.out, tuple, sizeof tuple)) {
             return false;
         }
@@ -162,16 +162,16 @@ static bool album_genres(BuilderState *state, Region sorted, Region genres, uint
         for (uint32_t index = 0; index < ALBUM_TUPLE; index++) {
             previous[index] = stream.record[index];
         }
-        uint32_t best_genre = builder_get32(previous + 26);
+        uint32_t best_genre = bytes_get32(previous + 26);
         uint32_t best_count = 0;
         uint32_t best_first = BUILDER_UNSET;
         while (stream.live && by_album_key(previous, stream.record, NULL) == 0) {
-            uint32_t genre = builder_get32(stream.record + 14);
-            uint32_t genre_key = builder_get32(stream.record + 26);
-            uint32_t first = builder_get32(stream.record + 10);
+            uint32_t genre = bytes_get32(stream.record + 14);
+            uint32_t genre_key = bytes_get32(stream.record + 26);
+            uint32_t first = bytes_get32(stream.record + 10);
             uint32_t occurrences = 0;
             while (stream.live && by_album_key(previous, stream.record, NULL) == 0 &&
-                   builder_get32(stream.record + 14) == genre) {
+                   bytes_get32(stream.record + 14) == genre) {
                 occurrences++;
                 if (!builder_pull(&stream)) {
                     return false;
@@ -184,7 +184,7 @@ static bool album_genres(BuilderState *state, Region sorted, Region genres, uint
             }
         }
         uint8_t value[4];
-        builder_put32(value, best_genre);
+        bytes_put32(value, best_genre);
         if (!out_put(&out, value, sizeof value)) {
             return false;
         }
@@ -221,7 +221,7 @@ static bool write_album_rows(BuilderState *state, Region sorted, Region genres, 
         uint32_t members = 0;
         uint32_t year = 0;
         while (stream.live && by_album_key(previous, stream.record, NULL) == 0) {
-            uint32_t candidate = builder_get16(stream.record + 18);
+            uint32_t candidate = (uint16_t)bytes_get16(stream.record + 18);
             if (candidate != 0 && (year == 0 || candidate < year)) {
                 year = candidate;
             }
@@ -235,13 +235,13 @@ static bool write_album_rows(BuilderState *state, Region sorted, Region genres, 
             return false;
         }
         uint8_t row[ALBUM_PRE];
-        builder_put32(row, builder_get32(previous + 10));
-        builder_put32(row + 4, builder_get32(previous + 2));
-        builder_put32(row + 8, builder_get32(previous + 6));
-        builder_put16(row + 12, year);
-        builder_put32(row + 14, members);
-        builder_put32(row + 18, builder_get32(genre));
-        builder_put32(row + 22, member_start);
+        bytes_put32(row, bytes_get32(previous + 10));
+        bytes_put32(row + 4, bytes_get32(previous + 2));
+        bytes_put32(row + 8, bytes_get32(previous + 6));
+        bytes_put16(row + 12, year);
+        bytes_put32(row + 14, members);
+        bytes_put32(row + 18, bytes_get32(genre));
+        bytes_put32(row + 22, member_start);
         member_start += members;
         if (!out_put(&out, row, sizeof row)) {
             return false;
@@ -339,11 +339,11 @@ static bool order_albums(BuilderState *state, const AlbumPhase *albums, Region *
         if (!in_get(&pre, tuple + 18, ALBUM_PRE)) {
             return false;
         }
-        builder_put16(tuple, ORDER_TUPLE);
-        builder_put32(tuple + 2, builder_get32(tuple + 18 + 8));
-        builder_put32(tuple + 6, builder_get32(tuple + 18 + 4));
-        builder_put32(tuple + 10, builder_get32(tuple + 18));
-        builder_put32(tuple + 14, album);
+        bytes_put16(tuple, ORDER_TUPLE);
+        bytes_put32(tuple + 2, bytes_get32(tuple + 18 + 8));
+        bytes_put32(tuple + 6, bytes_get32(tuple + 18 + 4));
+        bytes_put32(tuple + 10, bytes_get32(tuple + 18));
+        bytes_put32(tuple + 14, album);
         if (!out_put(&tail.out, tuple, sizeof tuple)) {
             return false;
         }
@@ -390,15 +390,15 @@ static bool place_member(Placing *placing, uint32_t track, uint32_t position, ui
 {
     uint8_t value[4];
     uint8_t place[PLACE_SIZE];
-    builder_put32(place, position);
-    builder_put32(place + 4, album);
-    builder_put32(place + 8, builder_get16(pre + 12));
-    builder_put32(place + 12, builder_get32(pre + 8));
-    builder_put32(value, track);
+    bytes_put32(place, position);
+    bytes_put32(place + 4, album);
+    bytes_put32(place + 8, (uint16_t)bytes_get16(pre + 12));
+    bytes_put32(place + 12, bytes_get32(pre + 8));
+    bytes_put32(value, track);
     if (!out_put(&placing->final_tracks, value, sizeof value)) {
         return false;
     }
-    builder_put32(value, album);
+    bytes_put32(value, album);
     return out_put(&placing->track_album, value, sizeof value) &&
            builder_put_entry(&placing->places, track, place, sizeof place);
 }
@@ -407,9 +407,9 @@ static bool place_album(BuilderState *state, Prepared *prepared, const AlbumPhas
                         Placing *placing, uint32_t final, const uint8_t *pre, uint32_t *position,
                         uint8_t *members)
 {
-    uint32_t first_seen = builder_get32(pre);
-    uint32_t member_count = builder_get32(pre + 14);
-    uint32_t member_start = builder_get32(pre + 22);
+    uint32_t first_seen = bytes_get32(pre);
+    uint32_t member_count = bytes_get32(pre + 14);
+    uint32_t member_start = bytes_get32(pre + 22);
     uint32_t first_track = *position;
     for (uint32_t done = 0; done < member_count;) {
         uint32_t step =
@@ -419,14 +419,14 @@ static bool place_album(BuilderState *state, Prepared *prepared, const AlbumPhas
             return false;
         }
         for (uint32_t index = 0; index < step; index++) {
-            if (!place_member(placing, builder_get32(members + 4 * index), (*position)++, final,
+            if (!place_member(placing, bytes_get32(members + 4 * index), (*position)++, final,
                               pre)) {
                 return false;
             }
         }
         done += step;
     }
-    if (builder_get32(pre + 8) < prepared->music_ranks[BUILDER_ALBUM]) {
+    if (bytes_get32(pre + 8) < prepared->music_ranks[BUILDER_ALBUM]) {
         prepared->music_albums = final + 1;
         prepared->music_tracks = *position;
     }
@@ -435,14 +435,14 @@ static bool place_album(BuilderState *state, Prepared *prepared, const AlbumPhas
         return false;
     }
     uint8_t record[ALBUM_FINAL];
-    builder_put32(record, row.text[BUILDER_ALBUM]);
-    builder_put16(record + 4, row.length[BUILDER_ALBUM]);
-    builder_put32(record + 6, builder_get32(pre + 4));
-    builder_put32(record + 10, builder_get32(pre + 18));
-    builder_put16(record + 14, builder_get16(pre + 12));
-    builder_put32(record + 16, first_track);
-    builder_put32(record + 20, member_count);
-    builder_put32(record + 24, builder_get32(pre + 8));
+    bytes_put32(record, row.text[BUILDER_ALBUM]);
+    bytes_put16(record + 4, row.length[BUILDER_ALBUM]);
+    bytes_put32(record + 6, bytes_get32(pre + 4));
+    bytes_put32(record + 10, bytes_get32(pre + 18));
+    bytes_put16(record + 14, (uint16_t)bytes_get16(pre + 12));
+    bytes_put32(record + 16, first_track);
+    bytes_put32(record + 20, member_count);
+    bytes_put32(record + 24, bytes_get32(pre + 8));
     return out_put(&placing->albums, record, sizeof record);
 }
 
@@ -525,10 +525,10 @@ static bool next_place(TrackPlaces *places)
     if (!in_get(&places->in, place, sizeof place)) {
         return false;
     }
-    places->position = builder_get32(place);
-    places->album = builder_get32(place + 4);
-    places->year = builder_get32(place + 8);
-    places->title = builder_get32(place + 12);
+    places->position = bytes_get32(place);
+    places->album = bytes_get32(place + 4);
+    places->year = bytes_get32(place + 8);
+    places->title = bytes_get32(place + 12);
     return true;
 }
 
@@ -575,11 +575,11 @@ static bool emit_group_tuples(BuilderState *state, Prepared *prepared, int field
             return false;
         }
         uint8_t tuple[GROUP_TUPLE];
-        builder_put16(tuple, GROUP_TUPLE);
-        builder_put32(tuple + 2, group);
-        builder_put16(tuple + 6, places.year);
-        builder_put32(tuple + 8, places.title);
-        builder_put32(tuple + 12, places.album);
+        bytes_put16(tuple, GROUP_TUPLE);
+        bytes_put32(tuple + 2, group);
+        bytes_put16(tuple + 6, places.year);
+        bytes_put32(tuple + 8, places.title);
+        bytes_put32(tuple + 12, places.album);
         if (!out_put(&tail.out, tuple, sizeof tuple)) {
             return false;
         }
@@ -604,11 +604,11 @@ static bool write_group_links(BuilderState *state, Region sorted, GroupTable *ta
     for (uint32_t group = 0; group < table->count; group++) {
         uint32_t first = total;
         uint32_t last_album = BUILDER_UNSET;
-        while (stream.live && builder_get32(stream.record + 2) == group) {
-            uint32_t album = builder_get32(stream.record + 12);
+        while (stream.live && bytes_get32(stream.record + 2) == group) {
+            uint32_t album = bytes_get32(stream.record + 12);
             if (album != last_album) {
                 uint8_t value[4];
-                builder_put32(value, album);
+                bytes_put32(value, album);
                 if (!out_put(&links, value, sizeof value)) {
                     return false;
                 }
@@ -620,8 +620,8 @@ static bool write_group_links(BuilderState *state, Region sorted, GroupTable *ta
             }
         }
         uint8_t entry[GROUP_ENTRY];
-        builder_put32(entry, first);
-        builder_put32(entry + 4, total - first);
+        bytes_put32(entry, first);
+        bytes_put32(entry + 4, total - first);
         if (!out_put(&groups, entry, sizeof entry)) {
             return false;
         }
@@ -657,8 +657,8 @@ static bool build_group(BuilderState *state, Prepared *prepared, int field, Grou
 static int by_rank_path(const uint8_t *left, const uint8_t *right, const void *context)
 {
     (void)context;
-    uint32_t left_depth = (builder_get16(left) - 6u) / 4;
-    uint32_t right_depth = (builder_get16(right) - 6u) / 4;
+    uint32_t left_depth = ((uint16_t)bytes_get16(left) - 6u) / 4;
+    uint32_t right_depth = ((uint16_t)bytes_get16(right) - 6u) / 4;
     uint32_t shorter = left_depth < right_depth ? left_depth : right_depth;
     for (uint32_t level = 0; level < shorter; level++) {
         int order = compare_u32(left, right, 6 + 4 * level);
@@ -675,7 +675,7 @@ static bool column_at(Cache *cache, Region column, uint32_t index, uint32_t *val
     if (!cache_read(cache, column.offset + index * 4, bytes, sizeof bytes)) {
         return false;
     }
-    *value = builder_get32(bytes);
+    *value = bytes_get32(bytes);
     return true;
 }
 
@@ -702,10 +702,10 @@ static bool emit_folder_paths(BuilderState *state, Prepared *prepared, Region *i
             walk = row.parent;
         }
         uint8_t record[6 + 4 * BUILDER_MAX_DEPTH];
-        builder_put16(record, 6 + 4 * depth);
-        builder_put32(record + 2, node);
+        bytes_put16(record, 6 + 4 * depth);
+        bytes_put32(record + 2, node);
         for (uint32_t level = 0; level < depth; level++) {
-            builder_put32(record + 6 + 4 * level, chain[depth - 1 - level]);
+            bytes_put32(record + 6 + 4 * level, chain[depth - 1 - level]);
         }
         if (!out_put(&tail.out, record, 6 + 4 * depth)) {
             return false;
@@ -740,9 +740,9 @@ static bool number_folders(BuilderState *state, Prepared *prepared, Region node_
     out_open(&pairs, &state->store, new_index_pairs, pair_buffer, STREAM_BUFFER);
     uint32_t position = 0;
     while (stream.live) {
-        uint32_t node = builder_get32(stream.record + 2);
+        uint32_t node = bytes_get32(stream.record + 2);
         uint8_t value[4];
-        builder_put32(value, node);
+        bytes_put32(value, node);
         if (!out_put(&nodes, value, sizeof value) || !builder_put_pair(&pairs, node, position) ||
             !builder_pull(&stream)) {
             return false;
@@ -777,7 +777,7 @@ static bool measure_folders(BuilderState *state, Prepared *prepared)
             walk = row.parent;
         }
         uint8_t value[4];
-        builder_put32(value, length);
+        bytes_put32(value, length);
         if (!out_put(&out, value, sizeof value)) {
             return false;
         }
@@ -808,14 +808,14 @@ static bool put_link_tuple(Tail *tail, uint32_t folder, uint32_t kind, uint32_t 
                            uint32_t number, uint32_t key, uint32_t value)
 {
     uint8_t tuple[LINK_TUPLE];
-    builder_put16(tuple, LINK_TUPLE);
-    builder_put32(tuple + 2, folder);
+    bytes_put16(tuple, LINK_TUPLE);
+    bytes_put32(tuple + 2, folder);
     tuple[6] = (uint8_t)kind;
     tuple[7] = (uint8_t)disc;
     tuple[8] = (uint8_t)number;
     tuple[9] = 0;
-    builder_put32(tuple + 10, key);
-    builder_put32(tuple + 14, value);
+    bytes_put32(tuple + 10, key);
+    bytes_put32(tuple + 14, value);
     return out_put(&tail->out, tuple, sizeof tuple);
 }
 
@@ -907,9 +907,9 @@ static bool write_folder_rows(BuilderState *state, Prepared *prepared, Region no
         uint32_t first = total;
         uint32_t tracks = 0;
         uint32_t children = 0;
-        while (stream.live && builder_get32(stream.record + 2) == position) {
+        while (stream.live && bytes_get32(stream.record + 2) == position) {
             uint8_t value[4];
-            builder_put32(value, builder_get32(stream.record + 14));
+            bytes_put32(value, bytes_get32(stream.record + 14));
             tracks += stream.record[6] == KIND_TRACK;
             children += stream.record[6] == KIND_CHILD;
             total++;
@@ -923,20 +923,20 @@ static bool write_folder_rows(BuilderState *state, Prepared *prepared, Region no
         if (!in_get(&nodes, node_bytes, sizeof node_bytes)) {
             return false;
         }
-        uint32_t node = builder_get32(node_bytes);
+        uint32_t node = bytes_get32(node_bytes);
         if (!builder_read_folder(&prepared->folders, state, node, &row) ||
             (node != 0 &&
              !column_at(&new_index, prepared->folder_new_index, row.parent, &parent))) {
             return false;
         }
         uint8_t record[FOLDER_FINAL];
-        builder_put32(record, row.name);
-        builder_put16(record + 4, row.length);
-        builder_put32(record + 6, parent);
-        builder_put32(record + 10, children);
-        builder_put32(record + 14, tracks);
-        builder_put32(record + 18, first);
-        builder_put16(record + 22, 0);
+        bytes_put32(record, row.name);
+        bytes_put16(record + 4, row.length);
+        bytes_put32(record + 6, parent);
+        bytes_put32(record + 10, children);
+        bytes_put32(record + 14, tracks);
+        bytes_put32(record + 18, first);
+        bytes_put16(record + 22, 0);
         if (!out_put(&rows, record, sizeof record)) {
             return false;
         }
@@ -1005,10 +1005,10 @@ static bool emit_title_tuples(BuilderState *state, Prepared *prepared, Region *i
             return false;
         }
         uint8_t tuple[TITLE_TUPLE];
-        builder_put16(tuple, TITLE_TUPLE);
-        builder_put32(tuple + 2, title);
-        builder_put32(tuple + 6, artist);
-        builder_put32(tuple + 10, places.position);
+        bytes_put16(tuple, TITLE_TUPLE);
+        bytes_put32(tuple + 2, title);
+        bytes_put32(tuple + 6, artist);
+        bytes_put32(tuple + 10, places.position);
         if (!out_put(&tail.out, tuple, sizeof tuple)) {
             return false;
         }

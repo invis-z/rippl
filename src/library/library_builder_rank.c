@@ -24,7 +24,7 @@ static int compare_bytes(const uint8_t *left, uint32_t left_length, const uint8_
 
 static uint32_t key_length_of(const uint8_t *record)
 {
-    return builder_get16(record + 12);
+    return (uint16_t)bytes_get16(record + 12);
 }
 
 static int compare_keys_only(const uint8_t *left, const uint8_t *right)
@@ -38,9 +38,9 @@ static int compare_raw_only(const uint8_t *left, const uint8_t *right)
     uint32_t left_key = key_length_of(left);
     uint32_t right_key = key_length_of(right);
     return compare_bytes(left + RECORD_HEADER + left_key,
-                         builder_get16(left) - (uint32_t)RECORD_HEADER - left_key,
+                         (uint16_t)bytes_get16(left) - (uint32_t)RECORD_HEADER - left_key,
                          right + RECORD_HEADER + right_key,
-                         builder_get16(right) - (uint32_t)RECORD_HEADER - right_key);
+                         (uint16_t)bytes_get16(right) - (uint32_t)RECORD_HEADER - right_key);
 }
 
 static int compare_field_keys(const uint8_t *left, const uint8_t *right, const void *context)
@@ -61,11 +61,11 @@ static bool emit_run(Prepared *prepared, Tail *tail, uint32_t run, const TrackRo
     key[0] = (char)row->spoken;
     uint32_t key_length = 1u + (uint32_t)sort_key_make(text, key + 1, SORT_KEY_CAPACITY - 1);
     uint8_t header[RECORD_HEADER];
-    builder_put16(header, RECORD_HEADER + key_length + length);
-    builder_put32(header + 2, run);
-    builder_put32(header + 6, row->text[field]);
-    builder_put16(header + 10, length);
-    builder_put16(header + 12, key_length);
+    bytes_put16(header, RECORD_HEADER + key_length + length);
+    bytes_put32(header + 2, run);
+    bytes_put32(header + 6, row->text[field]);
+    bytes_put16(header + 10, length);
+    bytes_put16(header + 12, key_length);
     return out_put(&tail->out, header, sizeof header) && out_put(&tail->out, key, key_length) &&
            out_put(&tail->out, text, length);
 }
@@ -143,9 +143,9 @@ typedef struct RankTarget {
 static bool put_display(Out *out, Region display, uint32_t text, uint32_t length)
 {
     uint8_t entry[DISPLAY_SIZE];
-    builder_put32(entry, text);
-    builder_put16(entry + 4, length);
-    builder_put16(entry + 6, 0);
+    bytes_put32(entry, text);
+    bytes_put16(entry + 4, length);
+    bytes_put16(entry + 6, 0);
     return display.size == 0 || out_put(out, entry, sizeof entry);
 }
 
@@ -173,7 +173,7 @@ static bool assign_ranks(BuilderState *state, Region sorted, RankTarget *target)
         if (!in_record(&in, record)) {
             return false;
         }
-        uint32_t run = builder_get32(record + 2);
+        uint32_t run = bytes_get32(record + 2);
         bool new_key = !have_previous || compare_keys_only(previous, record) != 0;
         bool new_spelling = new_key || compare_raw_only(previous, record) != 0;
         if (new_key) {
@@ -183,16 +183,16 @@ static bool assign_ranks(BuilderState *state, Region sorted, RankTarget *target)
             ranks++;
             target->music_ranks += record[RECORD_HEADER] == 0 ? 1u : 0u;
             best_run = run;
-            best_text = builder_get32(record + 6);
-            best_length = builder_get16(record + 10);
+            best_text = bytes_get32(record + 6);
+            best_length = (uint16_t)bytes_get16(record + 10);
         } else if (run < best_run) {
             best_run = run;
-            best_text = builder_get32(record + 6);
-            best_length = builder_get16(record + 10);
+            best_text = bytes_get32(record + 6);
+            best_length = (uint16_t)bytes_get16(record + 10);
         }
         if (new_spelling) {
             spellings++;
-            uint32_t length = builder_get16(record);
+            uint32_t length = (uint16_t)bytes_get16(record);
             for (uint32_t index = 0; index < length; index++) {
                 previous[index] = record[index];
             }
@@ -340,16 +340,16 @@ static bool rank_field(BuilderState *state, Prepared *prepared, int field)
 static int compare_folder_names(const uint8_t *left, const uint8_t *right, const void *context)
 {
     (void)context;
-    uint32_t left_key = builder_get16(left + 6);
-    uint32_t right_key = builder_get16(right + 6);
+    uint32_t left_key = (uint16_t)bytes_get16(left + 6);
+    uint32_t right_key = (uint16_t)bytes_get16(right + 6);
     int key = compare_bytes(left + FOLDER_HEADER, left_key, right + FOLDER_HEADER, right_key);
     if (key != 0) {
         return key;
     }
     return compare_bytes(left + FOLDER_HEADER + left_key,
-                         builder_get16(left) - (uint32_t)FOLDER_HEADER - left_key,
+                         (uint16_t)bytes_get16(left) - (uint32_t)FOLDER_HEADER - left_key,
                          right + FOLDER_HEADER + right_key,
-                         builder_get16(right) - (uint32_t)FOLDER_HEADER - right_key);
+                         (uint16_t)bytes_get16(right) - (uint32_t)FOLDER_HEADER - right_key);
 }
 
 static bool collect_folders(BuilderState *state, Prepared *prepared, Region *input)
@@ -383,9 +383,9 @@ static bool collect_folders(BuilderState *state, Prepared *prepared, Region *inp
         text[row.length] = '\0';
         uint32_t key_length = (uint32_t)sort_key_make(text, key, SORT_KEY_CAPACITY);
         uint8_t header[FOLDER_HEADER];
-        builder_put16(header, FOLDER_HEADER + key_length + row.length);
-        builder_put32(header + 2, node);
-        builder_put16(header + 6, key_length);
+        bytes_put16(header, FOLDER_HEADER + key_length + row.length);
+        bytes_put32(header + 2, node);
+        bytes_put16(header + 6, key_length);
         if (!out_put(&tail.out, header, sizeof header) || !out_put(&tail.out, key, key_length) ||
             !out_put(&tail.out, text, row.length)) {
             return false;
@@ -436,12 +436,12 @@ static bool rank_folders(BuilderState *state, Prepared *prepared)
         }
         if (!have_previous || compare_folder_names(previous, record, NULL) != 0) {
             ranks++;
-            for (uint32_t index = 0; index < builder_get16(record); index++) {
+            for (uint32_t index = 0; index < (uint16_t)bytes_get16(record); index++) {
                 previous[index] = record[index];
             }
             have_previous = true;
         }
-        if (!builder_put_pair(&order, builder_get32(record + 2), ranks)) {
+        if (!builder_put_pair(&order, bytes_get32(record + 2), ranks)) {
             return false;
         }
     }
