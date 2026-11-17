@@ -61,14 +61,23 @@ Turn it on in Settings → System → Diagnostics, or put an empty file named `d
 
 ### Performance overlay
 
-Four lines in green at the top right, over the status bar, with no background; times in milliseconds:
+Green monospaced text at the top left, over the status bar, on a darkened strip. Two lines in landscape and four in portrait. Each field is a letter and a zero-padded number of fixed width, so nothing moves as values change; times are in milliseconds.
 
-| Line | Fields |
+```
+F016 u02 d009 s004 cv09 r03 t02 bg01 h02 a00
+b0480 x000 o000 L12% c45% dec01/003 rd00/002
+```
+
+| Field | Meaning |
 |---|---|
-| 1 | Frame time, then `u` update, `d` draw, `s` send |
-| 2 | `b` audio buffered (ms), `x` underruns, `o` output underruns, `L` core 0 audio load %, `c` core 1 load % |
-| 3 | Per audio block, average/longest: `dec` decode, `rd` card read |
-| 4 | Draw parts: `cv` covers, `r` reflections, `t` text, `bg` backdrop, `h` frame hash, `a` audio service |
+| `F` `u` `d` `s` | Frame time, then update, draw and send |
+| `cv` `r` `t` `bg` `h` `a` | Draw parts: covers, reflections, text, backdrop, frame hash, audio service |
+| `b` | Audio buffered (ms) |
+| `x` `o` | Underruns and output underruns. They count past 999 by starting again at 000, and the letter turns upper case (`X`, `O`) |
+| `L` `c` | Core 0 audio load and core 1 load, `00`–`99` %, `xx` at 100 % or more |
+| `dec` `rd` | Per audio block, average/longest: decode and card read |
+
+A time too long for its digits shows as all nines.
 
 ### Core 1 load
 

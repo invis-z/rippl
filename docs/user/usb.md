@@ -46,4 +46,4 @@ The volume is applied in software while in DAC mode. Music on the player stops a
 
 Hi-Res DAC keeps the player's clock in step with the computer's through a feedback endpoint. Plain DAC mode occasionally drops or repeats a sample instead, up to a few hundred a minute in short bursts, which is normal.
 
-Hold ≡ to show the stream counters; hold again to hide them. *missed* (packets that never arrived) and *restarts* should stay at 0 while music plays; if *missed* rises, please report the panel.
+Hold ≡ to show the stream counters; hold again to hide them. `mis` (packets that never arrived) and `rst` (restarts) should stay at 000 while music plays; if `mis` rises, please report the panel. The other counters are `drp` dropped, `rep` repeated, `sta` starts, `stp` stops, `fmt` format changes, `try` retries, `ctl` control requests, `slt` wrong slot and `irq` late interrupts; `loss` shows the last and longest loss and `gap` the gap in µs. A counter past 999 starts again at 000 with an upper-case first letter.

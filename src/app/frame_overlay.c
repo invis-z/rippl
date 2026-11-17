@@ -1,32 +1,27 @@
 #include "frame_overlay.h"
 
-#include "core/string_builder.h"
-#include "hal/display.h"
-#include "ui/label.h"
+#include "fonts/fonts.h"
+#include "gfx/text.h"
+#include "stat_text.h"
 
 enum {
-    OVERLAY_WIDTH = 168,
-    OVERLAY_LINE_HEIGHT = 18,
-    OVERLAY_LINES = 4,
-    OVERLAY_HEIGHT = OVERLAY_LINE_HEIGHT * OVERLAY_LINES,
-    OVERLAY_MARGIN = 4,
+    OVERLAY_LEFT = 4,
+    OVERLAY_PAD = 2,
     MICROSECONDS_PER_MILLISECOND = 1000,
     PERCENT = 100
 };
 
 static const Color OVERLAY_TEXT = COLOR_RGB(124, 252, 0);
-static const Color OVERLAY_EDGE = COLOR_RGB(0, 0, 0);
+
+static int line_count(const Theme *theme)
+{
+    return theme_is_portrait(theme) ? FRAME_OVERLAY_LINES : FRAME_OVERLAY_LINES / 2;
+}
 
 Rect frame_overlay_area(const Theme *theme)
 {
-    int width = theme->metrics.screen_width;
-    int height = theme->metrics.screen_height;
-    int left = width - OVERLAY_WIDTH - OVERLAY_MARGIN;
-    if (left < 0) {
-        left = (width - OVERLAY_WIDTH) / 2;
-    }
-    (void)height;
-    return (Rect){left, 0, OVERLAY_WIDTH, OVERLAY_HEIGHT};
+    return (Rect){0, 0, theme->metrics.screen_width,
+                  font_line_height(&FONT_MONO_12) * line_count(theme)};
 }
 
 Color frame_overlay_background(void)
@@ -34,29 +29,14 @@ Color frame_overlay_background(void)
     return COLOR_RGB(0, 0, 0);
 }
 
-static void append_milliseconds(StringBuilder *builder, const char *prefix, uint32_t microseconds)
+Color frame_overlay_text_color(void)
 {
-    string_builder_append(builder, prefix);
-    string_builder_append_unsigned(builder, (microseconds + MICROSECONDS_PER_MILLISECOND / 2) /
-                                                MICROSECONDS_PER_MILLISECOND);
+    return OVERLAY_TEXT;
 }
 
-void frame_overlay_format(FrameBreakdown breakdown, char *text, size_t capacity)
+static uint32_t milliseconds(uint32_t microseconds)
 {
-    StringBuilder builder = string_builder_make(text, capacity);
-    append_milliseconds(&builder, "", breakdown.total_us);
-    append_milliseconds(&builder, " u", breakdown.update_us);
-    append_milliseconds(&builder, " d", breakdown.draw_us);
-    append_milliseconds(&builder, " s", breakdown.send_us);
-}
-
-void frame_overlay_format_parts(const uint32_t *parts_us, char *text, size_t capacity)
-{
-    static const char *const PREFIXES[DRAW_PART_COUNT] = {"cv", " r", " t", " bg", " h", " a"};
-    StringBuilder builder = string_builder_make(text, capacity);
-    for (int part = 0; part < DRAW_PART_COUNT; part++) {
-        append_milliseconds(&builder, PREFIXES[part], parts_us[part]);
-    }
+    return (microseconds + MICROSECONDS_PER_MILLISECOND / 2) / MICROSECONDS_PER_MILLISECOND;
 }
 
 static uint32_t share_percent(uint32_t part, uint32_t whole)
@@ -64,79 +44,90 @@ static uint32_t share_percent(uint32_t part, uint32_t whole)
     return whole == 0 ? 0 : (uint32_t)((uint64_t)part * PERCENT / whole);
 }
 
-void frame_overlay_format_audio(HalAudioStats stats, char *text, size_t capacity)
+static uint32_t average(uint32_t total_us, uint32_t blocks)
 {
-    StringBuilder builder = string_builder_make(text, capacity);
-    string_builder_append(&builder, "b");
-    string_builder_append_unsigned(&builder, stats.buffered_ms);
-    string_builder_append(&builder, " x");
-    string_builder_append_unsigned(&builder, stats.underruns);
-    string_builder_append(&builder, " o");
-    string_builder_append_unsigned(&builder, stats.output_underruns);
-    string_builder_append(&builder, " L");
-    string_builder_append_unsigned(&builder, share_percent(stats.busy_us, stats.elapsed_us));
-    string_builder_append(&builder, "% c");
-    string_builder_append_unsigned(&builder, stats.core1_load);
-    string_builder_append(&builder, "%");
+    return blocks == 0 ? 0 : milliseconds(total_us / blocks);
 }
 
-static void append_average_and_longest(StringBuilder *builder, const char *prefix,
-                                       uint32_t total_us, uint32_t blocks, uint32_t longest_us)
+typedef struct LineWriter {
+    char (*lines)[FRAME_OVERLAY_TEXT_CAPACITY];
+    int line;
+    StringBuilder builder;
+    bool empty;
+} LineWriter;
+
+static void next_line(LineWriter *writer)
 {
-    append_milliseconds(builder, prefix, blocks == 0 ? 0 : total_us / blocks);
-    append_milliseconds(builder, "/", longest_us);
+    writer->line++;
+    writer->builder = string_builder_make(writer->lines[writer->line], FRAME_OVERLAY_TEXT_CAPACITY);
+    writer->empty = true;
 }
 
-void frame_overlay_format_block_times(HalAudioStats stats, char *text, size_t capacity)
+static void put(LineWriter *writer, const char *label, uint32_t value, uint32_t digits,
+                StatKind kind)
 {
-    StringBuilder builder = string_builder_make(text, capacity);
-    append_average_and_longest(&builder, "dec", stats.decode_total_us, stats.blocks,
-                               stats.decode_max_us);
-    append_average_and_longest(&builder, " rd", stats.read_total_us, stats.blocks,
-                               stats.read_max_us);
-}
-
-static void draw_line(Canvas *canvas, const Theme *theme, Rect area, const char *text)
-{
-    static const int SHIFTS[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-    TextStyle style = {.font = theme->fonts.small, .color = OVERLAY_EDGE};
-    Rect place = label_centered_area(style.font, area, text);
-    for (int shift = 0; shift < 4; shift++) {
-        Rect edge = {place.x + SHIFTS[shift][0], place.y + SHIFTS[shift][1], place.width,
-                     place.height};
-        label_draw(canvas, style, (Label){.area = edge, .text = text});
+    if (!writer->empty && label[0] != '/') {
+        string_builder_append_char(&writer->builder, ' ');
     }
-    style.color = OVERLAY_TEXT;
-    label_draw(canvas, style, (Label){.area = place, .text = text});
+    stat_text_put(&writer->builder, label, value, digits, kind);
+    writer->empty = false;
 }
 
-Color frame_overlay_text_color(void)
+int frame_overlay_lines(FrameBreakdown breakdown, const uint32_t *parts_us, HalAudioStats stats,
+                        bool portrait, char lines[FRAME_OVERLAY_LINES][FRAME_OVERLAY_TEXT_CAPACITY])
 {
-    return OVERLAY_TEXT;
+    static const char *const PARTS[DRAW_PART_COUNT] = {"cv", "r", "t", "bg", "h", "a"};
+    LineWriter writer = {lines, -1, {0}, true};
+    next_line(&writer);
+    put(&writer, "F", milliseconds(breakdown.total_us), 3, STAT_MEASURE);
+    put(&writer, "u", milliseconds(breakdown.update_us), 2, STAT_MEASURE);
+    put(&writer, "d", milliseconds(breakdown.draw_us), 3, STAT_MEASURE);
+    put(&writer, "s", milliseconds(breakdown.send_us), 3, STAT_MEASURE);
+    if (portrait) {
+        put(&writer, "h", milliseconds(parts_us[DRAW_PART_HASH]), 2, STAT_MEASURE);
+        put(&writer, "a", milliseconds(parts_us[DRAW_PART_AUDIO]), 2, STAT_MEASURE);
+        next_line(&writer);
+    }
+    for (int part = 0; part < DRAW_PART_COUNT; part++) {
+        if (!portrait || (part != DRAW_PART_HASH && part != DRAW_PART_AUDIO)) {
+            put(&writer, PARTS[part], milliseconds(parts_us[part]), 2, STAT_MEASURE);
+        }
+    }
+    next_line(&writer);
+    put(&writer, "b", stats.buffered_ms, 4, STAT_MEASURE);
+    put(&writer, "x", stats.underruns, 3, STAT_COUNT);
+    put(&writer, "o", stats.output_underruns, 3, STAT_COUNT);
+    put(&writer, "L", share_percent(stats.busy_us, stats.elapsed_us), 2, STAT_PERCENT);
+    if (portrait) {
+        next_line(&writer);
+    }
+    put(&writer, "c", stats.core1_load, 2, STAT_PERCENT);
+    put(&writer, "dec", average(stats.decode_total_us, stats.blocks), 2, STAT_MEASURE);
+    put(&writer, "/", milliseconds(stats.decode_max_us), 3, STAT_MEASURE);
+    put(&writer, "rd", average(stats.read_total_us, stats.blocks), 2, STAT_MEASURE);
+    put(&writer, "/", milliseconds(stats.read_max_us), 3, STAT_MEASURE);
+    return writer.line + 1;
 }
 
 void frame_overlay_draw(Canvas *canvas, const Theme *theme, FrameBreakdown breakdown,
                         HalAudioStats stats)
 {
-    Rect area = frame_overlay_area(theme);
-    if (rect_is_empty(rect_intersection(area, canvas->clip))) {
+    if (rect_is_empty(rect_intersection(frame_overlay_area(theme), canvas->clip))) {
         return;
     }
-    char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    Rect line = {area.x, area.y, area.width, OVERLAY_LINE_HEIGHT};
-    frame_overlay_format(breakdown, text, sizeof text);
-    draw_line(canvas, theme, line, text);
-    line.y += OVERLAY_LINE_HEIGHT;
-    frame_overlay_format_audio(stats, text, sizeof text);
-    draw_line(canvas, theme, line, text);
-    line.y += OVERLAY_LINE_HEIGHT;
-    frame_overlay_format_block_times(stats, text, sizeof text);
-    draw_line(canvas, theme, line, text);
-    line.y += OVERLAY_LINE_HEIGHT;
     uint32_t parts[DRAW_PART_COUNT];
     for (int part = 0; part < DRAW_PART_COUNT; part++) {
         parts[part] = draw_profile_average_us((DrawPart)part);
     }
-    frame_overlay_format_parts(parts, text, sizeof text);
-    draw_line(canvas, theme, line, text);
+    char lines[FRAME_OVERLAY_LINES][FRAME_OVERLAY_TEXT_CAPACITY];
+    int count = frame_overlay_lines(breakdown, parts, stats, theme_is_portrait(theme), lines);
+    const Font *font = &FONT_MONO_12;
+    int height = font_line_height(font);
+    TextStyle style = {.font = font, .color = OVERLAY_TEXT};
+    for (int line = 0; line < count; line++) {
+        int top = line * height;
+        canvas_dim_rect(canvas, (Rect){OVERLAY_LEFT - OVERLAY_PAD, top,
+                                       text_width(font, lines[line]) + 2 * OVERLAY_PAD, height});
+        text_draw(canvas, style, (Point){OVERLAY_LEFT, top + font->ascent}, lines[line]);
+    }
 }

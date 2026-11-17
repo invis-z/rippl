@@ -74,3 +74,17 @@ Color canvas_pixel_at(const Canvas *canvas, int x, int y)
 {
     return contains(canvas->bounds, (Point){x, y}) ? *pixel_address(canvas, x, y) : 0;
 }
+
+void canvas_dim_rect(Canvas *canvas, Rect area)
+{
+    Rect visible = rect_intersection(canvas->clip, area);
+    if (rect_is_empty(visible)) {
+        return;
+    }
+    for (int y = visible.y; y < visible.y + visible.height; y++) {
+        Color *row = pixel_address(canvas, visible.x, y);
+        for (int column = 0; column < visible.width; column++) {
+            row[column] = (Color)((row[column] >> 1) & 0x7BEFu);
+        }
+    }
+}
