@@ -86,6 +86,8 @@ set(RIPPL_DEVICE_LOGIC_SOURCES
     core1_mp3.c
     core1_opus.c
     core1_qoa.c
+    core1_open.c
+    core1_source.c
     core1_stream.c
     dac_sequence.c
     flac_source.c
