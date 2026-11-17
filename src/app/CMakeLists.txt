@@ -1,5 +1,6 @@
 add_library(rippl_app STATIC
     app.c
+    app_usb.c
     card_files.c
     clock_store.c
     error_log.c
