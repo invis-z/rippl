@@ -19,6 +19,9 @@ enum {
     MAX_ENTRIES = (SECTOR_BYTES - 8) / 8
 };
 
+_Static_assert(RIPPL_GLYPH_FACE_COUNT == FONT_PACK_FACES,
+               "the glyph table holds FONT_PACK_FACES faces before the language packs");
+
 static uint32_t table[SECTOR_WORDS] __attribute__((section(".glyph_ram")));
 static uint32_t sector[SECTOR_WORDS] __attribute__((section(".glyph_ram")));
 static uint32_t cache[CACHE_WORDS] __attribute__((section(".glyph_ram")));

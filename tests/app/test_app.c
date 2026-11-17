@@ -13,6 +13,7 @@
 #include "fake_hal.h"
 #include "fixture_library.h"
 #include "folders_store.h"
+#include "fonts/fonts.h"
 #include "frame_overlay.h"
 #include "gfx/text.h"
 #include "hal/display.h"
@@ -243,19 +244,6 @@ static bool title_is(const char *expected)
     return strcmp(expected, app_screen_title()) == 0;
 }
 
-static bool overlay_visible(void)
-{
-    Rect area = frame_overlay_area(&DEFAULT_THEME);
-    for (int y = area.y; y < area.y + area.height; y++) {
-        for (int x = area.x; x < area.x + area.width; x++) {
-            if (fake_hal_pixel(x, y) == frame_overlay_text_color()) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 static void audio_gets_a_turn_after_every_strip(void)
 {
     start_app();
@@ -317,8 +305,7 @@ static void a_long_back_returns_home_from_deep_screens(void)
 static void the_frame_overlay_is_off_until_enabled_in_diagnostics(void)
 {
     start_app_with_diagnostics();
-    step();
-    CHECK(!overlay_visible());
+    Rect area = frame_overlay_area(&DEFAULT_THEME);
     move_down(HOME_DIAGNOSTICS_INDEX);
     tap(KEY_PLAY);
     CHECK(title_is("Diagnostics"));
@@ -326,8 +313,11 @@ static void the_frame_overlay_is_off_until_enabled_in_diagnostics(void)
     tap(KEY_PLAY);
     CHECK(title_is("System"));
     move_down(DIAGNOSTICS_PERFORMANCE_INDEX);
+    step();
+    Color before = fake_hal_pixel(area.x + 3, area.y + 2);
     tap(KEY_PLAY);
-    CHECK(overlay_visible());
+    step();
+    CHECK(fake_hal_pixel(area.x + 3, area.y + 2) != before);
 }
 
 static void diagnostics_are_hidden_until_turned_on(void)
@@ -349,78 +339,62 @@ static void a_debug_file_on_internal_storage_shows_diagnostics(void)
     CHECK(title_is("System"));
 }
 
-static void the_frame_overlay_splits_the_frame_time(void)
+static HalAudioStats sample_audio(void)
 {
-    char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    FrameBreakdown breakdown = {
-        .total_us = 190400, .update_us = 12000, .draw_us = 119600, .send_us = 58200};
-    frame_overlay_format(breakdown, text, sizeof text);
-    CHECK(strcmp("190 u12 d120 s58", text) == 0);
-}
-
-static void the_frame_overlay_splits_the_drawing(void)
-{
-    char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    uint32_t parts[DRAW_PART_COUNT] = {[DRAW_PART_COVERS] = 9400, [DRAW_PART_REFLECTIONS] = 3100,
-                                       [DRAW_PART_TEXT] = 2000,   [DRAW_PART_BACKDROP] = 600,
-                                       [DRAW_PART_HASH] = 1500,   [DRAW_PART_AUDIO] = 0};
-    frame_overlay_format_parts(parts, text, sizeof text);
-    CHECK(strcmp("cv9 r3 t2 bg1 h2 a0", text) == 0);
-}
-
-static void the_frame_overlay_shows_the_audio_numbers(void)
-{
-    char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    HalAudioStats stats = {.buffered_ms = 340,
+    return (HalAudioStats){.buffered_ms = 340,
                            .underruns = 2,
-                           .output_underruns = 7,
+                           .output_underruns = 1007,
                            .core1_load = 83,
-                           .decode_total_us = 100000,
-                           .busy_us = 640000,
-                           .elapsed_us = 1000000};
-    frame_overlay_format_audio(stats, text, sizeof text);
-    CHECK(strcmp("b340 x2 o7 L64% c83%", text) == 0);
-}
-
-static void the_frame_overlay_shows_average_and_longest_block_times(void)
-{
-    char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    HalAudioStats stats = {.blocks = 4,
+                           .blocks = 4,
                            .decode_total_us = 92000,
                            .decode_max_us = 38400,
                            .read_total_us = 20000,
-                           .read_max_us = 11600};
-    frame_overlay_format_block_times(stats, text, sizeof text);
-    CHECK(strcmp("dec23/38 rd5/12", text) == 0);
+                           .read_max_us = 11600,
+                           .busy_us = 640000,
+                           .elapsed_us = 1000000};
 }
 
-static void the_frame_overlay_shows_zero_before_any_block(void)
+static void the_performance_overlay_takes_two_lines_in_landscape(void)
 {
-    char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    frame_overlay_format_block_times((HalAudioStats){0}, text, sizeof text);
-    CHECK(strcmp("dec0/0 rd0/0", text) == 0);
-    frame_overlay_format_audio((HalAudioStats){0}, text, sizeof text);
-    CHECK(strcmp("b0 x0 o0 L0% c0%", text) == 0);
+    char lines[FRAME_OVERLAY_LINES][FRAME_OVERLAY_TEXT_CAPACITY];
+    FrameBreakdown breakdown = {
+        .total_us = 190400, .update_us = 12000, .draw_us = 119600, .send_us = 58200};
+    uint32_t parts[DRAW_PART_COUNT] = {[DRAW_PART_COVERS] = 9400, [DRAW_PART_REFLECTIONS] = 3100,
+                                       [DRAW_PART_TEXT] = 2000,   [DRAW_PART_BACKDROP] = 600,
+                                       [DRAW_PART_HASH] = 1500,   [DRAW_PART_AUDIO] = 0};
+    CHECK_EQUAL(2, frame_overlay_lines(breakdown, parts, sample_audio(), false, lines));
+    CHECK(strcmp("F190 u12 d120 s058 cv09 r03 t02 bg01 h02 a00", lines[0]) == 0);
+    CHECK(strcmp("b340 x002 O007 L64%/83% dec23/038 rd05/012", lines[1]) == 0);
 }
 
-static void the_frame_overlay_block_and_part_lines_fit_its_width(void)
+static void the_performance_overlay_takes_four_lines_in_portrait(void)
 {
-    char text[FRAME_OVERLAY_TEXT_CAPACITY];
-    int width = frame_overlay_area(&DEFAULT_THEME).width;
-    const Font *font = DEFAULT_THEME.fonts.small;
-    HalAudioStats stats = {.blocks = 1,
-                           .decode_total_us = 99000,
-                           .decode_max_us = 999000,
-                           .read_total_us = 99000,
-                           .read_max_us = 999000};
-    frame_overlay_format_block_times(stats, text, sizeof text);
-    CHECK(text_width(font, text) <= width);
-    uint32_t parts[DRAW_PART_COUNT];
-    for (int part = 0; part < DRAW_PART_COUNT; part++) {
-        parts[part] = 99000;
+    char lines[FRAME_OVERLAY_LINES][FRAME_OVERLAY_TEXT_CAPACITY];
+    uint32_t parts[DRAW_PART_COUNT] = {0};
+    HalAudioStats stats = {.core1_load = 100, .elapsed_us = 1000, .busy_us = 1000};
+    CHECK_EQUAL(
+        4, frame_overlay_lines((FrameBreakdown){.total_us = 5000000}, parts, stats, true, lines));
+    CHECK(strcmp("F999 u00 d000 s000 h00", lines[0]) == 0);
+    CHECK(strcmp("a00 cv00 r00 t00 bg00", lines[1]) == 0);
+    CHECK(strcmp("b000 x000 o000 Lxx%/xx%", lines[2]) == 0);
+    CHECK(strcmp("dec00/000 rd00/000", lines[3]) == 0);
+}
+
+static void the_performance_overlay_fits_the_screen(void)
+{
+    enum {
+        MONO_ADVANCE = 7
+    };
+    char lines[FRAME_OVERLAY_LINES][FRAME_OVERLAY_TEXT_CAPACITY];
+    uint32_t parts[DRAW_PART_COUNT] = {0};
+    for (int portrait = 0; portrait < 2; portrait++) {
+        int width = portrait ? HAL_DISPLAY_SHORT_SIDE : HAL_DISPLAY_LONG_SIDE;
+        int count =
+            frame_overlay_lines((FrameBreakdown){0}, parts, sample_audio(), portrait != 0, lines);
+        for (int line = 0; line < count; line++) {
+            CHECK((int)strlen(lines[line]) * MONO_ADVANCE + 8 <= width);
+        }
     }
-    frame_overlay_format_parts(parts, text, sizeof text);
-    CHECK(text_width(font, text) <= width);
 }
 
 static void open_music_entry(int index)
@@ -3663,12 +3637,9 @@ int main(void)
         TEST_CASE(the_frame_overlay_is_off_until_enabled_in_diagnostics),
         TEST_CASE(diagnostics_are_hidden_until_turned_on),
         TEST_CASE(a_debug_file_on_internal_storage_shows_diagnostics),
-        TEST_CASE(the_frame_overlay_splits_the_frame_time),
-        TEST_CASE(the_frame_overlay_splits_the_drawing),
-        TEST_CASE(the_frame_overlay_shows_the_audio_numbers),
-        TEST_CASE(the_frame_overlay_shows_average_and_longest_block_times),
-        TEST_CASE(the_frame_overlay_shows_zero_before_any_block),
-        TEST_CASE(the_frame_overlay_block_and_part_lines_fit_its_width),
+        TEST_CASE(the_performance_overlay_takes_two_lines_in_landscape),
+        TEST_CASE(the_performance_overlay_takes_four_lines_in_portrait),
+        TEST_CASE(the_performance_overlay_fits_the_screen),
         TEST_CASE(diagnostics_shows_the_firmware_version_from_the_hal),
         TEST_CASE(albums_open_from_the_library),
         TEST_CASE(album_rows_show_a_chevron_and_track_rows_do_not),

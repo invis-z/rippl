@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "draw_profile.h"
@@ -9,7 +9,8 @@
 #include "ui/theme.h"
 
 enum {
-    FRAME_OVERLAY_TEXT_CAPACITY = 32
+    FRAME_OVERLAY_LINES = 4,
+    FRAME_OVERLAY_TEXT_CAPACITY = 48
 };
 
 typedef struct FrameBreakdown {
@@ -22,9 +23,8 @@ typedef struct FrameBreakdown {
 Rect frame_overlay_area(const Theme *theme);
 Color frame_overlay_background(void);
 Color frame_overlay_text_color(void);
-void frame_overlay_format(FrameBreakdown breakdown, char *text, size_t capacity);
-void frame_overlay_format_parts(const uint32_t *parts_us, char *text, size_t capacity);
-void frame_overlay_format_audio(HalAudioStats stats, char *text, size_t capacity);
-void frame_overlay_format_block_times(HalAudioStats stats, char *text, size_t capacity);
+int frame_overlay_lines(FrameBreakdown breakdown, const uint32_t *parts_us, HalAudioStats stats,
+                        bool portrait,
+                        char lines[FRAME_OVERLAY_LINES][FRAME_OVERLAY_TEXT_CAPACITY]);
 void frame_overlay_draw(Canvas *canvas, const Theme *theme, FrameBreakdown breakdown,
                         HalAudioStats stats);

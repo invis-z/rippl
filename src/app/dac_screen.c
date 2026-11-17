@@ -6,6 +6,7 @@
 #include "frame_overlay.h"
 #include "gfx/text.h"
 #include "hal/audio.h"
+#include "stat_text.h"
 #include "ui/header.h"
 #include "ui/label.h"
 
@@ -13,8 +14,6 @@ enum {
     HZ_PER_KHZ = 1000,
     STATS_LINE_HEIGHT_LANDSCAPE = 16,
     STATS_LINE_HEIGHT_PORTRAIT = 15,
-    COUNT_THOUSANDS_FROM = 10000,
-    COUNT_MILLIONS_FROM = 10000000,
     STATS_PADDING = 2,
     STATS_INSET = 6,
     VOLUME_BAR_HEIGHT = 3,
@@ -43,21 +42,8 @@ void dac_screen_rate_text(uint32_t rate, char *text, size_t capacity)
     }
 }
 
-static void append_count(StringBuilder *line, uint32_t value)
-{
-    if (value < COUNT_THOUSANDS_FROM) {
-        string_builder_append_unsigned(line, value);
-    } else if (value < COUNT_MILLIONS_FROM) {
-        string_builder_append_unsigned(line, value / 1000u);
-        string_builder_append_char(line, 'k');
-    } else {
-        string_builder_append_unsigned(line, value / 1000000u);
-        string_builder_append_char(line, 'M');
-    }
-}
-
 typedef struct StatsItem {
-    const char *name;
+    const char *label;
     uint32_t value;
 } StatsItem;
 
@@ -69,11 +55,9 @@ static int lines_of(const StatsItem *items, const uint8_t *breaks, int count,
         StringBuilder builder = string_builder_make(lines[line], DAC_SCREEN_STATS_CAPACITY);
         for (int index = 0; index < breaks[line]; index++, item++) {
             if (index > 0) {
-                string_builder_append(&builder, "  ");
+                string_builder_append_char(&builder, ' ');
             }
-            string_builder_append(&builder, items[item].name);
-            string_builder_append_char(&builder, ' ');
-            append_count(&builder, items[item].value);
+            stat_text_put(&builder, items[item].label, items[item].value, 3, STAT_COUNT);
         }
     }
     return count;
@@ -83,28 +67,20 @@ int dac_screen_stats_lines(const AppDacStats *stats, bool portrait,
                            char lines[DAC_SCREEN_STATS_LINES][DAC_SCREEN_STATS_CAPACITY])
 {
     const StatsItem items[] = {
-        {"missed", stats->missed},     {"dropped", stats->dropped},
-        {"repeated", stats->repeated}, {"restarts", stats->restarts},
-        {"starts", stats->starts},     {"stops", stats->stops},
-        {"formats", stats->formats},   {"retries", stats->retries},
-        {"control", stats->control},   {"wrong slot", stats->wrong_slot},
-        {"late irq", stats->late},
+        {"mis", stats->missed},     {"drp", stats->dropped}, {"rep", stats->repeated},
+        {"rst", stats->restarts},   {"sta", stats->starts},  {"stp", stats->stops},
+        {"fmt", stats->formats},    {"try", stats->retries}, {"ctl", stats->control},
+        {"slt", stats->wrong_slot}, {"irq", stats->late},
     };
-    static const uint8_t LANDSCAPE[] = {4, 4, 3};
-    static const uint8_t PORTRAIT[] = {2, 2, 2, 2, 1, 1, 1};
+    static const uint8_t LANDSCAPE[] = {6, 5};
+    static const uint8_t PORTRAIT[] = {3, 3, 3, 2};
     int count = portrait ? lines_of(items, PORTRAIT, sizeof PORTRAIT, lines)
                          : lines_of(items, LANDSCAPE, sizeof LANDSCAPE, lines);
     StringBuilder loss = string_builder_make(lines[count], DAC_SCREEN_STATS_CAPACITY);
-    string_builder_append(&loss, "loss ");
-    append_count(&loss, stats->loss_last);
-    string_builder_append(&loss, " last, ");
-    append_count(&loss, stats->loss_longest);
-    string_builder_append(&loss, " longest");
-    if (!portrait) {
-        string_builder_append(&loss, ", ");
-        append_count(&loss, stats->loss_gap_us);
-        string_builder_append(&loss, " us gap");
-    }
+    stat_text_put(&loss, "loss", stats->loss_last, 3, STAT_MEASURE);
+    stat_text_put(&loss, "/", stats->loss_longest, 3, STAT_MEASURE);
+    stat_text_put(&loss, " gap", stats->loss_gap_us, 4, STAT_MEASURE);
+    string_builder_append(&loss, "us");
     return count + 1;
 }
 
@@ -124,7 +100,7 @@ static void draw_stats(Canvas *canvas, const Theme *theme, const AppDacStats *st
     char lines[DAC_SCREEN_STATS_LINES][DAC_SCREEN_STATS_CAPACITY];
     int count = dac_screen_stats_lines(stats, theme_is_portrait(theme), lines);
     canvas_fill_rect(canvas, area, frame_overlay_background());
-    TextStyle style = {.font = theme->fonts.small, .color = STATS_TEXT};
+    TextStyle style = {.font = &FONT_MONO_12, .color = STATS_TEXT};
     int height = stats_line_height(theme);
     for (int index = 0; index < count; index++) {
         Rect row = {area.x + STATS_INSET, area.y + STATS_PADDING + index * height,
