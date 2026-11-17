@@ -268,7 +268,7 @@ def parse_arguments(argv):
     parser = argparse.ArgumentParser(
         description="Report what fills the device code window from the linker maps")
     parser.add_argument("--build", type=Path,
-                        help="a build directory such as build/release (reads its device ELF "
+                        help="a build directory such as build/device (reads its device ELF "
                              "and map and the overlay maps)")
     parser.add_argument("--map", type=Path, help="the device map file (instead of --build)")
     parser.add_argument("--elf", type=Path, help="the device ELF, for attributing LTO code")

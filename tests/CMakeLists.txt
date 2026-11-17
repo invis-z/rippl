@@ -190,9 +190,8 @@ rippl_add_unit_test(NAME test_app
     LIBRARIES rippl_app rippl_library_fixtures m
     PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
 )
-rippl_add_unit_test(NAME test_release_diagnostics
-    SOURCES app/test_release_diagnostics.c ${PROJECT_SOURCE_DIR}/src/app/diagnostics_menu_release.c
-        app/fake_hal.c
+rippl_add_unit_test(NAME test_diagnostics_menu
+    SOURCES app/test_diagnostics_menu.c app/fake_hal.c
     LIBRARIES rippl_app rippl_library_fixtures
     PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
 )

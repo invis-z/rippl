@@ -33,10 +33,10 @@ The [documentation](docs/README.md) covers everything else.
 
 ```sh
 cmake --preset dev && cmake --build --preset dev && ctest --preset dev
-cmake --preset release && cmake --build --preset release
+cmake --preset device && cmake --build --preset device
 ```
 
-The first line builds the simulator and runs the tests; the second builds the firmware into `build/release/RIPPL.IMG`. See [building](docs/development/building.md) for requirements on macOS, Windows and Linux.
+The first line builds the simulator and runs the tests; the second builds the firmware into `build/device/RIPPL.IMG`. See [building](docs/development/building.md) for requirements on macOS, Windows and Linux.
 
 ## Repository layout
 

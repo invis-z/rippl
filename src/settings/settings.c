@@ -26,6 +26,8 @@ enum {
     DAC_FIELD = 18,
     OPTIONS_FIELD = 19,
     CHECKSUM_FIELD = OPTIONS_FIELD + SETTINGS_OPTION_COUNT,
+    EARLIER_OPTION_COUNT = OPTION_DIAGNOSTICS,
+    EARLIER_CHECKSUM_FIELD = OPTIONS_FIELD + EARLIER_OPTION_COUNT,
     DEFAULT_BRIGHTNESS = 7,
     DEFAULT_TIMEOUT_OPTION = 2,
     DEFAULT_VOLUME = 40,
@@ -61,7 +63,8 @@ static const uint8_t OPTION_COUNTS[SETTINGS_OPTION_COUNT] = {
     [OPTION_POWER_ON] = 2,
     [OPTION_NOW_PLAYING_FACE] = NP_FACE_OPTION_SLOTS,
     [OPTION_DRE] = DRE_MODE_COUNT,
-    [OPTION_DAYLIGHT] = DAYLIGHT_CHOICE_COUNT};
+    [OPTION_DAYLIGHT] = DAYLIGHT_CHOICE_COUNT,
+    [OPTION_DIAGNOSTICS] = 2};
 
 _Static_assert(CHECKSUM_FIELD + 4 == SETTINGS_FILE_SIZE, "the checksum ends the file");
 
@@ -144,6 +147,17 @@ static uint32_t get_u32(const uint8_t *bytes, int offset)
     return value;
 }
 
+static int stored_options(const uint8_t *bytes, uint32_t length)
+{
+    if (length >= SETTINGS_FILE_SIZE && get_u32(bytes, CHECKSUM_FIELD) == checksum_of(bytes)) {
+        return SETTINGS_OPTION_COUNT;
+    }
+    bool earlier = length >= EARLIER_CHECKSUM_FIELD + 4 &&
+                   get_u32(bytes, EARLIER_CHECKSUM_FIELD) ==
+                       hash_update(HASH_START, bytes, EARLIER_CHECKSUM_FIELD);
+    return earlier ? EARLIER_OPTION_COUNT : 0;
+}
+
 void settings_encode(const Settings *settings, uint8_t *bytes)
 {
     for (int index = 0; index < SETTINGS_FILE_SIZE; index++) {
@@ -177,13 +191,12 @@ static bool header_valid(const uint8_t *bytes, uint32_t length)
             return false;
         }
     }
-    return length >= SETTINGS_FILE_SIZE && bytes[VERSION_FIELD] == VERSION &&
-           get_u32(bytes, CHECKSUM_FIELD) == checksum_of(bytes);
+    return length > VERSION_FIELD && bytes[VERSION_FIELD] == VERSION;
 }
 
-static bool options_valid(const uint8_t *bytes)
+static bool options_valid(const uint8_t *bytes, int count)
 {
-    for (int option = 0; option < SETTINGS_OPTION_COUNT; option++) {
+    for (int option = 0; option < count; option++) {
         if (bytes[OPTIONS_FIELD + option] >= OPTION_COUNTS[option]) {
             return false;
         }
@@ -204,12 +217,13 @@ static bool values_valid(const uint8_t *bytes)
            bytes[DAC_VOLUME_FIELD] <= SETTINGS_VOLUME_MAX &&
            bytes[ORIENTATION_FIELD] < ORIENTATION_COUNT && bytes[LANGUAGE_FIELD] < LANGUAGE_COUNT &&
            (bytes[DAC_FIELD] >> FILTER_SHIFT) < DAC_FILTER_COUNT &&
-           (bytes[DAC_FIELD] & BALANCE_MASK) < SETTINGS_BALANCE_STEPS && options_valid(bytes);
+           (bytes[DAC_FIELD] & BALANCE_MASK) < SETTINGS_BALANCE_STEPS;
 }
 
 bool settings_decode(const uint8_t *bytes, uint32_t length, Settings *settings)
 {
-    if (!header_valid(bytes, length) || !values_valid(bytes)) {
+    int count = header_valid(bytes, length) ? stored_options(bytes, length) : 0;
+    if (count == 0 || !values_valid(bytes) || !options_valid(bytes, count)) {
         return false;
     }
     *settings = (Settings){
@@ -230,7 +244,7 @@ bool settings_decode(const uint8_t *bytes, uint32_t length, Settings *settings)
         .balance = bytes[DAC_FIELD] & BALANCE_MASK,
     };
     for (int option = 0; option < SETTINGS_OPTION_COUNT; option++) {
-        settings->options[option] = bytes[OPTIONS_FIELD + option];
+        settings->options[option] = option < count ? bytes[OPTIONS_FIELD + option] : 0;
     }
     return true;
 }

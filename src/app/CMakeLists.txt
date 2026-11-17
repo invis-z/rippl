@@ -13,7 +13,7 @@ add_library(rippl_app STATIC
     favorites_store.c
     diagnostics_values.c
     diagnostics_rows.c
-    $<IF:$<BOOL:${RIPPL_RELEASE}>,diagnostics_menu_release.c,diagnostics_menu.c>
+    diagnostics_menu.c
     draw_profile.c
     equalizer_files.c
     equalizer_fits.c

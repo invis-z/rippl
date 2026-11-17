@@ -457,6 +457,7 @@ RIPPL_RESIDENT static const SettingChoice CHOICES[SETTINGS_CHOICE_COUNT] = {
     {STR_SETTINGS_DRE, DRE_OPTIONS, NULL, DRE_MODE_COUNT, current_dre, choose_dre, NULL, 0},
     {STR_SETTINGS_DAYLIGHT, DAYLIGHT_OPTIONS, NULL, DAYLIGHT_CHOICE_COUNT, current_daylight,
      choose_daylight, NULL, 0},
+    OPTION_CHOICE(STR_DIAG_TITLE, SWITCH_OPTIONS, OPTION_DIAGNOSTICS),
 };
 
 static ScreenAction open_choice(void *context)
@@ -542,6 +543,7 @@ enum {
     CHOICE_NOW_PLAYING_FACE,
     CHOICE_DRE,
     CHOICE_DAYLIGHT,
+    CHOICE_DIAGNOSTICS,
     ROW_BLUETOOTH = SETTINGS_CHOICE_COUNT,
     ROW_EQUALIZER,
     ROW_DATE_TIME,
@@ -613,7 +615,8 @@ RIPPL_RESIDENT static const uint8_t ROWS[] = {CHOICE_SHUFFLE,
                                               CHOICE_START,
                                               CHOICE_AUTO_OFF,
                                               CHOICE_USB_MODE,
-                                              CHOICE_USB_PROMPT};
+                                              CHOICE_USB_PROMPT,
+                                              CHOICE_DIAGNOSTICS};
 
 enum {
     SOUND_ROWS = 5,
@@ -624,7 +627,7 @@ enum {
     BUTTONS_FIRST = LIBRARY_FIRST + LIBRARY_ROWS,
     BUTTONS_ROWS = 4,
     SYSTEM_FIRST = BUTTONS_FIRST + BUTTONS_ROWS,
-    SYSTEM_ROWS = 7
+    SYSTEM_ROWS = 8
 };
 
 RIPPL_RESIDENT static const SettingsGroupRows GROUPS[SETTINGS_GROUP_COUNT] = {
