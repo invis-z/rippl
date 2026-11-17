@@ -79,6 +79,13 @@
       "ranges": [],
       "pack_faces": ["big_digits", "big_digits"],
       "level_bits": 2
+    },
+    {
+      "name": "mono_12",
+      "file": "cascadia-mono/CascadiaMono-Regular.ttf",
+      "size": 12,
+      "ranges": [],
+      "pack_faces": ["mono_12", "mono_12"]
     }
   ]
 }

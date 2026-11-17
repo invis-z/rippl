@@ -954,3 +954,9 @@ const Font FONT_INTER_SEMIBOLD_48 = {
     .pack_faces = {9, 9},
     .level_bits = 2,
 };
+
+const Font FONT_MONO_12 = {
+    .ascent = 12,
+    .descent = 3,
+    .pack_faces = {10, 10},
+};
