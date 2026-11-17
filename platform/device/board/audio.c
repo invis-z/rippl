@@ -83,7 +83,6 @@ static bool resume_after_clock_change;
 static bool paused_before_clock_change;
 static uint32_t position_before_clock_change;
 static AudioEngine engine;
-static EqualizerCurve equalizer_curve;
 static DmaItem items[RING_BLOCKS];
 static HalFile file;
 static bool engine_ready;
@@ -589,19 +588,10 @@ static bool light_track(const char *path)
     return path != NULL && light_probe(probe_path(path));
 }
 
-static bool equalizer_on(void)
-{
-    for (int band = 0; band < equalizer_curve.band_count; band++) {
-        if (equalizer_curve.bands[band].gain_tenths != 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static uint32_t clock_for(bool light)
 {
-    bool slow = light && slow_allowed && board_saving(HAL_SAVING_SLOW_CLOCK) && !equalizer_on();
+    bool slow = light && slow_allowed && board_saving(HAL_SAVING_SLOW_CLOCK) &&
+                !board_core1_equalizer_shapes();
     return slow ? SLOW_CLOCK_MHZ : AUDIO_CLOCK_MHZ;
 }
 
@@ -855,13 +845,12 @@ bool hal_audio_word_output(void)
 
 void hal_audio_set_equalizer(const EqualizerCurve *curve)
 {
-    equalizer_curve = *curve;
     board_core1_set_equalizer(curve);
     if (!engine_ready) {
         return;
     }
     AudioEngineState state = audio_engine_status(&engine).state;
-    if (transferring && state != AUDIO_ENGINE_STOPPED && equalizer_on() &&
+    if (transferring && state != AUDIO_ENGINE_STOPPED && board_core1_equalizer_shapes() &&
         (hal_system_clock_mhz() < AUDIO_CLOCK_MHZ || board_core1_equalizer_waits())) {
         seek_to(audio_engine_status(&engine).position_ms, state == AUDIO_ENGINE_PAUSED, true);
     }

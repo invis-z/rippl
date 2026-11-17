@@ -150,20 +150,14 @@ static Core1Result place_program(Core1Program program)
     return CORE1_OK;
 }
 
-static bool equalizer_moved(void)
+bool board_core1_equalizer_shapes(void)
 {
-    for (int band = 0; band < equalizer_curve.band_count; band++) {
-        if (equalizer_curve.bands[band].gain_tenths != 0) {
-            return true;
-        }
-    }
-    return false;
+    return equalizer_curve_shapes(&equalizer_curve);
 }
 
-static bool equalizing(Core1Program program, uint32_t rate)
+static bool equalizing(uint32_t rate)
 {
-    (void)program;
-    return rate <= EQUALIZER_MAX_RATE && equalizer_moved();
+    return rate <= EQUALIZER_MAX_RATE && board_core1_equalizer_shapes();
 }
 
 static bool hi_res(Core1Program program, uint32_t rate)
@@ -174,7 +168,7 @@ static bool hi_res(Core1Program program, uint32_t rate)
 static uint32_t stream_divider(Core1Program program, uint32_t rate, bool wide, uint32_t pll_mhz)
 {
     bool heavy = program == CORE1_PROGRAM_AAC || program == CORE1_PROGRAM_OPUS ||
-                 equalizing(program, rate) || hi_res(program, rate) || upsampler_factor(rate) > 1 ||
+                 equalizing(rate) || hi_res(program, rate) || upsampler_factor(rate) > 1 ||
                  (program == CORE1_PROGRAM_FLAC && wide);
     return heavy && pll_mhz <= FULL_SPEED_MHZ ? 1 : core1_divider_for(pll_mhz);
 }
@@ -209,8 +203,7 @@ void board_core1_set_equalizer(const EqualizerCurve *curve)
 {
     equalizer_curve = *curve;
     if (streaming) {
-        share_equalizer(streaming_rate,
-                        equalizing(streaming_program, streaming_rate) && streaming_divider == 1);
+        share_equalizer(streaming_rate, equalizing(streaming_rate) && streaming_divider == 1);
     }
 }
 
@@ -244,7 +237,7 @@ bool board_core1_equalizer_waits(void)
 {
     volatile Core1EqualizerShare *share =
         (volatile Core1EqualizerShare *)(uintptr_t)CORE1_SHARED_EQUALIZER;
-    return streaming && equalizing(streaming_program, streaming_rate) && share->enabled == 0 &&
+    return streaming && equalizing(streaming_rate) && share->enabled == 0 &&
            core1_region().control->bits_per_sample <= EQUALIZER_MAX_BITS;
 }
 
@@ -252,7 +245,7 @@ bool board_core1_start_stream(Core1Program program, uint32_t rate, bool wide)
 {
     if (streaming && !board_core1_needs_restart(program, rate, wide)) {
         streaming_rate = rate;
-        share_equalizer(rate, equalizing(program, rate) && streaming_divider == 1);
+        share_equalizer(rate, equalizing(rate) && streaming_divider == 1);
         return true;
     }
     board_core1_stop();
@@ -273,7 +266,7 @@ bool board_core1_start_stream(Core1Program program, uint32_t rate, bool wide)
     if (result == CORE1_OK) {
         register_write(CORE1_SHARED_COMMAND, CORE1_COMMAND_STREAM);
         register_write(CORE1_SHARED_ACCEL_CLASSES, accel_classes);
-        share_equalizer(rate, equalizing(program, rate) && divider == 1);
+        share_equalizer(rate, equalizing(rate) && divider == 1);
         share_sleep();
         result = core1_run(&BUS, REPLY_TIMEOUT_MS);
     }

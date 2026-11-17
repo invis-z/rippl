@@ -102,6 +102,18 @@ void equalizer_process_block(Equalizer *equalizer, EqualizerBlock block);
 int equalizer_preamp_tenths(const EqualizerCurve *curve, uint32_t rate);
 bool equalizer_curve_valid(const EqualizerCurve *curve, uint32_t rate);
 bool equalizer_band_audible(EqualizerBand band, uint32_t rate);
+static inline bool equalizer_curve_shapes(const EqualizerCurve *curve)
+{
+    for (int index = 0; index < curve->band_count && index < EQUALIZER_MAX_BANDS; index++) {
+        EqualizerBand band = curve->bands[index];
+        if (band.gain_tenths != 0 && band.frequency_hz > 0 && band.q_hundredths > 0 &&
+            band.filter <= EQUALIZER_HIGH_SHELF) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static inline uint32_t equalizer_target_rate(const EqualizerCurve *curve)
 {
     return curve->target_rate != 0 ? curve->target_rate : EQUALIZER_TARGET_RATE;
