@@ -32,19 +32,19 @@ static int compare_bytes(const uint8_t *left, uint32_t left_length, const uint8_
 
 static const uint8_t *album_key(const uint8_t *record, uint32_t *length)
 {
-    *length = builder_get16(record + 16);
+    *length = (uint16_t)bytes_get16(record + 16);
     return record + GUESS_HEADER;
 }
 
 static const uint8_t *artist_key(const uint8_t *record, uint32_t *length)
 {
-    *length = builder_get16(record + 18);
-    return record + GUESS_HEADER + builder_get16(record + 16);
+    *length = (uint16_t)bytes_get16(record + 18);
+    return record + GUESS_HEADER + (uint16_t)bytes_get16(record + 16);
 }
 
 static int same_album(const uint8_t *left, const uint8_t *right)
 {
-    int folder = compare_numbers(builder_get32(left + 2), builder_get32(right + 2));
+    int folder = compare_numbers(bytes_get32(left + 2), bytes_get32(right + 2));
     if (folder != 0) {
         return folder;
     }
@@ -72,14 +72,13 @@ static int by_album_artist_track(const uint8_t *left, const uint8_t *right, cons
         return album;
     }
     int artist = same_artist(left, right);
-    return artist != 0 ? artist
-                       : compare_numbers(builder_get32(left + 6), builder_get32(right + 6));
+    return artist != 0 ? artist : compare_numbers(bytes_get32(left + 6), bytes_get32(right + 6));
 }
 
 static int by_track(const uint8_t *left, const uint8_t *right, const void *context)
 {
     (void)context;
-    return compare_numbers(builder_get32(left + 2), builder_get32(right + 2));
+    return compare_numbers(bytes_get32(left + 2), bytes_get32(right + 2));
 }
 
 typedef struct KeyBuffers {
@@ -111,13 +110,13 @@ static bool emit_guess(Prepared *prepared, Tail *tail, uint32_t track, const Tra
         return false;
     }
     uint8_t header[GUESS_HEADER];
-    builder_put16(header, GUESS_HEADER + album_length + artist_length);
-    builder_put32(header + 2, row->folder);
-    builder_put32(header + 6, track);
-    builder_put32(header + 10, row->text[BUILDER_ARTIST]);
-    builder_put16(header + 14, row->length[BUILDER_ARTIST]);
-    builder_put16(header + 16, album_length);
-    builder_put16(header + 18, artist_length);
+    bytes_put16(header, GUESS_HEADER + album_length + artist_length);
+    bytes_put32(header + 2, row->folder);
+    bytes_put32(header + 6, track);
+    bytes_put32(header + 10, row->text[BUILDER_ARTIST]);
+    bytes_put16(header + 14, row->length[BUILDER_ARTIST]);
+    bytes_put16(header + 16, album_length);
+    bytes_put16(header + 18, artist_length);
     return out_put(&tail->out, header, sizeof header) &&
            out_put(&tail->out, buffers->album, album_length) &&
            out_put(&tail->out, buffers->artist, artist_length);
@@ -175,13 +174,13 @@ static bool decide(BuilderState *state, Region sorted, Region *decisions)
         return false;
     }
     while (stream.live) {
-        for (uint32_t index = 0; index < builder_get16(stream.record); index++) {
+        for (uint32_t index = 0; index < (uint16_t)bytes_get16(stream.record); index++) {
             album[index] = stream.record[index];
         }
         uint32_t best_count = 0;
         uint8_t best[DECISION_SIZE] = {0};
         while (stream.live && same_album(album, stream.record) == 0) {
-            for (uint32_t index = 0; index < builder_get16(stream.record); index++) {
+            for (uint32_t index = 0; index < (uint16_t)bytes_get16(stream.record); index++) {
                 artist[index] = stream.record[index];
             }
             uint32_t count = 0;
@@ -194,8 +193,8 @@ static bool decide(BuilderState *state, Region sorted, Region *decisions)
             }
             if (count > best_count) {
                 best_count = count;
-                builder_put32(best, builder_get32(artist + 10));
-                builder_put16(best + 4, builder_get16(artist + 14));
+                bytes_put32(best, bytes_get32(artist + 10));
+                bytes_put16(best + 4, (uint16_t)bytes_get16(artist + 14));
             }
         }
         if (!out_put(&tail.out, best, sizeof best)) {
@@ -228,13 +227,13 @@ static bool assign(BuilderState *state, Region sorted, Region decisions, Region 
         if (!in_get(&chosen, decision, sizeof decision)) {
             return false;
         }
-        for (uint32_t index = 0; index < builder_get16(stream.record); index++) {
+        for (uint32_t index = 0; index < (uint16_t)bytes_get16(stream.record); index++) {
             album[index] = stream.record[index];
         }
         while (stream.live && same_album(album, stream.record) == 0) {
             uint8_t tuple[ASSIGNMENT_SIZE];
-            builder_put16(tuple, ASSIGNMENT_SIZE);
-            builder_put32(tuple + 2, builder_get32(stream.record + 6));
+            bytes_put16(tuple, ASSIGNMENT_SIZE);
+            bytes_put32(tuple + 2, bytes_get32(stream.record + 6));
             for (uint32_t index = 0; index < DECISION_SIZE; index++) {
                 tuple[6 + index] = decision[index];
             }
@@ -269,9 +268,9 @@ static bool rewrite_rows(BuilderState *state, Region sorted)
         if (!in_get(&rows, bytes, sizeof bytes)) {
             return false;
         }
-        if (stream.live && builder_get32(stream.record + 2) == track) {
-            builder_put32(bytes + ROW_ALBUM_ARTIST_TEXT, builder_get32(stream.record + 6));
-            builder_put16(bytes + ROW_ALBUM_ARTIST_LENGTH, builder_get16(stream.record + 10));
+        if (stream.live && bytes_get32(stream.record + 2) == track) {
+            bytes_put32(bytes + ROW_ALBUM_ARTIST_TEXT, bytes_get32(stream.record + 6));
+            bytes_put16(bytes + ROW_ALBUM_ARTIST_LENGTH, (uint16_t)bytes_get16(stream.record + 10));
             if (!builder_pull(&stream)) {
                 return false;
             }

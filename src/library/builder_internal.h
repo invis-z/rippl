@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "core/bytes.h"
+#include "core/text.h"
 #include "library/library_builder.h"
 
 #define BUILDER_UNSET 0xFFFFFFFFu
@@ -218,12 +220,6 @@ typedef struct SortJob {
     SortCompare compare;
     const void *context;
 } SortJob;
-
-uint16_t builder_get16(const uint8_t *bytes);
-uint32_t builder_get32(const uint8_t *bytes);
-void builder_put16(uint8_t *bytes, uint32_t value);
-void builder_put32(uint8_t *bytes, uint32_t value);
-uint32_t builder_text_length(const char *text);
 
 void arena_init(Arena *arena, void *memory, uint32_t size);
 void *arena_take(Arena *arena, uint32_t bytes);

@@ -14,14 +14,14 @@ static int by_hash_then_node(const uint8_t *left, const uint8_t *right, const vo
     (void)context;
     static const uint32_t OFFSETS[2] = {6, 2};
     for (int index = 0; index < 2; index++) {
-        uint32_t a = builder_get32(left + OFFSETS[index]);
-        uint32_t b = builder_get32(right + OFFSETS[index]);
+        uint32_t a = bytes_get32(left + OFFSETS[index]);
+        uint32_t b = bytes_get32(right + OFFSETS[index]);
         if (a != b) {
             return a < b ? -1 : 1;
         }
     }
-    uint32_t a = builder_get32(left + 10);
-    uint32_t b = builder_get32(right + 10);
+    uint32_t a = bytes_get32(left + 10);
+    uint32_t b = bytes_get32(right + 10);
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
@@ -29,8 +29,8 @@ static int by_canon_then_node(const uint8_t *left, const uint8_t *right, const v
 {
     (void)context;
     for (uint32_t offset = 2; offset <= 6; offset += 4) {
-        uint32_t a = builder_get32(left + offset);
-        uint32_t b = builder_get32(right + offset);
+        uint32_t a = bytes_get32(left + offset);
+        uint32_t b = bytes_get32(right + offset);
         if (a != b) {
             return a < b ? -1 : 1;
         }
@@ -40,16 +40,16 @@ static int by_canon_then_node(const uint8_t *left, const uint8_t *right, const v
 
 static bool same_hash(const uint8_t *left, const uint8_t *right)
 {
-    return builder_get32(left + 2) == builder_get32(right + 2) &&
-           builder_get32(left + 6) == builder_get32(right + 6);
+    return bytes_get32(left + 2) == bytes_get32(right + 2) &&
+           bytes_get32(left + 6) == bytes_get32(right + 6);
 }
 
 static bool put_canon(Out *out, uint32_t canon, uint32_t node)
 {
     uint8_t record[CANON_SIZE];
-    builder_put16(record, CANON_SIZE);
-    builder_put32(record + 2, canon);
-    builder_put32(record + 6, node);
+    bytes_put16(record, CANON_SIZE);
+    bytes_put32(record + 2, canon);
+    bytes_put32(record + 6, node);
     return out_put(out, record, sizeof record);
 }
 
@@ -78,10 +78,10 @@ static bool find_canons(BuilderState *state, Region hashes, Region canons)
             for (uint32_t index = 0; index < BUILDER_FOLDER_HASH_SIZE; index++) {
                 first[index] = record[index];
             }
-            canon = builder_get32(record + 10);
+            canon = bytes_get32(record + 10);
             started = true;
         }
-        if (!put_canon(&out, canon, builder_get32(record + 10))) {
+        if (!put_canon(&out, canon, bytes_get32(record + 10))) {
             return false;
         }
     }
@@ -114,11 +114,11 @@ static bool number_canons(BuilderState *state, Region sorted, Region remap, uint
         if (!in_get(&in, record, sizeof record)) {
             return false;
         }
-        if (builder_get32(record + 2) != canon) {
-            canon = builder_get32(record + 2);
+        if (bytes_get32(record + 2) != canon) {
+            canon = bytes_get32(record + 2);
             number++;
         }
-        if (!builder_put_pair(&out, builder_get32(record + 6), number)) {
+        if (!builder_put_pair(&out, bytes_get32(record + 6), number)) {
             return false;
         }
     }
@@ -135,7 +135,7 @@ static bool remapped(Cache *cache, Region remap, uint32_t node, uint32_t *value)
     if (!cache_read(cache, remap.offset + node * 4, bytes, sizeof bytes)) {
         return false;
     }
-    *value = builder_get32(bytes);
+    *value = bytes_get32(bytes);
     return true;
 }
 
