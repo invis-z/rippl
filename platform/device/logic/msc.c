@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "core/borrowed.h"
+#include "core/bytes.h"
 
 enum {
     CBW_LENGTH = 31,
@@ -50,31 +51,12 @@ static const uint8_t INQUIRY_HEADER[8] = {0x00, 0x80, 0x02, 0x02, 31, 0, 0, 0};
 static const char INQUIRY_VENDOR[] = "RIPPL   ";
 static const char INQUIRY_REVISION[] = "0.1 ";
 
-static uint32_t le32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
-static uint32_t be32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] << 24 | (uint32_t)bytes[1] << 16 | (uint32_t)bytes[2] << 8 | bytes[3];
-}
-
 static void put_be32(uint8_t *bytes, uint32_t value)
 {
     bytes[0] = (uint8_t)(value >> 24);
     bytes[1] = (uint8_t)(value >> 16);
     bytes[2] = (uint8_t)(value >> 8);
     bytes[3] = (uint8_t)value;
-}
-
-static void put_le32(uint8_t *bytes, uint32_t value)
-{
-    bytes[0] = (uint8_t)value;
-    bytes[1] = (uint8_t)(value >> 8);
-    bytes[2] = (uint8_t)(value >> 16);
-    bytes[3] = (uint8_t)(value >> 24);
 }
 
 void msc_init(Msc *msc, const MscLun *luns, uint8_t count)
@@ -253,7 +235,7 @@ static void mode_sense(Msc *msc, const MscLun *lun, bool ten_byte)
 static bool start_transfer(Msc *msc, const MscLun *lun, const uint8_t *block)
 {
     uint32_t count = (uint32_t)block[7] << 8 | block[8];
-    msc->lba = be32(block + 2);
+    msc->lba = bytes_get32_be(block + 2);
     msc->sector_offset = 0;
     msc->read_count = 0;
     msc->batch_bytes = 0;
@@ -353,8 +335,8 @@ static void begin_command(Msc *msc, const uint8_t *cbw)
 {
     msc->stats.commands++;
     msc->opcode = cbw[CBW_BLOCK];
-    msc->tag = le32(cbw + 4);
-    msc->expected = le32(cbw + 8);
+    msc->tag = bytes_get32(cbw + 4);
+    msc->expected = bytes_get32(cbw + 8);
     msc->lun = cbw[CBW_LUN] & 0x0F;
     msc->transferred = 0;
     msc->valid_bytes = 0;
@@ -577,8 +559,8 @@ static void status_packet(Msc *msc, uint8_t *packet, uint32_t *length)
     packet[1] = 'S';
     packet[2] = 'B';
     packet[3] = 'S';
-    put_le32(packet + 4, msc->tag);
-    put_le32(packet + 8, residue(msc));
+    bytes_put32(packet + 4, msc->tag);
+    bytes_put32(packet + 8, residue(msc));
     packet[12] = msc->status;
     *length = CSW_LENGTH;
     remember(msc);

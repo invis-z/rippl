@@ -1,4 +1,5 @@
 #include "library/mp4_chapters.h"
+#include "core/bytes.h"
 
 enum {
     ATOM_HEADER = 8,
@@ -18,14 +19,9 @@ typedef struct Atom {
     uint32_t type;
 } Atom;
 
-static uint32_t be32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] << 24 | (uint32_t)bytes[1] << 16 | (uint32_t)bytes[2] << 8 | bytes[3];
-}
-
 static uint64_t be64(const uint8_t *bytes)
 {
-    return (uint64_t)be32(bytes) << 32 | be32(bytes + 4);
+    return (uint64_t)bytes_get32_be(bytes) << 32 | bytes_get32_be(bytes + 4);
 }
 
 static bool read_at(ByteSource source, uint32_t size, uint32_t offset, void *buffer,
@@ -42,13 +38,13 @@ static bool read_atom(ByteSource source, uint32_t size, uint32_t offset, uint32_
         !read_at(source, size, offset, header, ATOM_HEADER)) {
         return false;
     }
-    uint32_t length = be32(header);
+    uint32_t length = bytes_get32_be(header);
     if (length < ATOM_HEADER || length > limit - offset) {
         return false;
     }
     atom->body = offset + ATOM_HEADER;
     atom->end = offset + length;
-    atom->type = be32(header + 4);
+    atom->type = bytes_get32_be(header + 4);
     return true;
 }
 

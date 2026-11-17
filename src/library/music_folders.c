@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "core/bytes.h"
 #include "core/hash.h"
 #include "core/volume_path.h"
 
@@ -16,19 +17,6 @@ enum {
 static const uint8_t MAGIC[4] = {'E', 'M', 'M', 'F'};
 static const char INTERNAL_PREFIX[] = VOLUME_INTERNAL_NAME "/";
 
-static void put_word(uint8_t *bytes, uint32_t value)
-{
-    for (int index = 0; index < 4; index++) {
-        bytes[index] = (uint8_t)(value >> (8 * index));
-    }
-}
-
-static uint32_t get_word(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
 void music_folders_encode(const MusicFolders *folders, uint8_t *bytes)
 {
     for (uint32_t index = 0; index < MUSIC_FOLDERS_FILE_BYTES; index++) {
@@ -37,9 +25,9 @@ void music_folders_encode(const MusicFolders *folders, uint8_t *bytes)
     bytes[VERSION_AT] = VERSION;
     bytes[COUNT_AT] = (uint8_t)folders->count;
     for (uint32_t index = 0; index < folders->count; index++) {
-        put_word(bytes + KEYS_AT + 4 * index, folders->keys[index]);
+        bytes_put32(bytes + KEYS_AT + 4 * index, folders->keys[index]);
     }
-    put_word(bytes + CHECK_AT, hash_update(HASH_START, bytes, CHECK_AT));
+    bytes_put32(bytes + CHECK_AT, hash_update(HASH_START, bytes, CHECK_AT));
 }
 
 bool music_folders_decode(const uint8_t *bytes, uint32_t size, MusicFolders *folders)
@@ -47,7 +35,7 @@ bool music_folders_decode(const uint8_t *bytes, uint32_t size, MusicFolders *fol
     folders->count = 0;
     if (size < MUSIC_FOLDERS_FILE_BYTES || bytes[VERSION_AT] != VERSION ||
         bytes[COUNT_AT] > MUSIC_FOLDERS_MAX ||
-        get_word(bytes + CHECK_AT) != hash_update(HASH_START, bytes, CHECK_AT)) {
+        bytes_get32(bytes + CHECK_AT) != hash_update(HASH_START, bytes, CHECK_AT)) {
         return false;
     }
     for (uint32_t index = 0; index < sizeof MAGIC; index++) {
@@ -57,7 +45,7 @@ bool music_folders_decode(const uint8_t *bytes, uint32_t size, MusicFolders *fol
     }
     folders->count = bytes[COUNT_AT];
     for (uint32_t index = 0; index < folders->count; index++) {
-        folders->keys[index] = get_word(bytes + KEYS_AT + 4 * index);
+        folders->keys[index] = bytes_get32(bytes + KEYS_AT + 4 * index);
     }
     return true;
 }

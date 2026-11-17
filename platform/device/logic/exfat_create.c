@@ -1,5 +1,6 @@
 #include "fat_create.h"
 
+#include "core/bytes.h"
 #include "fat_layout.h"
 
 enum {
@@ -24,18 +25,6 @@ enum {
     BITS_PER_BYTE = 8,
     BITS_PER_SECTOR = FAT_SECTOR_SIZE * BITS_PER_BYTE
 };
-
-static void put16(uint8_t *bytes, uint32_t value)
-{
-    bytes[0] = (uint8_t)value;
-    bytes[1] = (uint8_t)(value >> 8);
-}
-
-static void put32(uint8_t *bytes, uint32_t value)
-{
-    put16(bytes, value);
-    put16(bytes + 2, value >> 16);
-}
 
 static bool find_bitmap(FatVolume *volume, FatFile *bitmap)
 {
@@ -168,10 +157,10 @@ static void fill_file_entry(uint8_t *entry, uint32_t count, bool directory)
 {
     entry[0] = ENTRY_FILE;
     entry[1] = (uint8_t)(count - 1);
-    put16(entry + 4, directory ? ATTRIBUTE_DIRECTORY : ATTRIBUTE_ARCHIVE);
-    put32(entry + 8, new_timestamp());
-    put32(entry + 12, new_timestamp());
-    put32(entry + 16, new_timestamp());
+    bytes_put16(entry + 4, directory ? ATTRIBUTE_DIRECTORY : ATTRIBUTE_ARCHIVE);
+    bytes_put32(entry + 8, new_timestamp());
+    bytes_put32(entry + 12, new_timestamp());
+    bytes_put32(entry + 16, new_timestamp());
 }
 
 static void fill_stream_entry(uint8_t *entry, const FatNewEntry *new_entry, const FatFile *file,
@@ -180,10 +169,10 @@ static void fill_stream_entry(uint8_t *entry, const FatNewEntry *new_entry, cons
     entry[0] = ENTRY_STREAM;
     entry[1] = STREAM_FLAGS;
     entry[3] = (uint8_t)new_entry->length;
-    put16(entry + 4, name_hash(new_entry));
-    put32(entry + 8, length);
-    put32(entry + 20, file->first_cluster);
-    put32(entry + 24, length);
+    bytes_put16(entry + 4, name_hash(new_entry));
+    bytes_put32(entry + 8, length);
+    bytes_put32(entry + 20, file->first_cluster);
+    bytes_put32(entry + 24, length);
 }
 
 static void fill_name_entries(uint8_t *entries, const FatNewEntry *entry, uint32_t count)
@@ -193,8 +182,8 @@ static void fill_name_entries(uint8_t *entries, const FatNewEntry *entry, uint32
         name[0] = ENTRY_NAME;
         for (uint32_t unit = 0; unit < NAME_UNITS_PER_ENTRY; unit++) {
             size_t position = slot * NAME_UNITS_PER_ENTRY + unit;
-            put16(name + 2 + unit * 2,
-                  position < entry->length ? (uint8_t)entry->name[position] : 0);
+            bytes_put16(name + 2 + unit * 2,
+                        position < entry->length ? (uint8_t)entry->name[position] : 0);
         }
     }
 }
@@ -209,7 +198,7 @@ static void build_set(uint8_t *entries, const FatNewEntry *entry, const FatFile 
     fill_file_entry(entries, count, entry->directory);
     fill_stream_entry(entries + ENTRY_SIZE, entry, file, length);
     fill_name_entries(entries + 2 * ENTRY_SIZE, entry, count - 2);
-    put16(entries + 2, set_checksum(entries, count));
+    bytes_put16(entries + 2, set_checksum(entries, count));
 }
 
 static bool write_entry(FatVolume *volume, FatFile *parent, uint32_t index, const uint8_t *entry)
@@ -348,7 +337,7 @@ static FatReserveResult extend(FatVolume *volume, FatFile *bitmap, FatFile file,
     stream[1] = (uint8_t)((stream[1] & ~FLAG_NO_FAT_CHAIN) | FLAG_ALLOCATION_POSSIBLE);
     FatReserveResult result = fat_grow_chain(volume, &growth, ends);
     if (empty) {
-        put32(stream + 20, ends[0]);
+        bytes_put32(stream + 20, ends[0]);
     }
     return result;
 }
@@ -371,10 +360,10 @@ FatReserveResult exfat_grow_entry(FatVolume *volume, FatFile *parent, uint32_t i
     if (result != FAT_RESERVE_CREATED) {
         return result;
     }
-    put32(stream + 8, size);
-    put32(stream + 12, 0);
-    put32(stream + 24, size);
-    put16(entries + 2, set_checksum(entries, count));
+    bytes_put32(stream + 8, size);
+    bytes_put32(stream + 12, 0);
+    bytes_put32(stream + 24, size);
+    bytes_put16(entries + 2, set_checksum(entries, count));
     bool written = write_entry(volume, parent, index + 1, stream) &&
                    write_entry(volume, parent, index, entries);
     return written ? FAT_RESERVE_CREATED : FAT_RESERVE_FAILED;

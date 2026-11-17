@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "core/borrowed.h"
+#include "core/bytes.h"
 #include "library/playlist_reader.h"
 #include "library/track_fields.h"
 #include "library/track_tags.h"
@@ -84,20 +85,6 @@ static const char *entry_name(const ScanState *state, uint32_t offset)
     return (const char *)state->listing + offset + ENTRY_HEAD;
 }
 
-static uint32_t get_u32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
-static void put_u32(uint8_t *bytes, uint32_t value)
-{
-    bytes[0] = (uint8_t)value;
-    bytes[1] = (uint8_t)(value >> 8);
-    bytes[2] = (uint8_t)(value >> 16);
-    bytes[3] = (uint8_t)(value >> 24);
-}
-
 static bool entry_is_directory(const ScanState *state, uint32_t offset)
 {
     return state->listing[offset] != 0;
@@ -159,8 +146,8 @@ static bool store_entry(ScanState *state, const ScanEntry *entry)
     }
     uint8_t *record = state->listing + state->listing_used;
     record[0] = entry->directory ? 1 : 0;
-    put_u32(record + 1, entry->size);
-    put_u32(record + 5, entry->modified);
+    bytes_put32(record + 1, entry->size);
+    bytes_put32(record + 5, entry->modified);
     for (uint32_t index = 0; index <= length; index++) {
         record[ENTRY_HEAD + index] = (uint8_t)entry->name[index];
     }
@@ -392,11 +379,6 @@ static ScanResult builder_result(BuilderResult result)
     return SCAN_WRITE_FAILED;
 }
 
-static uint16_t get_u16(const uint8_t *bytes)
-{
-    return (uint16_t)(bytes[0] | bytes[1] << 8);
-}
-
 static int compare_part_paths(const char *left, const char *right)
 {
     const unsigned char *a = (const unsigned char *)left;
@@ -466,7 +448,7 @@ static void cache_load(ScanState *state, const ScanCache *cache)
     if (!cache_fill(state, cache, 2)) {
         return;
     }
-    uint32_t length = get_u16(cache_record(state));
+    uint32_t length = bytes_get16(cache_record(state));
     if (length <= CACHE_HEADER || length > CACHE_RECORD_MAX || !cache_fill(state, cache, length)) {
         return;
     }
@@ -478,7 +460,7 @@ static void cache_load(ScanState *state, const ScanCache *cache)
 
 static void cache_next(ScanState *state, const ScanCache *cache)
 {
-    state->cache_in_taken += get_u16(cache_record(state));
+    state->cache_in_taken += bytes_get16(cache_record(state));
     cache_load(state, cache);
 }
 
@@ -504,7 +486,7 @@ static uint8_t *cache_room(ScanState *state, const ScanCache *cache)
 static void cache_keep(ScanState *state, const ScanCache *cache, const uint8_t *record)
 {
     uint8_t *to = cache_room(state, cache);
-    uint32_t length = get_u16(record);
+    uint32_t length = bytes_get16(record);
     for (uint32_t index = 0; to != NULL && index < length; index++) {
         to[index] = record[index];
     }
@@ -532,9 +514,9 @@ static void cache_write(ScanState *state, const ScanCache *cache, const BuilderT
     }
     record[2] = track != NULL ? CACHE_TRACK : CACHE_SKIPPED;
     record[3] = track != NULL && track->album_artist_guessed ? CACHE_GUESSED : 0;
-    put_u32(record + 4, size);
-    put_u32(record + 8, modified);
-    put_u32(record + 12, track != NULL ? track->duration_ms : 0);
+    bytes_put32(record + 4, size);
+    bytes_put32(record + 8, modified);
+    bytes_put32(record + 12, track != NULL ? track->duration_ms : 0);
     record[16] = (uint8_t)(track != NULL ? track->year : 0);
     record[17] = (uint8_t)(track != NULL ? track->year >> 8 : 0);
     record[18] = track != NULL ? track->disc : 0;
@@ -570,10 +552,10 @@ static BuilderTrack cached_track(const uint8_t *record)
                           .album_artist = texts[3],
                           .album = texts[4],
                           .genre = texts[5],
-                          .year = get_u16(record + 16),
+                          .year = (uint16_t)bytes_get16(record + 16),
                           .disc = record[18],
                           .number = record[19],
-                          .duration_ms = get_u32(record + 12),
+                          .duration_ms = bytes_get32(record + 12),
                           .album_artist_guessed = (record[3] & CACHE_GUESSED) != 0,
                           .chapters = record[20]};
 }
@@ -592,7 +574,7 @@ static bool reuse_cached(ScanState *state, const ScanJob *job, ScanStats *stats,
         return false;
     }
     const uint8_t *record = cache_record(state);
-    if (get_u32(record + 4) != size || get_u32(record + 8) != modified) {
+    if (bytes_get32(record + 4) != size || bytes_get32(record + 8) != modified) {
         cache_next(state, cache);
         return false;
     }
@@ -711,7 +693,8 @@ static ScanResult visit_entry(ScanState *state, const ScanJob *job, ScanStats *s
     }
     if (!directory) {
         const uint8_t *record = state->listing + offset;
-        ScanResult result = add_file(state, job, stats, get_u32(record + 1), get_u32(record + 5));
+        ScanResult result =
+            add_file(state, job, stats, bytes_get32(record + 1), bytes_get32(record + 5));
         truncate_path(state, state->levels[state->depth - 1].path_length);
         return result;
     }

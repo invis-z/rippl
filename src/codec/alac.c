@@ -1,5 +1,6 @@
 #include "codec/alac.h"
 
+#include "core/bytes.h"
 #include <stddef.h>
 
 enum {
@@ -52,29 +53,20 @@ typedef struct Prediction {
     int16_t coefficients[ALAC_MAX_COEFFICIENTS];
 } Prediction;
 
-static uint32_t big_endian(const uint8_t *bytes, int count)
-{
-    uint32_t value = 0;
-    for (int index = 0; index < count; index++) {
-        value = value << BYTE_BITS | bytes[index];
-    }
-    return value;
-}
-
 bool alac_parse_config(const uint8_t *bytes, uint32_t length, AlacConfig *config)
 {
     if (length < ALAC_CONFIG_BYTES || bytes[4] != 0) {
         return false;
     }
     *config = (AlacConfig){
-        .frame_length = big_endian(bytes, 4),
+        .frame_length = bytes_get_be(bytes, 4),
         .bit_depth = bytes[5],
         .pb = bytes[6],
         .mb = bytes[7],
         .kb = bytes[8],
         .channels = bytes[9],
-        .max_run = (uint16_t)big_endian(bytes + 10, 2),
-        .sample_rate = big_endian(bytes + 20, 4),
+        .max_run = (uint16_t)bytes_get_be(bytes + 10, 2),
+        .sample_rate = bytes_get_be(bytes + 20, 4),
     };
     bool depth_ok = config->bit_depth == 16 || config->bit_depth == 20 || config->bit_depth == 24 ||
                     config->bit_depth == 32;

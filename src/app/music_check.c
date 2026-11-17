@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "core/bytes.h"
 #include "error_log.h"
 #include "folders_store.h"
 #include "hal/storage.h"
@@ -62,19 +63,6 @@ MusicFingerprint music_check_fingerprint(void)
     return music_fingerprint(&files, &work);
 }
 
-static void put_word(uint8_t *bytes, uint32_t value)
-{
-    for (int index = 0; index < 4; index++) {
-        bytes[index] = (uint8_t)(value >> (8 * index));
-    }
-}
-
-static uint32_t get_word(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
 static bool read_bytes(uint8_t *bytes)
 {
     HalFile file;
@@ -89,13 +77,13 @@ static bool read_bytes(uint8_t *bytes)
 
 static bool decode_print(const uint8_t *bytes, MusicFingerprint *print)
 {
-    if (get_word(bytes) != RECORD_MAGIC) {
+    if (bytes_get32(bytes) != RECORD_MAGIC) {
         return false;
     }
     *print = (MusicFingerprint){.complete = true,
-                                .first = get_word(bytes + 4),
-                                .second = get_word(bytes + 8),
-                                .entries = get_word(bytes + 12)};
+                                .first = bytes_get32(bytes + 4),
+                                .second = bytes_get32(bytes + 8),
+                                .entries = bytes_get32(bytes + 12)};
     return true;
 }
 
@@ -137,10 +125,10 @@ static bool version_matches(const uint8_t *bytes)
 static void write_record(MusicFingerprint print)
 {
     uint8_t bytes[RECORD_BYTES];
-    put_word(bytes, RECORD_MAGIC);
-    put_word(bytes + 4, print.first);
-    put_word(bytes + 8, print.second);
-    put_word(bytes + 12, print.entries);
+    bytes_put32(bytes, RECORD_MAGIC);
+    bytes_put32(bytes + 4, print.first);
+    bytes_put32(bytes + 8, print.second);
+    bytes_put32(bytes + 12, print.entries);
     put_version(bytes + PRINT_BYTES);
     (void)hal_file_write_at(MUSIC_CHECK_PATH, 0, bytes, sizeof bytes);
 }
