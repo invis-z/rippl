@@ -1,6 +1,7 @@
 #include "sound/equalizer_file.h"
 
 #include "core/hash.h"
+#include "core/record.h"
 
 enum {
     VERSION = 1,
@@ -50,10 +51,8 @@ void equalizer_file_encode(const EqualizerChoice *choice, uint8_t *bytes)
 
 static bool magic_valid(const uint8_t *bytes)
 {
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        if (bytes[index] != MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(bytes, MAGIC, MAGIC_SIZE)) {
+        return false;
     }
     return true;
 }
