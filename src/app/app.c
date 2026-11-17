@@ -1,71 +1,8 @@
 #include "app/app.h"
 
-#include <stddef.h>
+#include "app_state.h"
 
-#include "app_internal.h"
-#include "app_screens.h"
-#include "bluetooth_link.h"
-#include "card_files.h"
-#include "clock_store.h"
-#include "core/deadline.h"
-#include "core/i18n.h"
-#include "core/key_tracker.h"
-#include "core/low_battery.h"
-#include "core/power_policy.h"
-#include "core/string_builder.h"
-#include "core/volume_path.h"
-#include "cover_cache.h"
-#include "dac_screen.h"
-#include "default_theme.h"
-#include "draw_profile.h"
-#include "equalizer_fits.h"
-#include "equalizer_store.h"
-#include "error_log.h"
-#include "favorites_store.h"
-#include "frame_overlay.h"
-#include "gfx/frame_diff.h"
-#include "gfx/strip_renderer.h"
-#include "hal/audio.h"
-#include "hal/bluetooth.h"
-#include "hal/clock.h"
-#include "hal/display.h"
-#include "hal/input.h"
-#include "hal/language.h"
-#include "hal/power.h"
-#include "hal/system.h"
-#include "language_files.h"
-#include "library_rescan.h"
-#include "library_store.h"
-#include "music_check.h"
-#include "player.h"
-#include "screens/charge_screen.h"
-#include "settings/rocker.h"
-#include "settings_store.h"
-#include "ui/choice_screen.h"
-#include "ui/fade.h"
-#include "ui/header.h"
-#include "ui/label.h"
-#include "ui/marquee.h"
-#include "ui/message_screen.h"
-#include "ui/rippl_logo.h"
-#include "ui/screen_stack.h"
-#include "ui/slide.h"
-#include "ui/status_bar.h"
-#include "ui/toast.h"
-
-enum {
-    STRIP_HEIGHT = 34,
-    NOTICE_STRIP_HEIGHT = 6,
-    RESCAN_PROGRESS_MS = 250,
-    BATTERY_CHECK_MS = 250,
-    CHARGE_LIT_MS = 5000,
-    IDLE_RENDER_MS = 100,
-    NUMBER_CAPACITY = 12,
-    PROGRESS_TEXT_CAPACITY = 64,
-    MESSAGE_TEXT_CAPACITY = 64
-};
-
-static const KeyConfig KEY_CONFIG = {
+const KeyConfig APP_KEY_CONFIG = {
     .timing =
         {
             .long_press_ms = 600,
@@ -89,94 +26,7 @@ static const KeyConfig KEY_CONFIG = {
         },
 };
 
-static const KeyConfig DAC_KEY_CONFIG = {
-    .timing =
-        {
-            .long_press_ms = 600,
-            .repeat_delay_ms = 400,
-            .repeat_interval_ms = 120,
-        },
-    .behaviors =
-        {
-            [KEY_VOLUME_UP] = KEY_BEHAVIOR_TAP_HOLD_REPEAT,
-            [KEY_VOLUME_DOWN] = KEY_BEHAVIOR_TAP_HOLD_REPEAT,
-            [KEY_PLAY] = KEY_BEHAVIOR_TAP_OR_HOLD,
-            [KEY_MENU] = KEY_BEHAVIOR_TAP_OR_HOLD,
-            [KEY_BACK] = KEY_BEHAVIOR_TAP_OR_HOLD,
-            [KEY_POWER] = KEY_BEHAVIOR_TAP_OR_HOLD,
-        },
-    .long_press_ms =
-        {
-            [KEY_VOLUME_UP] = 1000,
-            [KEY_VOLUME_DOWN] = 1000,
-            [KEY_BACK] = 1000,
-            [KEY_POWER] = 2000,
-        },
-};
-
-typedef struct AppState {
-    KeyTracker keys;
-    bool rocker_swapped[KEY_COUNT];
-    uint32_t dac_volume_until_ms;
-    Theme theme;
-    Theme stage_theme;
-    int shown_theme;
-    FrameStats frame_stats;
-    FrameStats update_stats;
-    FrameStats draw_stats;
-    FrameStats send_stats;
-    uint32_t send_us;
-    ScreenStack stack;
-    LibraryStore library;
-    Player player;
-    SettingsStore settings;
-    EqualizerStore equalizer;
-    FavoritesStore favorites;
-    SpokenStore spoken;
-    ClockStore clock;
-    bool usb_written;
-    CoverCache covers;
-    PowerPolicy power;
-    LowBattery low_battery;
-    uint32_t battery_check_ms;
-    bool usb_power;
-    bool rescan_requested;
-    bool music_check_requested;
-    bool clock_question;
-    bool open_date_time;
-    bool light_after_frame;
-    bool frame_changed;
-    bool frame_stable;
-    bool key_activity;
-    bool idle;
-    uint32_t idle_render_ms;
-    const char *goodbye_text;
-    Toast toast;
-    BluetoothLink bluetooth;
-    uint32_t shown_refusals;
-    StatusBarState status_bar;
-    AppScreens screens;
-    MessageScreen notice;
-    ChoiceScreen prompt;
-    ChoiceScreen clock_prompt;
-    int prompt_default;
-    int prompt_result;
-    FrameDiff frame_diff;
-    Fade splash;
-    Fade goodbye;
-    Slide slide;
-    Screen *leaving;
-    bool saying_goodbye;
-    uint32_t now_ms;
-    AppOptions options;
-    bool display_on;
-    bool powered_off;
-    bool charging;
-    uint32_t charge_lit_until_ms;
-    HalBattery charge_battery;
-} AppState;
-
-static AppState app;
+AppState app;
 
 static const FadeTiming SPLASH_TIMING = {.fade_ms = 300, .hold_ms = 200, .rising = true};
 static const uint32_t SCREEN_ON_CLOCK_MHZ = 200;
@@ -191,14 +41,14 @@ static Screen *top_screen(void)
     return screen_stack_top(&app.stack);
 }
 
-static const Theme *current_theme(void)
+const Theme *app_current_theme(void)
 {
     return app.theme.metrics.screen_width > 0 ? &app.theme : &DEFAULT_THEME;
 }
 
 static Rect whole_screen(void)
 {
-    const ThemeMetrics *metrics = &current_theme()->metrics;
+    const ThemeMetrics *metrics = &app_current_theme()->metrics;
     return (Rect){0, 0, metrics->screen_width, metrics->screen_height};
 }
 
@@ -258,7 +108,7 @@ static Key oriented_key(HalKeyTransition transition)
     return rocker_key(transition.key, app.rocker_swapped[transition.key]);
 }
 
-static void read_input(void)
+void app_read_input(void)
 {
     HalKeyTransition transition;
     while (hal_input_next_transition(&transition)) {
@@ -270,8 +120,6 @@ static void read_input(void)
         }
     }
 }
-
-static void use_screen_key_behaviors(void);
 
 static void use_wanted_clock(void)
 {
@@ -285,7 +133,7 @@ static void use_wanted_clock(void)
     }
 }
 
-static void light_after_first_frame(void)
+void app_light_after_first_frame(void)
 {
     if (app.light_after_frame) {
         app.light_after_frame = false;
@@ -293,7 +141,7 @@ static void light_after_first_frame(void)
     }
 }
 
-static void set_display(bool on)
+void app_set_display(bool on)
 {
     app.display_on = on;
     app.light_after_frame = on;
@@ -305,7 +153,7 @@ static void set_display(bool on)
     }
     use_wanted_clock();
     if (screen_stack_depth(&app.stack) > 0) {
-        use_screen_key_behaviors();
+        app_use_screen_key_behaviors();
     }
 }
 
@@ -325,7 +173,7 @@ static void save_session(void)
 
 static void power_off_now(void)
 {
-    set_display(false);
+    app_set_display(false);
     app.powered_off = true;
     hal_power_off();
 }
@@ -334,7 +182,7 @@ static void light_charge_screen(uint32_t now_ms)
 {
     app.charge_lit_until_ms = now_ms + CHARGE_LIT_MS;
     if (!app.display_on) {
-        set_display(true);
+        app_set_display(true);
     }
 }
 
@@ -356,7 +204,7 @@ static void stop_charging(uint32_t now_ms)
     bluetooth_link_start(&app.bluetooth, &app.toast, now_ms);
     power_policy_wake(&app.power, now_ms);
     if (!app.display_on) {
-        set_display(true);
+        app_set_display(true);
     }
     app_show_splash();
 }
@@ -377,7 +225,7 @@ static void shut_down(const char *text, bool shown)
     save_session();
     if (shown && !app.display_on) {
         power_policy_wake(&app.power, app.now_ms);
-        set_display(true);
+        app_set_display(true);
     }
     if (!app.display_on) {
         finish_shut_down();
@@ -399,7 +247,7 @@ static void drain_key_events(void)
     }
 }
 
-static void use_screen_key_behaviors(void)
+void app_use_screen_key_behaviors(void)
 {
     bool hold = !app.display_on || top_screen()->hold_volume_keys;
     KeyBehavior volume = hold ? KEY_BEHAVIOR_TAP_HOLD_REPEAT : KEY_BEHAVIOR_REPEAT;
@@ -464,7 +312,7 @@ static void dispatch_to_screen(KeyEvent event, uint32_t now_ms)
                               ? screen_action_push(&app.screens.settings.menu.screen)
                               : screen->handle_key(screen->context, event, now_ms);
     if (screen_stack_apply(&app.stack, action, now_ms)) {
-        use_screen_key_behaviors();
+        app_use_screen_key_behaviors();
         start_slide(screen, depth_before, hal_clock_milliseconds());
     }
 }
@@ -482,7 +330,7 @@ static void show_now_playing(uint32_t now_ms)
     if (may_show_now_playing() &&
         screen_stack_apply(&app.stack, screen_action_push(&app.screens.now_playing.screen),
                            now_ms)) {
-        use_screen_key_behaviors();
+        app_use_screen_key_behaviors();
     }
 }
 
@@ -577,7 +425,7 @@ static void update_power(uint32_t now_ms)
     if (app.power.display_on == app.display_on) {
         return;
     }
-    set_display(app.power.display_on);
+    app_set_display(app.power.display_on);
     if (!app.display_on) {
         save_settings();
     } else {
@@ -595,7 +443,7 @@ static void update_screen(uint32_t now_ms)
 
 static void draw_fade(Canvas *canvas, const Fade *fade, const char *text)
 {
-    const Theme *theme = current_theme();
+    const Theme *theme = app_current_theme();
     Rect screen = whole_screen();
     Color color =
         color_blend(theme->colors.background, theme->colors.text, fade_alpha(fade, app.now_ms));
@@ -610,7 +458,7 @@ static void draw_splash(Canvas *canvas)
     const RipplLogo *logo = &RIPPL_LOGO_SPLASH;
     Point origin = {screen.x + (screen.width - logo->side) / 2,
                     screen.y + (screen.height - logo->side) / 2};
-    rippl_logo_draw(canvas, logo, origin, current_theme()->colors.text,
+    rippl_logo_draw(canvas, logo, origin, app_current_theme()->colors.text,
                     fade_alpha(&app.splash, app.now_ms));
 }
 
@@ -643,7 +491,7 @@ static const Screen *chrome_screen(const Screen *top)
 
 static void draw_slide(Canvas *canvas, Screen *arriving)
 {
-    const Theme *theme = current_theme();
+    const Theme *theme = app_current_theme();
     Screen *leaving = app.leaving;
     bool whole = arriving->full_screen || leaving->full_screen;
     Rect area = whole ? whole_screen() : theme_content_area(theme);
@@ -668,9 +516,9 @@ static void draw_frame(void *context, Canvas *canvas)
         screen->draw(screen->context, canvas);
     }
     if (!screen->full_screen) {
-        status_bar_draw(canvas, current_theme(), state->status_bar);
+        status_bar_draw(canvas, app_current_theme(), state->status_bar);
     }
-    toast_draw(&state->toast, canvas, current_theme());
+    toast_draw(&state->toast, canvas, app_current_theme());
     if (state->options.show_frame_time) {
         FrameBreakdown breakdown = {
             .total_us = frame_stats_average_us(&state->frame_stats),
@@ -678,7 +526,7 @@ static void draw_frame(void *context, Canvas *canvas)
             .draw_us = frame_stats_average_us(&state->draw_stats),
             .send_us = frame_stats_average_us(&state->send_stats),
         };
-        frame_overlay_draw(canvas, current_theme(), breakdown, hal_audio_stats());
+        frame_overlay_draw(canvas, app_current_theme(), breakdown, hal_audio_stats());
     }
 }
 
@@ -751,17 +599,17 @@ static StatusBarState current_status_bar(void)
     };
 }
 
-static void render(FrameDrawer drawer, bool drawer_paints_everything, int strip_height)
+void app_render(FrameDrawer drawer, bool drawer_paints_everything, int strip_height)
 {
     hal_display_wait();
     strip_height = (strip_height + 1) / 2;
     StripRenderer renderer = {
         .strip_pixels = strip_pixels,
         .other_pixels = strip_pixels + HAL_DISPLAY_WIDTH * STRIP_HEIGHT / 2,
-        .screen_width = current_theme()->metrics.screen_width,
-        .screen_height = current_theme()->metrics.screen_height,
+        .screen_width = app_current_theme()->metrics.screen_width,
+        .screen_height = app_current_theme()->metrics.screen_height,
         .strip_height = strip_height,
-        .background = current_theme()->colors.background,
+        .background = app_current_theme()->colors.background,
         .drawer_paints_everything = drawer_paints_everything,
     };
     FrameSink sink = {.write = write_to_display, .context = NULL};
@@ -777,7 +625,7 @@ static void render_frame(void)
     app.status_bar = current_status_bar();
     bool screen_paints = top_screen()->paints_every_pixel && !fade_running() && !slide_running();
     marquee_frame_start();
-    render((FrameDrawer){.draw = draw_frame, .context = &app}, screen_paints, STRIP_HEIGHT);
+    app_render((FrameDrawer){.draw = draw_frame, .context = &app}, screen_paints, STRIP_HEIGHT);
     uint32_t render_us = hal_clock_microseconds() - started_us;
     frame_stats_record(&app.send_stats, app.send_us);
     frame_stats_record(&app.draw_stats, render_us - app.send_us);
@@ -832,7 +680,7 @@ static void start_hardware(uint32_t now_ms)
     power_policy_set_auto_off(&app.power, settings_auto_off_ms(&app.settings.settings), now_ms);
     settings_store_apply_hardware(&app.settings.settings);
     equalizer_store_apply(&app.equalizer);
-    set_display(true);
+    app_set_display(true);
 }
 
 static void open_start_screen(uint32_t now_ms)
@@ -866,7 +714,7 @@ static void start_screens(uint32_t now_ms)
     Screen *root = app_screens_init(&app.screens, context);
     screen_stack_init(&app.stack, root, now_ms);
     open_start_screen(now_ms);
-    use_screen_key_behaviors();
+    app_use_screen_key_behaviors();
 }
 
 static const char DEBUG_FILE_PATH[] = "/" VOLUME_INTERNAL_NAME "/debug";
@@ -982,7 +830,7 @@ void app_start(void)
 {
     uint32_t now_ms = hal_clock_milliseconds();
     apply_language(LANGUAGE_ENGLISH);
-    key_tracker_init(&app.keys, &KEY_CONFIG);
+    key_tracker_init(&app.keys, &APP_KEY_CONFIG);
     frame_stats_reset(&app.frame_stats);
     frame_stats_reset(&app.update_stats);
     frame_stats_reset(&app.draw_stats);
@@ -1092,161 +940,6 @@ static void run_rescan(void)
     toast_show(&app.toast, text, hal_clock_milliseconds());
 }
 
-void app_release_audio(void)
-{
-    spoken_store_flush(&app.spoken, player_status(&app.player), hal_clock_milliseconds());
-    player_release_output(&app.player);
-}
-
-void app_remember_dac_volume(uint8_t level)
-{
-    app.settings.settings.dac_volume = level;
-    settings_store_save(&app.settings);
-}
-
-void app_dac_keys_start(void)
-{
-    key_tracker_init(&app.keys, &DAC_KEY_CONFIG);
-    app.dac_volume_until_ms = hal_clock_milliseconds();
-}
-
-static AppDacKey dac_key_of(NowPlayingCommand command, bool menu_skips)
-{
-    switch (command) {
-    case NOW_PLAYING_EQUALIZER:
-        return APP_DAC_KEY_STATS;
-    case NOW_PLAYING_UP_NEXT:
-        return menu_skips ? APP_DAC_KEY_STATS : APP_DAC_KEY_NONE;
-    case NOW_PLAYING_VOLUME_UP:
-        return APP_DAC_KEY_VOLUME_UP;
-    case NOW_PLAYING_VOLUME_DOWN:
-        return APP_DAC_KEY_VOLUME_DOWN;
-    case NOW_PLAYING_TOGGLE_PAUSE:
-        return APP_DAC_KEY_PLAY_PAUSE;
-    case NOW_PLAYING_NEXT:
-        return APP_DAC_KEY_NEXT;
-    case NOW_PLAYING_PREVIOUS:
-        return APP_DAC_KEY_PREVIOUS;
-    case NOW_PLAYING_HOME:
-        return APP_DAC_KEY_LEAVE;
-    default:
-        return APP_DAC_KEY_NONE;
-    }
-}
-
-static AppDacKey dac_key_for(KeyEvent event, uint32_t now_ms)
-{
-    NowPlayingControls controls =
-        now_playing_controls_of(app.settings.settings.options, app.settings.settings.orientation);
-    controls.volume_shown = !deadline_reached(now_ms, app.dac_volume_until_ms);
-    AppDacKey key =
-        dac_key_of(now_playing_command_with(event, false, controls), controls.menu_skips);
-    if (key == APP_DAC_KEY_VOLUME_UP || key == APP_DAC_KEY_VOLUME_DOWN) {
-        app.dac_volume_until_ms = now_ms + NOW_PLAYING_VOLUME_HOLD_MS;
-    }
-    return key;
-}
-
-AppDacKey app_dac_next_key(void)
-{
-    uint32_t now_ms = hal_clock_milliseconds();
-    read_input();
-    key_tracker_update(&app.keys, now_ms);
-    KeyEvent event;
-    while (key_tracker_next_event(&app.keys, &event)) {
-        AppDacKey key = dac_key_for(event, now_ms);
-        if (key != APP_DAC_KEY_NONE) {
-            return key;
-        }
-    }
-    return APP_DAC_KEY_NONE;
-}
-
-static int prompt_current(const void *context)
-{
-    const AppState *state = context;
-    return state->prompt_default;
-}
-
-static void prompt_choose(void *context, int index)
-{
-    AppState *state = context;
-    state->prompt_result = index;
-}
-
-void app_choice_show(const char *title, const StringId *options, int count, int current)
-{
-    app.prompt_default = current;
-    app.prompt_result = -1;
-    ChoiceConfig config = {.title = title,
-                           .options = NULL,
-                           .option_ids = options,
-                           .option_count = count,
-                           .current = prompt_current,
-                           .choose = prompt_choose,
-                           .context = &app,
-                           .theme = current_theme()};
-    Screen *screen = choice_screen_init(&app.prompt, config);
-    app.now_ms = hal_clock_milliseconds();
-    screen->enter(screen->context, app.now_ms);
-    key_tracker_init(&app.keys, &KEY_CONFIG);
-    key_tracker_set_behavior(&app.keys, KEY_PLAY, KEY_BEHAVIOR_PRESS);
-    if (!app.display_on) {
-        set_display(true);
-    }
-    app.frame_stable = false;
-}
-
-static void draw_prompt(void *context, Canvas *canvas)
-{
-    Screen *screen = context;
-    screen->draw(screen->context, canvas);
-}
-
-static void follow_prompt_keys(uint32_t now_ms)
-{
-    KeyEvent event;
-    Screen *screen = &app.prompt.screen;
-    while (app.prompt_result < 0 && key_tracker_next_event(&app.keys, &event)) {
-        ScreenAction action = screen->handle_key(screen->context, event, now_ms);
-        bool dismissed =
-            action.type == SCREEN_ACTION_POP || action.type == SCREEN_ACTION_POP_TO_ROOT;
-        if (dismissed && app.prompt_result < 0) {
-            app.prompt_result = app.prompt_default;
-        }
-    }
-}
-
-int app_choice_step(void)
-{
-    uint32_t now_ms = hal_clock_milliseconds();
-    app.now_ms = now_ms;
-    hal_audio_service();
-    hal_bluetooth_service();
-    read_input();
-    key_tracker_update(&app.keys, now_ms);
-    follow_prompt_keys(now_ms);
-    Screen *screen = &app.prompt.screen;
-    screen->update(screen->context, now_ms);
-    render((FrameDrawer){.draw = draw_prompt, .context = screen}, false, STRIP_HEIGHT);
-    light_after_first_frame();
-    return app.prompt_result;
-}
-
-void app_choice_close(void)
-{
-    app.frame_stable = false;
-    app_dac_keys_stop();
-}
-
-void app_dac_keys_stop(void)
-{
-    key_tracker_init(&app.keys, &KEY_CONFIG);
-    if (screen_stack_depth(&app.stack) > 0) {
-        use_screen_key_behaviors();
-    }
-}
-
 void app_request_rescan(void)
 {
     app.rescan_requested = true;
@@ -1275,7 +968,7 @@ static void clock_prompt_choose(void *context, int index)
 static void push_screen(Screen *screen, uint32_t now_ms)
 {
     if (screen_stack_apply(&app.stack, screen_action_push(screen), now_ms)) {
-        use_screen_key_behaviors();
+        app_use_screen_key_behaviors();
     }
 }
 
@@ -1324,7 +1017,7 @@ static void take_computer_clock(void)
 static void draw_charge(void *context, Canvas *canvas)
 {
     (void)context;
-    charge_screen_draw(canvas, current_theme(), app.charge_battery);
+    charge_screen_draw(canvas, app_current_theme(), app.charge_battery);
 }
 
 static void follow_charge_keys(uint32_t now_ms)
@@ -1356,11 +1049,11 @@ static void charge_step(uint32_t now_ms)
         }
     }
     if (app.display_on && deadline_reached(now_ms, app.charge_lit_until_ms)) {
-        set_display(false);
+        app_set_display(false);
     }
     if (app.display_on) {
-        render((FrameDrawer){.draw = draw_charge, .context = NULL}, true, STRIP_HEIGHT);
-        light_after_first_frame();
+        app_render((FrameDrawer){.draw = draw_charge, .context = NULL}, true, STRIP_HEIGHT);
+        app_light_after_first_frame();
     } else {
         use_wanted_clock();
     }
@@ -1401,7 +1094,7 @@ void app_step(void)
     app.now_ms = now_ms;
     hal_audio_service();
     hal_bluetooth_service();
-    read_input();
+    app_read_input();
     key_tracker_update(&app.keys, now_ms);
     if (app.charging) {
         charge_step(now_ms);
@@ -1438,7 +1131,7 @@ void app_step(void)
     if (app.display_on && frame_needed(now_ms)) {
         app.now_ms = hal_clock_milliseconds();
         render_frame();
-        light_after_first_frame();
+        app_light_after_first_frame();
     } else {
         app.idle = app.display_on;
     }
@@ -1462,15 +1155,15 @@ static void show_progress_notice(const char *title, const char *message,
 {
     MessageConfig config = {.title = title,
                             .message = message,
-                            .theme = current_theme(),
+                            .theme = app_current_theme(),
                             .progress = (uint16_t)done,
                             .progress_total = (uint16_t)total};
     Screen *screen = message_screen_init(&app.notice, config);
     if (!app.display_on) {
-        set_display(true);
+        app_set_display(true);
     }
-    render((FrameDrawer){.draw = draw, .context = screen}, false, NOTICE_STRIP_HEIGHT);
-    light_after_first_frame();
+    app_render((FrameDrawer){.draw = draw, .context = screen}, false, NOTICE_STRIP_HEIGHT);
+    app_light_after_first_frame();
 }
 
 static void show_notice(const char *title, const char *message, void (*draw)(void *, Canvas *))
@@ -1492,7 +1185,7 @@ static void draw_usb_status(Canvas *canvas)
 {
     StatusBarState status = current_status_bar();
     status.playback = STATUS_PLAYBACK_USB;
-    status_bar_draw(canvas, current_theme(), status);
+    status_bar_draw(canvas, app_current_theme(), status);
 }
 
 static void draw_usb_notice(void *context, Canvas *canvas)
@@ -1508,7 +1201,7 @@ void app_show_usb_notice(const char *title, const char *message)
 
 static void draw_dac(void *context, Canvas *canvas)
 {
-    dac_screen_draw(canvas, current_theme(), context);
+    dac_screen_draw(canvas, app_current_theme(), context);
     draw_usb_status(canvas);
 }
 
@@ -1517,15 +1210,15 @@ void app_show_dac(const AppDacView *view)
     static AppDacView shown;
     shown = *view;
     if (!app.display_on) {
-        set_display(true);
+        app_set_display(true);
     }
-    render((FrameDrawer){.draw = draw_dac, .context = &shown}, true, STRIP_HEIGHT);
-    light_after_first_frame();
+    app_render((FrameDrawer){.draw = draw_dac, .context = &shown}, true, STRIP_HEIGHT);
+    app_light_after_first_frame();
 }
 
 void app_prepare_notice(const char *title, const char *message)
 {
-    const Theme *theme = current_theme();
+    const Theme *theme = app_current_theme();
     (void)text_width(theme->fonts.title, title);
     (void)text_width(theme->fonts.body, message);
 }
