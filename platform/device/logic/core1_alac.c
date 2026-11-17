@@ -2,6 +2,8 @@
 
 #include "codec/mp4.h"
 
+#include "core1_mp4_record.h"
+
 static void start_alac(void *context, FlacInput input, FlacInfo info, uint32_t first_sample,
                        const bool *starved)
 {
@@ -12,22 +14,6 @@ static void start_alac(void *context, FlacInput input, FlacInfo info, uint32_t f
     alac->position = 0;
     alac->next_sample = first_sample;
     alac->configured = false;
-}
-
-static bool read_record(Core1Alac *alac, uint32_t *start, uint32_t *length)
-{
-    uint8_t bytes[MP4_LENGTH_BYTES];
-    FlacInput input = alac->input;
-    if (!input.read(input.context, alac->position, bytes, sizeof bytes)) {
-        return false;
-    }
-    *start = alac->position + MP4_LENGTH_BYTES;
-    *length = mp4_record_length(bytes);
-    if (*length == 0 || *start > input.size || *length > input.size - *start) {
-        return false;
-    }
-    uint8_t last = 0;
-    return input.read(input.context, *start + *length - 1, &last, 1);
 }
 
 static bool configure(Core1Alac *alac, uint32_t start, uint32_t length)
@@ -53,7 +39,7 @@ static Core1DecodeResult decode_alac(void *context, Core1Block *block)
         }
         uint32_t start = 0;
         uint32_t length = 0;
-        if (!read_record(alac, &start, &length)) {
+        if (!core1_mp4_record(alac->input, alac->position, &start, &length)) {
             return *alac->starved ? CORE1_STARVED : CORE1_FAILED;
         }
         if (!alac->configured) {

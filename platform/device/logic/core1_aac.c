@@ -5,6 +5,8 @@
 #include "codec/mp4.h"
 #include "neaacdec.h"
 
+#include "core1_mp4_record.h"
+
 enum {
     CONFIG_CAPACITY = MP4_CONFIG_CAPACITY,
     OBJECT_LC = 2
@@ -32,22 +34,6 @@ static void start_aac(void *context, FlacInput input, FlacInfo info, uint32_t fi
     aac->starved = starved;
     aac->position = 0;
     aac->next_sample = first_sample;
-}
-
-static bool read_record(Core1Aac *aac, uint32_t *start, uint32_t *length)
-{
-    uint8_t bytes[MP4_LENGTH_BYTES];
-    FlacInput input = aac->input;
-    if (!input.read(input.context, aac->position, bytes, sizeof bytes)) {
-        return false;
-    }
-    *start = aac->position + MP4_LENGTH_BYTES;
-    *length = mp4_record_length(bytes);
-    if (*length == 0 || *start > input.size || *length > input.size - *start) {
-        return false;
-    }
-    uint8_t last = 0;
-    return input.read(input.context, *start + *length - 1, &last, 1);
 }
 
 static bool configure(Core1Aac *aac, uint32_t start, uint32_t length)
@@ -86,7 +72,7 @@ static Core1DecodeResult decode_aac(void *context, Core1Block *block)
         }
         uint32_t start = 0;
         uint32_t length = 0;
-        if (!read_record(aac, &start, &length)) {
+        if (!core1_mp4_record(aac->input, aac->position, &start, &length)) {
             return *aac->starved ? CORE1_STARVED : CORE1_FAILED;
         }
         if (!aac->configured) {

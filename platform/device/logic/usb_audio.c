@@ -279,28 +279,12 @@ void usb_audio_reset(UsbAudio *audio)
     set_alt(audio, 0);
 }
 
-static UsbReply stall(void)
-{
-    return (UsbReply){USB_REPLY_STALL, NULL, 0, USB_ACTION_NONE, 0};
-}
-
-static UsbReply status(UsbAction action, uint16_t value)
-{
-    return (UsbReply){USB_REPLY_STATUS, NULL, 0, action, value};
-}
-
-static UsbReply data_reply(const uint8_t *bytes, uint16_t length, UsbSetup setup)
-{
-    uint16_t sent = length < setup.length ? length : setup.length;
-    return (UsbReply){USB_REPLY_DATA, bytes, sent, USB_ACTION_NONE, 0};
-}
-
 static UsbReply little_endian(UsbAudio *audio, uint32_t value, uint16_t length, UsbSetup setup)
 {
     for (uint16_t index = 0; index < length; index++) {
         audio->reply[index] = (uint8_t)(value >> (8 * index));
     }
-    return data_reply(audio->reply, length, setup);
+    return usb_reply_data(audio->reply, length, setup);
 }
 
 static bool rate_supported(uint32_t rate)
@@ -343,7 +327,7 @@ static UsbReply volume_reply(UsbAudio *audio, UsbSetup setup)
     case REQUEST_GET_RES:
         return little_endian(audio, VOLUME_RESOLUTION, 2, setup);
     default:
-        return stall();
+        return usb_reply_stall();
     }
 }
 
@@ -354,19 +338,21 @@ static UsbReply class_in(UsbAudio *audio, UsbSetup setup)
         return volume_reply(audio, setup);
     }
     if (setup.request != REQUEST_GET_CUR) {
-        return stall();
+        return usb_reply_stall();
     }
     if (control == CONTROL_MUTE) {
         return little_endian(audio, audio->muted, 1, setup);
     }
-    return control == CONTROL_RATE ? little_endian(audio, audio->rate, RATE_BYTES, setup) : stall();
+    return control == CONTROL_RATE ? little_endian(audio, audio->rate, RATE_BYTES, setup)
+                                   : usb_reply_stall();
 }
 
 static UsbReply class_out(UsbSetup setup)
 {
     bool known =
         setup.request == REQUEST_SET_CUR && setup.length > 0 && control_of(setup) != CONTROL_NONE;
-    return known ? (UsbReply){USB_REPLY_RECEIVE, NULL, setup.length, USB_ACTION_NONE, 0} : stall();
+    return known ? (UsbReply){USB_REPLY_RECEIVE, NULL, setup.length, USB_ACTION_NONE, 0}
+                 : usb_reply_stall();
 }
 
 static UsbReply set_interface(UsbAudio *audio, UsbSetup setup)
@@ -374,10 +360,10 @@ static UsbReply set_interface(UsbAudio *audio, UsbSetup setup)
     uint16_t last = audio->high_resolution ? USB_AUDIO2_LAST_ALT : LAST_ALT;
     if (setup.index == STREAMING_INTERFACE && setup.value <= last) {
         set_alt(audio, (uint8_t)setup.value);
-        return status(USB_ACTION_STREAM, setup.value);
+        return usb_reply_status(USB_ACTION_STREAM, setup.value);
     }
     bool fixed = setup.index == 0 || setup.index == USB_HID_INTERFACE;
-    return fixed && setup.value == 0 ? status(USB_ACTION_NONE, 0) : stall();
+    return fixed && setup.value == 0 ? usb_reply_status(USB_ACTION_NONE, 0) : usb_reply_stall();
 }
 
 static bool for_hid(UsbSetup setup)
@@ -389,13 +375,13 @@ static UsbReply hid_descriptor(UsbSetup setup)
 {
     uint8_t type = (uint8_t)(setup.value >> 8);
     if (type == DESCRIPTOR_HID_REPORT) {
-        return data_reply(REPORT_DESCRIPTOR, sizeof REPORT_DESCRIPTOR, setup);
+        return usb_reply_data(REPORT_DESCRIPTOR, sizeof REPORT_DESCRIPTOR, setup);
     }
     if (type == DESCRIPTOR_HID) {
-        return data_reply(CONFIGURATION_DESCRIPTOR + HID_DESCRIPTOR_OFFSET, HID_DESCRIPTOR_LENGTH,
-                          setup);
+        return usb_reply_data(CONFIGURATION_DESCRIPTOR + HID_DESCRIPTOR_OFFSET,
+                              HID_DESCRIPTOR_LENGTH, setup);
     }
-    return stall();
+    return usb_reply_stall();
 }
 
 static UsbReply hid_class_in(UsbAudio *audio, UsbSetup setup)
@@ -408,14 +394,14 @@ static UsbReply hid_class_in(UsbAudio *audio, UsbSetup setup)
     case REQUEST_HID_GET_PROTOCOL:
         return little_endian(audio, HID_REPORT_PROTOCOL, 1, setup);
     default:
-        return stall();
+        return usb_reply_stall();
     }
 }
 
 static UsbReply hid_class_out(UsbSetup setup)
 {
     bool known = setup.request == REQUEST_HID_SET_IDLE || setup.request == REQUEST_HID_SET_PROTOCOL;
-    return known ? status(USB_ACTION_NONE, 0) : stall();
+    return known ? usb_reply_status(USB_ACTION_NONE, 0) : usb_reply_stall();
 }
 
 static bool own_descriptor(UsbSetup setup)
@@ -429,9 +415,9 @@ static bool own_descriptor(UsbSetup setup)
 static UsbReply descriptor(UsbSetup setup)
 {
     if ((setup.value >> 8) == DESCRIPTOR_DEVICE) {
-        return data_reply(DEVICE_DESCRIPTOR, sizeof DEVICE_DESCRIPTOR, setup);
+        return usb_reply_data(DEVICE_DESCRIPTOR, sizeof DEVICE_DESCRIPTOR, setup);
     }
-    return data_reply(CONFIGURATION_DESCRIPTOR, sizeof CONFIGURATION_DESCRIPTOR, setup);
+    return usb_reply_data(CONFIGURATION_DESCRIPTOR, sizeof CONFIGURATION_DESCRIPTOR, setup);
 }
 
 static UsbReply standard(UsbAudio *audio, UsbSetup setup)
@@ -474,7 +460,7 @@ static UsbReply high_resolution_setup(UsbAudio *audio, UsbSetup setup)
         return for_hid(setup) ? hid_class_out(setup) : usb_audio2_class_out(setup);
     case TYPE_CLASS_ENDPOINT_IN:
     case TYPE_CLASS_ENDPOINT_OUT:
-        return stall();
+        return usb_reply_stall();
     default:
         return common_setup(audio, setup);
     }
@@ -528,11 +514,11 @@ UsbReply usb_audio_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data,
                                  : control == CONTROL_VOLUME ? 2
                                                              : 1);
     if (control == CONTROL_NONE || length < needed) {
-        return stall();
+        return usb_reply_stall();
     }
     uint32_t value = bytes_get_le(data, needed);
     if (control == CONTROL_RATE) {
-        return take_rate(audio, value) ? status(USB_ACTION_NONE, 0) : stall();
+        return take_rate(audio, value) ? usb_reply_status(USB_ACTION_NONE, 0) : usb_reply_stall();
     }
     if (control == CONTROL_MUTE) {
         audio->muted = value != 0;
@@ -540,7 +526,7 @@ UsbReply usb_audio_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data,
         audio->volume = clamped_volume((int16_t)value);
     }
     audio->changes |= USB_AUDIO_CHANGED_VOLUME;
-    return status(USB_ACTION_NONE, 0);
+    return usb_reply_status(USB_ACTION_NONE, 0);
 }
 
 uint8_t usb_audio_take_changes(UsbAudio *audio)
