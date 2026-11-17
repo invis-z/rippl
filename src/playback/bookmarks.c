@@ -2,6 +2,7 @@
 
 #include "core/bytes.h"
 #include "core/hash.h"
+#include "core/record.h"
 
 enum {
     VERSION = 1,
@@ -82,9 +83,7 @@ static void encode_record(Bookmark bookmark, uint8_t *record)
 
 uint32_t bookmarks_encode(const Bookmarks *bookmarks, uint8_t *bytes)
 {
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        bytes[index] = MAGIC[index];
-    }
+    record_put_magic(bytes, MAGIC, MAGIC_SIZE);
     bytes_put16_at(bytes, VERSION_FIELD, VERSION);
     bytes_put16_at(bytes, COUNT_FIELD, bookmarks->count);
     bytes_put32_at(bytes, COUNT_FIELD + 2, 0);
@@ -93,7 +92,7 @@ uint32_t bookmarks_encode(const Bookmarks *bookmarks, uint8_t *bytes)
                       bytes + RECORDS_FIELD + (uint32_t)index * BOOKMARK_RECORD_SIZE);
     }
     uint32_t checksum_field = RECORDS_FIELD + (uint32_t)bookmarks->count * BOOKMARK_RECORD_SIZE;
-    bytes_put32_at(bytes, checksum_field, hash_update(HASH_START, bytes, checksum_field));
+    record_seal(bytes, checksum_field);
     return checksum_field + CHECKSUM_SIZE;
 }
 
@@ -111,10 +110,8 @@ static bool header_valid(const uint8_t *bytes, uint32_t length)
     if (length < RECORDS_FIELD + CHECKSUM_SIZE) {
         return false;
     }
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        if (bytes[index] != MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(bytes, MAGIC, MAGIC_SIZE)) {
+        return false;
     }
     uint32_t count = bytes_get16_at(bytes, COUNT_FIELD);
     return bytes_get16_at(bytes, VERSION_FIELD) == VERSION && count <= BOOKMARKS_CAPACITY &&
@@ -129,7 +126,7 @@ bool bookmarks_decode(const uint8_t *bytes, uint32_t length, Bookmarks *bookmark
     }
     uint16_t count = bytes_get16_at(bytes, COUNT_FIELD);
     uint32_t checksum_field = RECORDS_FIELD + (uint32_t)count * BOOKMARK_RECORD_SIZE;
-    if (bytes_get32_at(bytes, checksum_field) != hash_update(HASH_START, bytes, checksum_field)) {
+    if (!record_checksum_ok(bytes, checksum_field)) {
         return false;
     }
     for (uint16_t index = 0; index < count; index++) {

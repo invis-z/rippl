@@ -4,6 +4,7 @@
 
 #include "core/bytes.h"
 #include "core/hash.h"
+#include "core/record.h"
 
 enum {
     VERSION = 1,
@@ -172,10 +173,8 @@ void settings_encode(const Settings *settings, uint8_t *bytes)
 
 static bool header_valid(const uint8_t *bytes, uint32_t length)
 {
-    for (int index = 0; index < MAGIC_SIZE; index++) {
-        if (bytes[index] != MAGIC[index]) {
-            return false;
-        }
+    if (!record_magic_ok(bytes, MAGIC, MAGIC_SIZE)) {
+        return false;
     }
     return length > VERSION_FIELD && bytes[VERSION_FIELD] == VERSION;
 }
