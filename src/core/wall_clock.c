@@ -67,7 +67,7 @@ uint8_t wall_clock_weekday(uint32_t seconds)
     return (uint8_t)((seconds / SECONDS_PER_DAY + EPOCH_WEEKDAY) % DAYS_PER_WEEK);
 }
 
-static uint8_t days_in_month(uint16_t year, uint8_t month)
+uint8_t wall_clock_days_in_month(uint16_t year, uint8_t month)
 {
     if (month == FEBRUARY) {
         bool leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
@@ -80,8 +80,8 @@ bool wall_clock_civil_valid(const WallCivil *civil)
 {
     return civil->year >= WALL_CLOCK_FIRST_YEAR && civil->year <= WALL_CLOCK_LAST_YEAR &&
            civil->month >= 1 && civil->month <= MONTHS_PER_YEAR && civil->day >= 1 &&
-           civil->day <= days_in_month(civil->year, civil->month) && civil->hour <= LAST_HOUR &&
-           civil->minute <= LAST_MINUTE && civil->second <= LAST_MINUTE;
+           civil->day <= wall_clock_days_in_month(civil->year, civil->month) &&
+           civil->hour <= LAST_HOUR && civil->minute <= LAST_MINUTE && civil->second <= LAST_MINUTE;
 }
 
 int32_t wall_clock_zone_minutes(uint8_t zone)

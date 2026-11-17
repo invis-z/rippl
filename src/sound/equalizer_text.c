@@ -1,5 +1,6 @@
 #include "sound/equalizer_text.h"
 
+#include "core/text.h"
 #include <stddef.h>
 
 enum {
@@ -38,16 +39,11 @@ enum {
     FIELD_Q = 4
 };
 
-static char lower(char character)
-{
-    return character >= 'A' && character <= 'Z' ? (char)(character - 'A' + 'a') : character;
-}
-
 static bool token_is(const Token *token, const char *word)
 {
     uint32_t index = 0;
     while (word[index] != '\0') {
-        if (index >= token->length || lower(token->text[index]) != word[index]) {
+        if (index >= token->length || text_lower(token->text[index]) != word[index]) {
             return false;
         }
         index++;

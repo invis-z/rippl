@@ -4,6 +4,7 @@
 #include "core/i18n.h"
 #include "core/resident.h"
 #include "core/string_builder.h"
+#include "core/text.h"
 #include "ui/label.h"
 #include "ui/rippl_logo.h"
 
@@ -164,13 +165,7 @@ RIPPL_NP_FACES_CODE void face_times_draw(Canvas *canvas, const NowPlayingFrame *
 
 RIPPL_NP_FACES_CODE int face_progress_width(uint32_t position_ms, uint32_t duration_ms, int width)
 {
-    if (duration_ms == 0) {
-        return 0;
-    }
-    if (position_ms >= duration_ms) {
-        return width;
-    }
-    return (int)((uint64_t)position_ms * (uint64_t)width / duration_ms);
+    return (int)text_progress_width(position_ms, duration_ms, width);
 }
 
 RIPPL_NP_FACES_CODE int face_queue_progress(const NowPlayingFrame *frame, int whole)

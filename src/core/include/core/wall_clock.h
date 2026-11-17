@@ -37,6 +37,7 @@ typedef struct WallClock {
 } WallClock;
 
 uint32_t wall_clock_days_from_civil(uint32_t year, uint32_t month, uint32_t day);
+uint8_t wall_clock_days_in_month(uint16_t year, uint8_t month);
 uint32_t wall_clock_seconds_of(const WallCivil *civil);
 void wall_clock_civil_of(uint32_t seconds, WallCivil *civil);
 uint8_t wall_clock_weekday(uint32_t seconds);

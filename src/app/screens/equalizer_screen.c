@@ -5,6 +5,7 @@
 #include "core/i18n.h"
 #include "core/resident.h"
 #include "core/string_builder.h"
+#include "core/text.h"
 #include "core/utf8.h"
 #include "hal/audio.h"
 #include "hal/clock.h"
@@ -67,7 +68,6 @@ RIPPL_CODE2 static void use_preset(const EqualizerConfig *config, EqualizerPrese
 }
 
 static bool preview_file(EqualizerScreen *equalizer, int index);
-static bool same_name(const char *first, const char *second);
 
 static void forget_names(EqualizerScreen *equalizer)
 {
@@ -208,15 +208,6 @@ RIPPL_CODE2 static ScreenAction handle_picker_key(void *context, KeyEvent event,
     return leave(&equalizer->config, action);
 }
 
-RIPPL_CODE2 static bool same_name(const char *first, const char *second)
-{
-    uint32_t index = 0;
-    while (first[index] != '\0' && first[index] == second[index]) {
-        index++;
-    }
-    return first[index] == second[index];
-}
-
 typedef struct ProblemText {
     uint8_t problem;
     uint8_t has_line;
@@ -308,7 +299,7 @@ RIPPL_CODE2 static bool preview_file(EqualizerScreen *equalizer, int index)
         return false;
     }
     EqualizerChoice *choice = choice_of(&equalizer->config);
-    if (choice->preset == EQUALIZER_PRESET_FILE && same_name(choice->preset_name, name)) {
+    if (choice->preset == EQUALIZER_PRESET_FILE && text_same(choice->preset_name, name)) {
         equalizer->chosen_file = file;
         return true;
     }

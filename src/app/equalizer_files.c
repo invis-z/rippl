@@ -2,16 +2,12 @@
 
 #include <stddef.h>
 
+#include "core/text.h"
 #include "hal/storage.h"
 
 enum {
     EXTENSION_LENGTH = 4
 };
-
-static char lower(char character)
-{
-    return character >= 'A' && character <= 'Z' ? (char)(character - 'A' + 'a') : character;
-}
 
 static bool text_extension(const char *name)
 {
@@ -23,8 +19,8 @@ static bool text_extension(const char *name)
         }
         length++;
     }
-    return dot != NULL && length > 4 && dot[4] == '\0' && lower(dot[1]) == 't' &&
-           lower(dot[2]) == 'x' && lower(dot[3]) == 't';
+    return dot != NULL && length > 4 && dot[4] == '\0' && text_lower(dot[1]) == 't' &&
+           text_lower(dot[2]) == 'x' && text_lower(dot[3]) == 't';
 }
 
 uint32_t equalizer_files_stem_length(const char *name)
@@ -47,15 +43,6 @@ static bool preset_entry(const HalDirEntry *entry)
         length++;
     }
     return length + 1 <= EQUALIZER_PRESET_NAME_CAPACITY;
-}
-
-static bool same_name(const char *first, const char *second)
-{
-    uint32_t index = 0;
-    while (first[index] != '\0' && first[index] == second[index]) {
-        index++;
-    }
-    return first[index] == second[index];
 }
 
 bool equalizer_files_open(HalDir *dir)
@@ -90,7 +77,7 @@ int equalizer_files_find(const EqualizerFileList *list, const char *name)
     int found = -1;
     for (int index = 0; found < 0 && index < list->count && equalizer_files_next(&dir, listed);
          index++) {
-        if (same_name(listed, name)) {
+        if (text_same(listed, name)) {
             found = index;
         }
     }
