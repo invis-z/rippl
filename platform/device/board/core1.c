@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "board.h"
+#include "core/bytes.h"
 #include "core1_region.h"
 #include "device/core1_control.h"
 #include "device/core1_stream.h"
@@ -93,12 +94,6 @@ static HalCore1Status status_of(Core1Result result)
     return HAL_CORE1_BAD_REPLY;
 }
 
-static uint32_t le32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
 static bool copy_program_sectors(uint32_t first_sector, uint32_t size, uint32_t expected_crc)
 {
     uint32_t crc = 0;
@@ -137,9 +132,9 @@ static Core1Result place_program(Core1Program program)
         return CORE1_NO_REPLY;
     }
     const uint8_t *header = (const uint8_t *)staging;
-    uint32_t size = le32(header + 4);
-    uint32_t crc = le32(header + 8);
-    if (le32(header) != PROGRAM_MAGIC || size == 0 || size > CORE1_CODE_BYTES) {
+    uint32_t size = bytes_get32(header + 4);
+    uint32_t crc = bytes_get32(header + 8);
+    if (bytes_get32(header) != PROGRAM_MAGIC || size == 0 || size > CORE1_CODE_BYTES) {
         return CORE1_BAD_REPLY;
     }
     core1_hold(&BUS);

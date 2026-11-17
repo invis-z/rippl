@@ -1,5 +1,6 @@
 #include "codec/ogg.h"
 
+#include "core/bytes.h"
 #include <stddef.h>
 
 enum {
@@ -45,17 +46,6 @@ typedef struct Page {
     bool has_granule;
 } Page;
 
-static uint32_t le32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
-static uint32_t le16(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8;
-}
-
 static bool read_at(FlacInput input, uint32_t offset, void *buffer, uint32_t length)
 {
     return offset <= input.size && length <= input.size - offset &&
@@ -77,11 +67,11 @@ static bool page_header(const uint8_t *header, uint32_t offset, Page *page)
     if (!is_capture(header) || header[VERSION_AT] != 0) {
         return false;
     }
-    uint32_t low = le32(header + GRANULE_AT);
-    uint32_t high = le32(header + GRANULE_AT + 4);
+    uint32_t low = bytes_get32(header + GRANULE_AT);
+    uint32_t high = bytes_get32(header + GRANULE_AT + 4);
     *page = (Page){
         .offset = offset,
-        .serial = le32(header + SERIAL_AT),
+        .serial = bytes_get32(header + SERIAL_AT),
         .granule = high != 0 ? UINT32_MAX : low,
         .segments = header[SEGMENTS_AT],
         .flags = header[FLAGS_AT],
@@ -174,9 +164,9 @@ static bool read_head(FlacInput file, const Page *page, const uint8_t *lacing, O
     }
     *info = (OggOpusInfo){
         .serial = page->serial,
-        .input_rate = le32(head + HEAD_RATE_AT),
-        .pre_skip = (uint16_t)le16(head + HEAD_PRE_SKIP_AT),
-        .gain = (int16_t)le16(head + HEAD_GAIN_AT),
+        .input_rate = bytes_get32(head + HEAD_RATE_AT),
+        .pre_skip = (uint16_t)bytes_get16(head + HEAD_PRE_SKIP_AT),
+        .gain = (int16_t)bytes_get16(head + HEAD_GAIN_AT),
         .channels = head[HEAD_CHANNELS_AT],
     };
     return (head[HEAD_VERSION_AT] & MAJOR_VERSION_MASK) == 0 && head[HEAD_FAMILY_AT] == 0 &&

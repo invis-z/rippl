@@ -1,5 +1,6 @@
 #include "app/update_record.h"
 
+#include "core/bytes.h"
 #include "error_log.h"
 #include "hal/storage.h"
 
@@ -13,19 +14,6 @@ enum {
     STATUS_AT = 8,
     CHECK_AT = 12
 };
-
-static void put_word(uint8_t *bytes, uint32_t value)
-{
-    for (int index = 0; index < 4; index++) {
-        bytes[index] = (uint8_t)(value >> (8 * index));
-    }
-}
-
-static uint32_t get_word(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
 
 static uint32_t check_of(const uint8_t *bytes)
 {
@@ -41,24 +29,24 @@ void update_record_encode(HalUpdateRecord record, uint8_t *bytes)
     for (int index = 0; index < UPDATE_RECORD_BYTES; index++) {
         bytes[index] = 0;
     }
-    put_word(bytes, RECORD_MAGIC);
+    bytes_put32(bytes, RECORD_MAGIC);
     bytes[RESULT_AT] = (uint8_t)record.result;
     bytes[DETAIL_AT] = record.detail;
     bytes[REPLIED_AT] = record.emmc_replied ? 1 : 0;
-    put_word(bytes + STATUS_AT, record.emmc_status);
-    put_word(bytes + CHECK_AT, check_of(bytes));
+    bytes_put32(bytes + STATUS_AT, record.emmc_status);
+    bytes_put32(bytes + CHECK_AT, check_of(bytes));
 }
 
 bool update_record_decode(const uint8_t *bytes, HalUpdateRecord *record)
 {
-    if (get_word(bytes) != RECORD_MAGIC || get_word(bytes + CHECK_AT) != check_of(bytes) ||
+    if (bytes_get32(bytes) != RECORD_MAGIC || bytes_get32(bytes + CHECK_AT) != check_of(bytes) ||
         bytes[RESULT_AT] >= HAL_UPDATE_RESULT_COUNT) {
         return false;
     }
     *record = (HalUpdateRecord){.result = (HalUpdateResult)bytes[RESULT_AT],
                                 .detail = bytes[DETAIL_AT],
                                 .emmc_replied = bytes[REPLIED_AT] != 0,
-                                .emmc_status = get_word(bytes + STATUS_AT)};
+                                .emmc_status = bytes_get32(bytes + STATUS_AT)};
     return true;
 }
 

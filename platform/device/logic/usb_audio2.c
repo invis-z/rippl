@@ -1,5 +1,6 @@
 #include "usb_audio2.h"
 
+#include "core/bytes.h"
 #include <stddef.h>
 
 enum {
@@ -250,13 +251,6 @@ static UsbReply data_reply(const uint8_t *bytes, uint16_t length, UsbSetup setup
     return (UsbReply){USB_REPLY_DATA, bytes, sent, USB_ACTION_NONE, 0};
 }
 
-static void put_little_endian(uint8_t *bytes, uint32_t value, uint16_t length)
-{
-    for (uint16_t index = 0; index < length; index++) {
-        bytes[index] = (uint8_t)(value >> (8 * index));
-    }
-}
-
 uint8_t usb_audio2_sample_bytes(uint8_t alt)
 {
     return alt == 0 ? 0 : alt == 1 ? 2 : 4;
@@ -299,7 +293,7 @@ static UsbReply configuration(UsbAudio *audio, uint8_t type, UsbSpeed speed, Usb
         setting[SETTING_ALT] = alt;
         setting[SETTING_SUBSLOT] = usb_audio2_sample_bytes(alt);
         setting[SETTING_BITS] = usb_audio2_bits(alt);
-        put_little_endian(setting + SETTING_DATA_PACKET, usb_audio2_packet(speed, alt), 2);
+        bytes_put_le(setting + SETTING_DATA_PACKET, usb_audio2_packet(speed, alt), 2);
         setting[SETTING_FEEDBACK_PACKET] =
             high ? HIGH_SPEED_FEEDBACK_BYTES : FULL_SPEED_FEEDBACK_BYTES;
         setting[SETTING_FEEDBACK_INTERVAL] = high ? HIGH_SPEED_FEEDBACK_INTERVAL : 1;
@@ -380,28 +374,28 @@ static UsbReply rate_range(UsbAudio *audio, UsbSetup setup)
     for (size_t index = 0; index < sizeof RATES / sizeof RATES[0]; index++) {
         if (rate_offered(audio->device->speed, RATES[index])) {
             uint8_t *entry = audio->range + 2 + count * RANGE_ENTRY_BYTES;
-            put_little_endian(entry, RATES[index], 4);
-            put_little_endian(entry + 4, RATES[index], 4);
-            put_little_endian(entry + 8, 0, 4);
+            bytes_put_le(entry, RATES[index], 4);
+            bytes_put_le(entry + 4, RATES[index], 4);
+            bytes_put_le(entry + 8, 0, 4);
             count++;
         }
     }
-    put_little_endian(audio->range, count, 2);
+    bytes_put_le(audio->range, count, 2);
     return data_reply(audio->range, (uint16_t)(2 + count * RANGE_ENTRY_BYTES), setup);
 }
 
 static UsbReply volume_range(UsbAudio *audio, UsbSetup setup)
 {
-    put_little_endian(audio->range, 1, 2);
-    put_little_endian(audio->range + 2, (uint16_t)VOLUME_MIN, 2);
-    put_little_endian(audio->range + 4, VOLUME_MAX, 2);
-    put_little_endian(audio->range + 6, VOLUME_RESOLUTION, 2);
+    bytes_put_le(audio->range, 1, 2);
+    bytes_put_le(audio->range + 2, (uint16_t)VOLUME_MIN, 2);
+    bytes_put_le(audio->range + 4, VOLUME_MAX, 2);
+    bytes_put_le(audio->range + 6, VOLUME_RESOLUTION, 2);
     return data_reply(audio->range, 8, setup);
 }
 
 static UsbReply current(UsbAudio *audio, uint32_t value, uint16_t length, UsbSetup setup)
 {
-    put_little_endian(audio->reply, value, length);
+    bytes_put_le(audio->reply, value, length);
     return data_reply(audio->reply, length, setup);
 }
 
@@ -441,15 +435,6 @@ UsbReply usb_audio2_class_out(UsbSetup setup)
     return known ? (UsbReply){USB_REPLY_RECEIVE, NULL, setup.length, USB_ACTION_NONE, 0} : stall();
 }
 
-static uint32_t read_little_endian(const uint8_t *data, uint16_t length)
-{
-    uint32_t value = 0;
-    for (uint16_t index = length; index > 0; index--) {
-        value = value << 8 | data[index - 1];
-    }
-    return value;
-}
-
 UsbReply usb_audio2_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data, uint16_t length)
 {
     Control2 control = control_of(setup);
@@ -459,7 +444,7 @@ UsbReply usb_audio2_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data
     if (!writable(control) || length < needed) {
         return stall();
     }
-    uint32_t value = read_little_endian(data, needed);
+    uint32_t value = bytes_get_le(data, needed);
     if (control == CONTROL2_FREQUENCY) {
         if (!rate_offered(audio->device->speed, value)) {
             return stall();

@@ -1,5 +1,6 @@
 #include "library/favorites.h"
 
+#include "core/bytes.h"
 #include "core/hash.h"
 
 enum {
@@ -14,28 +15,6 @@ enum {
 };
 
 static const uint8_t MAGIC[MAGIC_SIZE] = {'E', 'M', 'F', 'V'};
-
-static void put_u16(uint8_t *bytes, uint32_t offset, uint32_t value)
-{
-    bytes[offset] = (uint8_t)value;
-    bytes[offset + 1] = (uint8_t)(value >> BITS_PER_BYTE);
-}
-
-static void put_u32(uint8_t *bytes, uint32_t offset, uint32_t value)
-{
-    put_u16(bytes, offset, value & 0xFFFFu);
-    put_u16(bytes, offset + 2, value >> 16);
-}
-
-static uint16_t get_u16(const uint8_t *bytes, uint32_t offset)
-{
-    return (uint16_t)(bytes[offset] | bytes[offset + 1] << BITS_PER_BYTE);
-}
-
-static uint32_t get_u32(const uint8_t *bytes, uint32_t offset)
-{
-    return (uint32_t)get_u16(bytes, offset) | (uint32_t)get_u16(bytes, offset + 2) << 16;
-}
 
 static int find_key(const Favorites *favorites, uint64_t key)
 {
@@ -84,14 +63,14 @@ uint32_t favorites_encode(const Favorites *favorites, uint8_t *bytes)
     for (int index = 0; index < MAGIC_SIZE; index++) {
         bytes[index] = MAGIC[index];
     }
-    put_u16(bytes, VERSION_FIELD, VERSION);
-    put_u16(bytes, COUNT_FIELD, favorites->count);
+    bytes_put16_at(bytes, VERSION_FIELD, VERSION);
+    bytes_put16_at(bytes, COUNT_FIELD, favorites->count);
     uint32_t offset = KEYS_FIELD;
     for (int index = 0; index < favorites->count; index++, offset += KEY_SIZE) {
-        put_u32(bytes, offset, (uint32_t)favorites->keys[index]);
-        put_u32(bytes, offset + 4, (uint32_t)(favorites->keys[index] >> 32));
+        bytes_put32_at(bytes, offset, (uint32_t)favorites->keys[index]);
+        bytes_put32_at(bytes, offset + 4, (uint32_t)(favorites->keys[index] >> 32));
     }
-    put_u32(bytes, offset, hash_update(HASH_START, bytes, offset));
+    bytes_put32_at(bytes, offset, hash_update(HASH_START, bytes, offset));
     return offset + CHECKSUM_SIZE;
 }
 
@@ -105,8 +84,8 @@ static bool header_valid(const uint8_t *bytes, uint32_t length)
             return false;
         }
     }
-    uint32_t count = get_u16(bytes, COUNT_FIELD);
-    return get_u16(bytes, VERSION_FIELD) == VERSION && count <= FAVORITES_CAPACITY &&
+    uint32_t count = bytes_get16_at(bytes, COUNT_FIELD);
+    return bytes_get16_at(bytes, VERSION_FIELD) == VERSION && count <= FAVORITES_CAPACITY &&
            length >= KEYS_FIELD + count * KEY_SIZE + CHECKSUM_SIZE;
 }
 
@@ -116,14 +95,15 @@ bool favorites_decode(const uint8_t *bytes, uint32_t length, Favorites *favorite
     if (!header_valid(bytes, length)) {
         return false;
     }
-    uint16_t count = get_u16(bytes, COUNT_FIELD);
+    uint16_t count = bytes_get16_at(bytes, COUNT_FIELD);
     uint32_t checksum_field = KEYS_FIELD + (uint32_t)count * KEY_SIZE;
-    if (get_u32(bytes, checksum_field) != hash_update(HASH_START, bytes, checksum_field)) {
+    if (bytes_get32_at(bytes, checksum_field) != hash_update(HASH_START, bytes, checksum_field)) {
         return false;
     }
     for (uint16_t index = 0; index < count; index++) {
         uint32_t field = KEYS_FIELD + (uint32_t)index * KEY_SIZE;
-        favorites->keys[index] = (uint64_t)get_u32(bytes, field + 4) << 32 | get_u32(bytes, field);
+        favorites->keys[index] =
+            (uint64_t)bytes_get32_at(bytes, field + 4) << 32 | bytes_get32_at(bytes, field);
     }
     favorites->count = count;
     return true;

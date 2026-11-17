@@ -1,12 +1,7 @@
 #include "library/covers.h"
 
+#include "core/bytes.h"
 #include "library/store_layout.h"
-
-static uint32_t u32_at(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
 
 uint32_t covers_offset(uint32_t slot)
 {
@@ -36,7 +31,7 @@ bool covers_slot(const Covers *covers, uint32_t rank, uint32_t *slot)
                             bytes, sizeof bytes)) {
         return false;
     }
-    *slot = u32_at(bytes);
+    *slot = bytes_get32(bytes);
     return *slot < covers->slots;
 }
 

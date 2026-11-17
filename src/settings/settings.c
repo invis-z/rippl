@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "core/bytes.h"
 #include "core/hash.h"
 
 enum {
@@ -131,29 +132,14 @@ static uint32_t checksum_of(const uint8_t *bytes)
     return hash_update(HASH_START, bytes, CHECKSUM_FIELD);
 }
 
-static void put_u32(uint8_t *bytes, int offset, uint32_t value)
-{
-    for (int index = 0; index < 4; index++) {
-        bytes[offset + index] = (uint8_t)(value >> (BITS_PER_BYTE * index));
-    }
-}
-
-static uint32_t get_u32(const uint8_t *bytes, int offset)
-{
-    uint32_t value = 0;
-    for (int index = 3; index >= 0; index--) {
-        value = value << BITS_PER_BYTE | bytes[offset + index];
-    }
-    return value;
-}
-
 static int stored_options(const uint8_t *bytes, uint32_t length)
 {
-    if (length >= SETTINGS_FILE_SIZE && get_u32(bytes, CHECKSUM_FIELD) == checksum_of(bytes)) {
+    if (length >= SETTINGS_FILE_SIZE &&
+        bytes_get32_at(bytes, CHECKSUM_FIELD) == checksum_of(bytes)) {
         return SETTINGS_OPTION_COUNT;
     }
     bool earlier = length >= EARLIER_CHECKSUM_FIELD + 4 &&
-                   get_u32(bytes, EARLIER_CHECKSUM_FIELD) ==
+                   bytes_get32_at(bytes, EARLIER_CHECKSUM_FIELD) ==
                        hash_update(HASH_START, bytes, EARLIER_CHECKSUM_FIELD);
     return earlier ? EARLIER_OPTION_COUNT : 0;
 }
@@ -181,7 +167,7 @@ void settings_encode(const Settings *settings, uint8_t *bytes)
     for (int option = 0; option < SETTINGS_OPTION_COUNT; option++) {
         bytes[OPTIONS_FIELD + option] = settings->options[option];
     }
-    put_u32(bytes, CHECKSUM_FIELD, checksum_of(bytes));
+    bytes_put32_at(bytes, CHECKSUM_FIELD, checksum_of(bytes));
 }
 
 static bool header_valid(const uint8_t *bytes, uint32_t length)

@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "codec/alac.h"
+#include "core/bytes.h"
 #include "core/resident.h"
 
 enum {
@@ -92,15 +93,6 @@ typedef struct ConfigBits {
     uint32_t position;
 } ConfigBits;
 
-static uint32_t big_endian(const uint8_t *bytes, int count)
-{
-    uint32_t value = 0;
-    for (int index = 0; index < count; index++) {
-        value = value << BYTE_BITS | bytes[index];
-    }
-    return value;
-}
-
 static uint32_t smaller(uint32_t a, uint32_t b)
 {
     return a < b ? a : b;
@@ -124,13 +116,13 @@ static bool read_word(FlacInput file, uint32_t offset, uint32_t *value)
     if (!read_at(file, offset, bytes, sizeof bytes)) {
         return false;
     }
-    *value = big_endian(bytes, 4);
+    *value = bytes_get_be(bytes, 4);
     return true;
 }
 
 bool mp4_signature(const uint8_t *bytes)
 {
-    return big_endian(bytes + 4, 4) == TYPE_FTYP;
+    return bytes_get_be(bytes + 4, 4) == TYPE_FTYP;
 }
 
 uint32_t mp4_record_length(const uint8_t *bytes)
@@ -146,16 +138,16 @@ static bool atom_at(FlacInput file, uint32_t offset, uint32_t limit, Atom *atom)
         !read_at(file, offset, header, ATOM_HEADER)) {
         return false;
     }
-    uint32_t size = big_endian(header, 4);
-    atom->type = big_endian(header + 4, 4);
+    uint32_t size = bytes_get_be(header, 4);
+    atom->type = bytes_get_be(header + 4, 4);
     atom->body = offset + ATOM_HEADER;
     if (size == 1) {
         if (limit - offset < LARGE_ATOM_HEADER ||
             !read_at(file, offset + ATOM_HEADER, header + ATOM_HEADER, ATOM_HEADER) ||
-            big_endian(header + ATOM_HEADER, 4) != 0) {
+            bytes_get_be(header + ATOM_HEADER, 4) != 0) {
             return false;
         }
-        size = big_endian(header + ATOM_HEADER + 4, 4);
+        size = bytes_get_be(header + ATOM_HEADER + 4, 4);
         atom->body = offset + LARGE_ATOM_HEADER;
     } else if (size == 0) {
         size = limit - offset;
@@ -355,10 +347,10 @@ static bool read_sample_entry(FlacInput file, Atom stsd, Mp4Track *track)
         !read_at(file, entry.body, fields, sizeof fields)) {
         return false;
     }
-    uint32_t version = big_endian(fields + ENTRY_VERSION_AT, 2);
-    track->channels = (uint8_t)big_endian(fields + ENTRY_CHANNELS_AT, 2);
-    track->bits_per_sample = (uint8_t)big_endian(fields + ENTRY_BITS_AT, 2);
-    track->sample_rate = big_endian(fields + ENTRY_RATE_AT, 4) >> FIXED_POINT_SHIFT;
+    uint32_t version = bytes_get_be(fields + ENTRY_VERSION_AT, 2);
+    track->channels = (uint8_t)bytes_get_be(fields + ENTRY_CHANNELS_AT, 2);
+    track->bits_per_sample = (uint8_t)bytes_get_be(fields + ENTRY_BITS_AT, 2);
+    track->sample_rate = bytes_get_be(fields + ENTRY_RATE_AT, 4) >> FIXED_POINT_SHIFT;
     uint32_t children = entry.body + SAMPLE_ENTRY_BYTES;
     if (version == 1) {
         children += SAMPLE_ENTRY_V1_EXTRA;
@@ -462,7 +454,7 @@ static bool read_times(FlacInput file, Mp4Track *track)
         if (entry == NULL) {
             return false;
         }
-        total += (uint64_t)big_endian(entry, 4) * big_endian(entry + 4, 4);
+        total += (uint64_t)bytes_get_be(entry, 4) * bytes_get_be(entry + 4, 4);
     }
     track->total_samples = scale(total, track->sample_rate, track->timescale);
     track->lead_trim = scale(track->lead_trim, track->sample_rate, track->timescale);
@@ -549,7 +541,7 @@ static bool frame_size(Mp4Stream *stream, uint32_t frame, uint32_t *size)
     if (entry == NULL) {
         return false;
     }
-    *size = big_endian(entry, 4);
+    *size = bytes_get_be(entry, 4);
     return true;
 }
 
@@ -560,10 +552,10 @@ static bool chunk_offset(Mp4Stream *stream, uint32_t chunk, uint32_t *offset)
         return false;
     }
     if (stream->track.offsets.width == LARGE_OFFSET_WIDTH) {
-        *offset = big_endian(entry + 4, 4);
-        return big_endian(entry, 4) == 0;
+        *offset = bytes_get_be(entry + 4, 4);
+        return bytes_get_be(entry, 4) == 0;
     }
-    *offset = big_endian(entry, 4);
+    *offset = bytes_get_be(entry, 4);
     return true;
 }
 
@@ -573,15 +565,15 @@ static bool load_entry(Mp4Stream *stream, uint32_t index, uint32_t *first_chunk)
     if (entry == NULL) {
         return false;
     }
-    uint32_t first = big_endian(entry, 4);
-    stream->per_chunk = big_endian(entry + 4, 4);
+    uint32_t first = bytes_get_be(entry, 4);
+    stream->per_chunk = bytes_get_be(entry + 4, 4);
     uint32_t end = stream->track.offsets.count;
     if (index + 1 < stream->track.chunks.count) {
         const uint8_t *next = cache_entry(&stream->chunks, stream->file, index + 1);
         if (next == NULL) {
             return false;
         }
-        end = smaller(big_endian(next, 4) - 1, end);
+        end = smaller(bytes_get_be(next, 4) - 1, end);
     }
     stream->entry = index;
     stream->entry_end = end;
@@ -664,8 +656,8 @@ static bool locate(Mp4Stream *stream, uint32_t sample, uint32_t *frame, uint32_t
         if (entry == NULL) {
             return false;
         }
-        uint32_t count = big_endian(entry, 4);
-        uint32_t delta = big_endian(entry + 4, 4);
+        uint32_t count = bytes_get_be(entry, 4);
+        uint32_t delta = bytes_get_be(entry + 4, 4);
         uint64_t span = (uint64_t)count * delta;
         if (delta > 0 && target < time + span) {
             uint32_t skip = (uint32_t)((target - time) / delta);

@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "core/bytes.h"
 #include "usb_audio2.h"
 
 enum {
@@ -517,15 +518,6 @@ static bool take_rate(UsbAudio *audio, uint32_t rate)
     return true;
 }
 
-static uint32_t read_little_endian(const uint8_t *data, uint16_t length)
-{
-    uint32_t value = 0;
-    for (uint16_t index = length; index > 0; index--) {
-        value = value << 8 | data[index - 1];
-    }
-    return value;
-}
-
 UsbReply usb_audio_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data, uint16_t length)
 {
     if (audio->high_resolution) {
@@ -538,7 +530,7 @@ UsbReply usb_audio_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data,
     if (control == CONTROL_NONE || length < needed) {
         return stall();
     }
-    uint32_t value = read_little_endian(data, needed);
+    uint32_t value = bytes_get_le(data, needed);
     if (control == CONTROL_RATE) {
         return take_rate(audio, value) ? status(USB_ACTION_NONE, 0) : stall();
     }

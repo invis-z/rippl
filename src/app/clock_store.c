@@ -1,5 +1,6 @@
 #include "clock_store.h"
 
+#include "core/bytes.h"
 #include "core/hash.h"
 #include "hal/storage.h"
 #include "hal/system.h"
@@ -31,15 +32,6 @@ enum {
 };
 
 static const uint8_t RECORD_MAGIC[RECORD_MAGIC_BYTES] = {'E', 'C', 'L', 'K'};
-
-static uint32_t get_u32(const uint8_t *bytes)
-{
-    uint32_t value = 0;
-    for (int index = 3; index >= 0; index--) {
-        value = value << BITS_PER_BYTE | bytes[index];
-    }
-    return value;
-}
 
 static uint32_t earliest_unix_time(void)
 {
@@ -92,10 +84,10 @@ bool clock_store_record_decode(const uint8_t *bytes, uint32_t size, ClockRecord 
         }
     }
     if (bytes[RECORD_VERSION_AT] != RECORD_VERSION ||
-        get_u32(bytes + RECORD_CHECK_AT) != hash_update(HASH_START, bytes, RECORD_CHECK_AT)) {
+        bytes_get32(bytes + RECORD_CHECK_AT) != hash_update(HASH_START, bytes, RECORD_CHECK_AT)) {
         return false;
     }
-    record->unix_time = get_u32(bytes + RECORD_TIME_AT);
+    record->unix_time = bytes_get32(bytes + RECORD_TIME_AT);
     record->offset_minutes = get_i16(bytes + RECORD_OFFSET_AT);
     return decode_rule(bytes, record) && record->unix_time >= earliest_unix_time() &&
            record->unix_time < latest_unix_time() &&
