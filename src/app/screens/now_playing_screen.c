@@ -5,6 +5,7 @@
 #include "core/format.h"
 #include "core/i18n.h"
 #include "core/string_builder.h"
+#include "core/text.h"
 #include "gfx/image.h"
 #include "hal/audio.h"
 #include "hal/storage.h"
@@ -253,13 +254,7 @@ NowPlayingCommand now_playing_command_with(KeyEvent event, bool scrubbing,
 
 int now_playing_progress_width(uint32_t position_ms, uint32_t duration_ms, int width)
 {
-    if (duration_ms == 0) {
-        return 0;
-    }
-    if (position_ms >= duration_ms) {
-        return width;
-    }
-    return (int)((uint64_t)position_ms * (uint64_t)width / duration_ms);
+    return (int)text_progress_width(position_ms, duration_ms, width);
 }
 
 NowPlayingFeedback now_playing_feedback_for(NowPlayingCommand command, PlayerState after)
@@ -786,16 +781,6 @@ static void modes_text(const PlayerStatus *status, char *buffer, size_t capacity
     }
 }
 
-static void draw_outline(Canvas *canvas, Rect area, Color color)
-{
-    canvas_fill_rect(canvas, (Rect){area.x, area.y, area.width, OUTLINE}, color);
-    canvas_fill_rect(canvas, (Rect){area.x, area.y + area.height - OUTLINE, area.width, OUTLINE},
-                     color);
-    canvas_fill_rect(canvas, (Rect){area.x, area.y, OUTLINE, area.height}, color);
-    canvas_fill_rect(canvas, (Rect){area.x + area.width - OUTLINE, area.y, OUTLINE, area.height},
-                     color);
-}
-
 static void draw_format(const NowPlayingScreen *now_playing, Canvas *canvas)
 {
     const Theme *theme = now_playing->config.theme;
@@ -815,7 +800,7 @@ static void draw_format(const NowPlayingScreen *now_playing, Canvas *canvas)
         row.width = total;
     }
     Rect badge = {row.x, row.y, codec_width, row.height};
-    draw_outline(canvas, badge, theme->colors.text_secondary);
+    canvas_outline_rect(canvas, badge, OUTLINE, theme->colors.text_secondary);
     Rect codec_text = label_centered_area(style.font, badge, codec);
     label_draw(canvas, style, (Label){.area = codec_text, .text = codec});
     int stream_left = badge.x + badge.width + CODEC_GAP;

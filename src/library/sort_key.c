@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "core/text.h"
 #include "core/utf8.h"
 #include "sort_fold_table.h"
 
@@ -22,15 +23,6 @@ typedef struct KeyBuilder {
     size_t length;
     bool full;
 } KeyBuilder;
-
-static bool is_space(uint32_t code_point)
-{
-    return code_point == ' ' || (code_point >= 0x09 && code_point <= 0x0D) ||
-           (code_point >= 0x1C && code_point <= 0x1F) || code_point == 0x85 || code_point == 0xA0 ||
-           code_point == 0x1680 || (code_point >= 0x2000 && code_point <= 0x200A) ||
-           code_point == 0x2028 || code_point == 0x2029 || code_point == 0x202F ||
-           code_point == 0x205F || code_point == 0x3000;
-}
 
 static void append_bytes(KeyBuilder *builder, const char *bytes, size_t length)
 {
@@ -173,7 +165,7 @@ static size_t skip_spaces(const char *key, size_t index, size_t end)
 {
     while (index < end) {
         size_t next = index;
-        if (!is_space(code_point_at(key, &next))) {
+        if (!text_is_space(code_point_at(key, &next))) {
             return index;
         }
         index = next;
@@ -186,7 +178,7 @@ static size_t content_end(const char *key, size_t length)
     size_t end = 0;
     for (size_t index = 0; index < length;) {
         uint32_t code_point = code_point_at(key, &index);
-        if (!is_space(code_point)) {
+        if (!text_is_space(code_point)) {
             end = index;
         }
     }

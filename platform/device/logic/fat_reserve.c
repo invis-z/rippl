@@ -1,5 +1,6 @@
 #include "device/fat.h"
 
+#include "core/text.h"
 #include "fat_create.h"
 #include "fat_layout.h"
 
@@ -53,15 +54,6 @@ uint32_t fat_new_cleared_sectors(const FatVolume *volume, const FatNewEntry *ent
     return (cleared + FAT_SECTOR_SIZE - 1) / FAT_SECTOR_SIZE;
 }
 
-static size_t component_length(const char *path)
-{
-    size_t length = 0;
-    while (path[length] != '\0' && path[length] != '/') {
-        length++;
-    }
-    return length;
-}
-
 static FatReserveResult create(FatVolume *volume, FatFile *parent, const FatNewEntry *entry,
                                FatFile *created)
 {
@@ -113,7 +105,7 @@ FatReserveResult fat_grow(FatVolume *volume, const char *path, uint32_t size)
     FatFile found;
     path = next_component(path, 0);
     for (;;) {
-        size_t length = component_length(path);
+        size_t length = text_component_length(path);
         const char *rest = next_component(path, length);
         if (length == 0 || !fat_find_entry(volume, &directory, path, length, &found)) {
             return FAT_RESERVE_FAILED;
@@ -153,7 +145,7 @@ FatReserveResult fat_reserve(FatVolume *volume, const char *path, uint32_t size)
         path++;
     }
     while (*path != '\0') {
-        size_t length = component_length(path);
+        size_t length = text_component_length(path);
         const char *rest = path + length;
         while (*rest == '/') {
             rest++;

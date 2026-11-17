@@ -167,16 +167,6 @@ static Color fill_color(const Theme *theme, StatusBarState state)
                                                                    : theme->colors.header_text;
 }
 
-static void draw_outline(Canvas *canvas, Rect body, Color color)
-{
-    canvas_fill_rect(canvas, (Rect){body.x, body.y, body.width, BORDER}, color);
-    canvas_fill_rect(canvas, (Rect){body.x, body.y + body.height - BORDER, body.width, BORDER},
-                     color);
-    canvas_fill_rect(canvas, (Rect){body.x, body.y, BORDER, body.height}, color);
-    canvas_fill_rect(canvas, (Rect){body.x + body.width - BORDER, body.y, BORDER, body.height},
-                     color);
-}
-
 static void draw_battery(Canvas *canvas, const Theme *theme, StatusBarState state)
 {
     Rect area = status_bar_battery_area(theme);
@@ -187,7 +177,7 @@ static void draw_battery(Canvas *canvas, const Theme *theme, StatusBarState stat
     Rect inner = {body.x + FILL_INSET, body.y + FILL_INSET, body.width - 2 * FILL_INSET,
                   body.height - 2 * FILL_INSET};
     Color color = theme->colors.header_text;
-    draw_outline(canvas, body, color);
+    canvas_outline_rect(canvas, body, BORDER, color);
     canvas_fill_rect(canvas, tip, color);
     inner.width = status_bar_battery_fill_width(state.battery_percent, inner.width);
     canvas_fill_rect(canvas, inner, fill_color(theme, state));

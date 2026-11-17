@@ -4,6 +4,7 @@
 
 #include "core/i18n.h"
 #include "core/string_builder.h"
+#include "core/text.h"
 #include "core/volume_path.h"
 #include "folders_store.h"
 #include "hal/clock.h"
@@ -21,26 +22,6 @@ enum {
 static const char CARD_ROOT[] = "/";
 static const char INTERNAL_ROOT[] = "/" VOLUME_INTERNAL_NAME;
 static const char CHECK_MARK[] = "\xE2\x9C\x93";
-
-static size_t text_length(const char *text)
-{
-    size_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
-static int compare_texts(const char *left, const char *right)
-{
-    const unsigned char *a = (const unsigned char *)left;
-    const unsigned char *b = (const unsigned char *)right;
-    while (*a != '\0' && *a == *b) {
-        a++;
-        b++;
-    }
-    return (int)*a - (int)*b;
-}
 
 static const char *label_of(const FoldersScreen *folders, int index)
 {
@@ -66,7 +47,7 @@ static void add_row(FoldersScreen *folders, const MusicFolders *stored, const ch
     string_builder_append(&label, name);
     folders->used += (uint32_t)label.length + 1;
     int at = folders->count++;
-    while (at > first && compare_texts(label_of(folders, at - 1), folders->names + row.label) > 0) {
+    while (at > first && text_compare(label_of(folders, at - 1), folders->names + row.label) > 0) {
         folders->rows[at] = folders->rows[at - 1];
         at--;
     }

@@ -1,17 +1,13 @@
 #include "library/spoken_path.h"
 
+#include "core/text.h"
 #include <stdbool.h>
-
-static char lower(char letter)
-{
-    return letter >= 'A' && letter <= 'Z' ? (char)(letter - 'A' + 'a') : letter;
-}
 
 static bool name_matches(const char *name, size_t length, const char *expected)
 {
     size_t index = 0;
     for (; index < length && expected[index] != '\0'; index++) {
-        if (lower(name[index]) != expected[index]) {
+        if (text_lower(name[index]) != expected[index]) {
             return false;
         }
     }

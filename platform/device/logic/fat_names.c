@@ -40,17 +40,6 @@ bool fat_name_matches(const uint16_t *units, size_t limit, const char *name, siz
     return !next_utf16(units, limit, &unit, &extra);
 }
 
-static size_t utf8_length_of(uint32_t code_point)
-{
-    if (code_point < 0x80) {
-        return 1;
-    }
-    if (code_point < 0x800) {
-        return 2;
-    }
-    return code_point < 0x10000 ? 3 : 4;
-}
-
 static void put_utf8(uint32_t code_point, size_t length, char *out)
 {
     static const uint8_t LEADS[5] = {0, 0x00, 0xC0, 0xE0, 0xF0};
@@ -67,7 +56,7 @@ size_t fat_utf8_from_units(const uint16_t *units, size_t limit, char *out, size_
     size_t written = 0;
     uint32_t code_point = 0;
     while (next_utf16(units, limit, &unit, &code_point)) {
-        size_t length = utf8_length_of(code_point);
+        size_t length = utf8_encoded_size(code_point);
         if (written + length + 1 > capacity) {
             break;
         }

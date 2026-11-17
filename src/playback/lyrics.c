@@ -1,5 +1,6 @@
 #include "playback/lyrics.h"
 
+#include "core/text.h"
 #include <stddef.h>
 
 enum {
@@ -15,14 +16,9 @@ static bool is_digit(char character)
     return character >= '0' && character <= '9';
 }
 
-static char lower(char character)
-{
-    return character >= 'A' && character <= 'Z' ? (char)(character - 'A' + 'a') : character;
-}
-
 static bool is_letter(char character)
 {
-    return lower(character) >= 'a' && lower(character) <= 'z';
+    return text_lower(character) >= 'a' && text_lower(character) <= 'z';
 }
 
 static bool is_blank(char character)
@@ -89,7 +85,7 @@ static bool parse_offset(const char *tag, size_t length, int32_t *offset_ms)
         return false;
     }
     for (size_t index = 0; index < name_length; index++) {
-        if (lower(tag[index]) != OFFSET_NAME[index]) {
+        if (text_lower(tag[index]) != OFFSET_NAME[index]) {
             return false;
         }
     }

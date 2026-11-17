@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "core/text.h"
 #include "core/utf8.h"
 
 static Rect glyph_area(const Glyph *glyph, Point pen)
@@ -59,18 +60,9 @@ int text_width(const Font *font, const char *text)
     return width;
 }
 
-static size_t byte_length(const char *text)
-{
-    size_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
 int text_draw(Canvas *canvas, TextStyle style, Point pen, const char *text)
 {
-    return text_draw_span(canvas, style, pen, (TextSpan){text, byte_length(text)});
+    return text_draw_span(canvas, style, pen, (TextSpan){text, text_length(text)});
 }
 
 int text_draw_span(Canvas *canvas, TextStyle style, Point pen, TextSpan span)

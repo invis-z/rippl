@@ -1,5 +1,7 @@
 #include "device/pcf8563.h"
 
+#include "core/wall_clock.h"
+
 enum {
     REGISTER_CONTROL1 = 0x00,
     REGISTER_SECONDS = 0x02,
@@ -42,18 +44,10 @@ uint8_t bcd_encode(uint8_t value)
     return (uint8_t)(value / 10 << NIBBLE_BITS | value % 10);
 }
 
-static uint8_t days_in_month(uint16_t year, uint8_t month)
-{
-    if (month == FEBRUARY) {
-        bool leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-        return (uint8_t)(FEBRUARY_DAYS + (leap ? 1 : 0));
-    }
-    return (uint8_t)(SHORT_MONTH_DAYS + ((LONG_MONTHS >> month) & 1));
-}
-
 bool civil_date_valid(uint16_t year, uint8_t month, uint8_t day)
 {
-    return month >= 1 && month <= MONTHS_PER_YEAR && day >= 1 && day <= days_in_month(year, month);
+    return month >= 1 && month <= MONTHS_PER_YEAR && day >= 1 &&
+           day <= wall_clock_days_in_month(year, month);
 }
 
 static uint8_t take(const uint8_t *registers, uint32_t index, uint8_t mask, bool *digits)

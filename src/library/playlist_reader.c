@@ -1,4 +1,5 @@
 #include "library/playlist_reader.h"
+#include "core/text.h"
 
 enum {
     REPLACEMENT = 0xFFFD,
@@ -140,15 +141,6 @@ static bool is_line_break(uint32_t code_point, bool utf8)
                     code_point == PARAGRAPH_SEPARATOR);
 }
 
-static bool is_space(uint32_t code_point)
-{
-    return code_point == ' ' || (code_point >= 0x09 && code_point <= 0x0D) ||
-           (code_point >= 0x1C && code_point <= 0x1F) || code_point == 0x85 || code_point == 0xA0 ||
-           code_point == 0x1680 || (code_point >= 0x2000 && code_point <= 0x200A) ||
-           code_point == 0x2028 || code_point == 0x2029 || code_point == 0x202F ||
-           code_point == 0x205F || code_point == 0x3000;
-}
-
 typedef struct Line {
     char *text;
     uint32_t capacity;
@@ -167,13 +159,13 @@ static void put(Line *line, uint32_t code_point)
     }
     static const uint8_t LEADS[5] = {0, 0x00, 0xC0, 0xE0, 0xF0};
     bytes[0] = (uint8_t)(LEADS[size] | value);
-    if (line->length + size >= line->capacity || (line->length == 0 && is_space(code_point))) {
+    if (line->length + size >= line->capacity || (line->length == 0 && text_is_space(code_point))) {
         return;
     }
     for (uint32_t index = 0; index < size; index++) {
         line->text[line->length++] = (char)bytes[index];
     }
-    if (!is_space(code_point)) {
+    if (!text_is_space(code_point)) {
         line->content_end = line->length;
     }
 }
