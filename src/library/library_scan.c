@@ -5,6 +5,7 @@
 
 #include "core/borrowed.h"
 #include "core/bytes.h"
+#include "core/text.h"
 #include "library/playlist_reader.h"
 #include "library/track_fields.h"
 #include "library/track_tags.h"
@@ -71,15 +72,6 @@ typedef struct Listing {
     BorrowedWord *scratch;
 } Listing;
 
-static uint32_t text_length(const char *text)
-{
-    uint32_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
 static const char *entry_name(const ScanState *state, uint32_t offset)
 {
     return (const char *)state->listing + offset + ENTRY_HEAD;
@@ -90,20 +82,9 @@ static bool entry_is_directory(const ScanState *state, uint32_t offset)
     return state->listing[offset] != 0;
 }
 
-static int compare_texts(const char *left, const char *right)
-{
-    const unsigned char *a = (const unsigned char *)left;
-    const unsigned char *b = (const unsigned char *)right;
-    while (*a != '\0' && *a == *b) {
-        a++;
-        b++;
-    }
-    return (int)*a - (int)*b;
-}
-
 static int compare_names(const ScanState *state, uint32_t left, uint32_t right)
 {
-    return compare_texts(entry_name(state, left), entry_name(state, right));
+    return text_compare(entry_name(state, left), entry_name(state, right));
 }
 
 static void merge_names(const ScanState *state, const BorrowedWord *from, BorrowedWord *to,
@@ -242,7 +223,7 @@ static void keep_smaller_half(ScanState *state, Batch *batch)
     uint32_t write = batch->start;
     for (uint32_t read = batch->start; read < state->listing_used;) {
         uint32_t size = ENTRY_HEAD + 1 + text_length(entry_name(state, read));
-        if (compare_texts(entry_name(state, read), state->cutoff) < 0) {
+        if (text_compare(entry_name(state, read), state->cutoff) < 0) {
             for (uint32_t index = 0; index < size; index++) {
                 state->listing[write + index] = state->listing[read + index];
             }
@@ -257,8 +238,8 @@ static void keep_smaller_half(ScanState *state, Batch *batch)
 
 static bool wanted(const ScanState *state, const Batch *batch, const char *name)
 {
-    return name[0] != '.' && (batch->after == NULL || compare_texts(name, batch->after) > 0) &&
-           (!batch->cut || compare_texts(name, state->cutoff) < 0);
+    return name[0] != '.' && (batch->after == NULL || text_compare(name, batch->after) > 0) &&
+           (!batch->cut || text_compare(name, state->cutoff) < 0);
 }
 
 static ScanResult add_to_batch(ScanState *state, Batch *batch)
@@ -269,7 +250,7 @@ static ScanResult add_to_batch(ScanState *state, Batch *batch)
             return SCAN_FOLDER_TOO_BIG;
         }
         keep_smaller_half(state, batch);
-        if (compare_texts(state->entry.name, state->cutoff) >= 0) {
+        if (text_compare(state->entry.name, state->cutoff) >= 0) {
             return SCAN_OK;
         }
     }

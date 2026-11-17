@@ -1,5 +1,6 @@
 #include <stddef.h>
 
+#include "core/text.h"
 #include "tags_internal.h"
 
 enum {
@@ -207,15 +208,6 @@ static const char *genre_for_id(const char *id, uint32_t length)
     return tag_same_text(id, length, "RX") ? "Remix" : "Unknown";
 }
 
-static uint32_t length_of(const char *text)
-{
-    uint32_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
 static void offer_text(TagReader *reader, const char *text)
 {
     if (text[0] != '\0') {
@@ -260,7 +252,7 @@ static void offer_genre(TagReader *reader, TagField field, const char *value, Id
     (void)field;
     (void)tag;
     if (value[0] != '\0') {
-        offer_genre_text(reader, value, length_of(value));
+        offer_genre_text(reader, value, text_length(value));
     }
 }
 
@@ -298,7 +290,7 @@ static void read_text_frame(TagReader *reader, const Frame *frame, const FrameNa
         char description[TRACK_TAG_TEXT_CAPACITY];
         decode_value(description, data + 1, end - 1, data[0]);
         if (end + width > length ||
-            !tag_same_text_folded(description, length_of(description), "albumversion")) {
+            !tag_same_text_folded(description, text_length(description), "albumversion")) {
             return;
         }
         data[end + width - 1] = data[0];

@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "core/string_builder.h"
+#include "core/text.h"
 #include "dsp/equalizer_fit.h"
 #include "sound/equalizer_fit_file.h"
 
@@ -129,18 +130,9 @@ static void clear_unused(const Slot *slots, uint8_t *bytes)
     }
 }
 
-static bool same_name(const char *first, const char *second)
-{
-    uint32_t index = 0;
-    while (first[index] != '\0' && first[index] == second[index]) {
-        index++;
-    }
-    return first[index] == second[index];
-}
-
 static bool forced(const EqualizerFitsRequest *request, const char *name)
 {
-    return request->all || (request->only != NULL && same_name(name, request->only));
+    return request->all || (request->only != NULL && text_same(name, request->only));
 }
 
 static void log_path(char *path)

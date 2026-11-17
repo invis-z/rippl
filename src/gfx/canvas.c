@@ -75,6 +75,16 @@ Color canvas_pixel_at(const Canvas *canvas, int x, int y)
     return contains(canvas->bounds, (Point){x, y}) ? *pixel_address(canvas, x, y) : 0;
 }
 
+void canvas_outline_rect(Canvas *canvas, Rect area, int thickness, Color color)
+{
+    canvas_fill_rect(canvas, (Rect){area.x, area.y, area.width, thickness}, color);
+    canvas_fill_rect(
+        canvas, (Rect){area.x, area.y + area.height - thickness, area.width, thickness}, color);
+    canvas_fill_rect(canvas, (Rect){area.x, area.y, thickness, area.height}, color);
+    canvas_fill_rect(
+        canvas, (Rect){area.x + area.width - thickness, area.y, thickness, area.height}, color);
+}
+
 void canvas_dim_rect(Canvas *canvas, Rect area)
 {
     Rect visible = rect_intersection(canvas->clip, area);

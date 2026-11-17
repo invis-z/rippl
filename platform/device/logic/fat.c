@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "core/text.h"
 #include "exfat.h"
 #include "fat_layout.h"
 #include "fat_names.h"
@@ -174,15 +175,6 @@ bool fat_find_entry(FatVolume *volume, FatFile *directory, const char *name, siz
     return find_fat_entry(volume, directory, name, length, found);
 }
 
-static size_t component_length(const char *path)
-{
-    size_t length = 0;
-    while (path[length] != '\0' && path[length] != '/') {
-        length++;
-    }
-    return length;
-}
-
 static bool walk_from(FatVolume *volume, FatFile *current, const char *path, const char *end,
                       bool *found_any)
 {
@@ -191,7 +183,7 @@ static bool walk_from(FatVolume *volume, FatFile *current, const char *path, con
             path++;
             continue;
         }
-        size_t length = component_length(path);
+        size_t length = text_component_length(path);
         if (!current->directory || !fat_find_entry(volume, current, path, length, current)) {
             return false;
         }

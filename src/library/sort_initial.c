@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "core/resident.h"
+#include "core/text.h"
 #include "core/utf8.h"
 #include "library/sort_key.h"
 
@@ -17,15 +18,6 @@ RIPPL_RESIDENT static const char LATIN_INITIALS[] =
     "aaaaaaccccccccdd~~eeeeeeeeeegggggggghh~~iiiiiiiii~iijjkk~lllllll"
     "l~~nnnnnn~~~oooooo~~rrrrrrsssssssstttt~~uuuuuuuuuuuuwwyyyzzzzzzs";
 
-static bool is_space(uint32_t code_point)
-{
-    return code_point == ' ' || (code_point >= 0x09 && code_point <= 0x0D) ||
-           (code_point >= 0x1C && code_point <= 0x1F) || code_point == 0x85 || code_point == 0xA0 ||
-           code_point == 0x1680 || (code_point >= 0x2000 && code_point <= 0x200A) ||
-           code_point == 0x2028 || code_point == 0x2029 || code_point == 0x202F ||
-           code_point == 0x205F || code_point == 0x3000;
-}
-
 static uint32_t lowered(uint32_t code_point)
 {
     return code_point >= 'A' && code_point <= 'Z' ? code_point + ('a' - 'A') : code_point;
@@ -37,7 +29,7 @@ static const char *skip_spaces(const char *text)
     while (true) {
         const char *before = cursor;
         uint32_t code_point = utf8_next(&cursor);
-        if (code_point == 0 || !is_space(code_point)) {
+        if (code_point == 0 || !text_is_space(code_point)) {
             return before;
         }
     }

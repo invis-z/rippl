@@ -17,6 +17,7 @@ Canvas canvas_shifted(const Canvas *canvas, int dx, Rect area);
 void canvas_clear(Canvas *canvas, Color color);
 void canvas_fill_rect(Canvas *canvas, Rect area, Color color);
 void canvas_dim_rect(Canvas *canvas, Rect area);
+void canvas_outline_rect(Canvas *canvas, Rect area, int thickness, Color color);
 void canvas_fill_gradient(Canvas *canvas, Rect area, Color top, Color bottom);
 void canvas_blend_pixel(Canvas *canvas, Point point, Color color, uint8_t alpha);
 Color canvas_pixel_at(const Canvas *canvas, int x, int y);

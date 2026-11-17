@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include "core/hash.h"
+#include "core/text.h"
 
 #define SECOND_SEED (HASH_START ^ UINT32_C(0x5BD1E995))
 
@@ -19,15 +20,6 @@ typedef struct Walk {
     MusicFingerprint print;
     uint32_t depth;
 } Walk;
-
-static uint32_t text_length(const char *text)
-{
-    uint32_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
 
 static char folded(char letter)
 {

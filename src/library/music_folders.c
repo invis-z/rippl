@@ -4,6 +4,7 @@
 
 #include "core/bytes.h"
 #include "core/hash.h"
+#include "core/text.h"
 #include "core/volume_path.h"
 
 enum {
@@ -48,15 +49,6 @@ bool music_folders_decode(const uint8_t *bytes, uint32_t size, MusicFolders *fol
         folders->keys[index] = bytes_get32(bytes + KEYS_AT + 4 * index);
     }
     return true;
-}
-
-static size_t text_length(const char *text)
-{
-    size_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
 }
 
 bool music_folders_key(const char *folder, const char *name, uint32_t *key)

@@ -4,6 +4,7 @@
 
 #include "core/bytes.h"
 #include "core/hash.h"
+#include "core/text.h"
 #include "image/cover_image.h"
 #include "library/covers.h"
 #include "library/library.h"
@@ -89,15 +90,6 @@ typedef struct CoverState {
     uint32_t decode_size;
 } CoverState;
 
-static uint32_t text_length(const char *text)
-{
-    uint32_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
 static uint32_t art_stamp(const char *path, uint32_t first, uint32_t second, uint32_t third)
 {
     uint8_t numbers[STAMP_NUMBERS * 4];
@@ -151,20 +143,15 @@ static bool open_any_embedded(CoverState *state, const CoverJob *job, ArtFile *a
     return false;
 }
 
-static char lower(char character)
-{
-    return character >= 'A' && character <= 'Z' ? (char)(character - 'A' + 'a') : character;
-}
-
 static bool is_name(const char *name, const char *stem, const char *suffix)
 {
     while (*stem != '\0') {
-        if (lower(*name++) != *stem++) {
+        if (text_lower(*name++) != *stem++) {
             return false;
         }
     }
     while (*suffix != '\0') {
-        if (lower(*name++) != *suffix++) {
+        if (text_lower(*name++) != *suffix++) {
             return false;
         }
     }

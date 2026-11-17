@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 
+#include "core/text.h"
+#include "core/utf8.h"
 #include "tags_internal.h"
 
 typedef struct FormatName {
@@ -16,15 +18,10 @@ static const FormatName FORMATS[] = {
     {"dsf", TAG_FORMAT_DSF},   {"dff", TAG_FORMAT_DFF}, {"qoa", TAG_FORMAT_QOA},
 };
 
-static char lower(char character)
-{
-    return character >= 'A' && character <= 'Z' ? (char)(character - 'A' + 'a') : character;
-}
-
 static bool same_folded(const char *text, const char *wanted)
 {
     for (; *wanted != '\0'; text++, wanted++) {
-        if (lower(*text) != *wanted) {
+        if (text_lower(*text) != *wanted) {
             return false;
         }
     }
@@ -103,7 +100,7 @@ bool tag_same_text_folded(const char *text, uint32_t length, const char *wanted)
 {
     uint32_t index = 0;
     for (; index < length && wanted[index] != '\0'; index++) {
-        if (lower(text[index]) != wanted[index]) {
+        if (text_lower(text[index]) != wanted[index]) {
             return false;
         }
     }
@@ -115,15 +112,6 @@ void tag_mark_present(TagReader *reader, TagField field)
     reader->present[field] = true;
 }
 
-static bool is_space(uint32_t code_point)
-{
-    return code_point == ' ' || (code_point >= 0x09 && code_point <= 0x0D) ||
-           (code_point >= 0x1C && code_point <= 0x1F) || code_point == 0x85 || code_point == 0xA0 ||
-           code_point == 0x1680 || (code_point >= 0x2000 && code_point <= 0x200A) ||
-           code_point == 0x2028 || code_point == 0x2029 || code_point == 0x202F ||
-           code_point == 0x205F || code_point == 0x3000;
-}
-
 typedef struct TextBuilder {
     char *text;
     uint32_t length;
@@ -131,28 +119,17 @@ typedef struct TextBuilder {
     bool started;
 } TextBuilder;
 
-static uint32_t utf8_size(uint32_t code_point)
-{
-    if (code_point < 0x80) {
-        return 1;
-    }
-    if (code_point < 0x800) {
-        return 2;
-    }
-    return code_point < 0x10000 ? 3 : 4;
-}
-
 static void put_code_point(TextBuilder *builder, uint32_t code_point)
 {
     static const uint8_t LEADS[5] = {0, 0x00, 0xC0, 0xE0, 0xF0};
-    if (code_point == 0 || (!builder->started && is_space(code_point))) {
+    if (code_point == 0 || (!builder->started && text_is_space(code_point))) {
         return;
     }
-    uint32_t size = utf8_size(code_point);
+    uint32_t size = utf8_encoded_size(code_point);
     if (builder->length + size >= TRACK_TAG_TEXT_CAPACITY) {
         return;
     }
-    bool space = is_space(code_point);
+    bool space = text_is_space(code_point);
     for (uint32_t index = size - 1; index > 0; index--) {
         builder->text[builder->length + index] = (char)(0x80 | (code_point & 0x3F));
         code_point >>= 6;
@@ -226,7 +203,7 @@ static uint32_t visible(uint32_t code_point)
         code_point == 0x2029 || code_point == 0x202F || code_point == 0x205F) {
         return ' ';
     }
-    bool hidden = (code_point < 0x20 && !is_space(code_point)) || code_point == 0x7F ||
+    bool hidden = (code_point < 0x20 && !text_is_space(code_point)) || code_point == 0x7F ||
                   code_point == 0xFEFF || (code_point >= 0x200B && code_point <= 0x200F) ||
                   code_point == 0x2060 || code_point == 0xFFFE || code_point == 0xFFFF;
     return hidden ? 0 : code_point;

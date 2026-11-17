@@ -23,20 +23,10 @@ enum {
     PERCENT_CAPACITY = 8
 };
 
-static void draw_outline(Canvas *canvas, Rect body, Color color)
-{
-    canvas_fill_rect(canvas, (Rect){body.x, body.y, body.width, BORDER}, color);
-    canvas_fill_rect(canvas, (Rect){body.x, body.y + body.height - BORDER, body.width, BORDER},
-                     color);
-    canvas_fill_rect(canvas, (Rect){body.x, body.y, BORDER, body.height}, color);
-    canvas_fill_rect(canvas, (Rect){body.x + body.width - BORDER, body.y, BORDER, body.height},
-                     color);
-}
-
 static void draw_battery(Canvas *canvas, const Theme *theme, Rect body, HalBattery battery)
 {
     Color outline = theme->colors.text;
-    draw_outline(canvas, body, outline);
+    canvas_outline_rect(canvas, body, BORDER, outline);
     canvas_fill_rect(
         canvas,
         (Rect){body.x + body.width, body.y + (body.height - NUB_HEIGHT) / 2, NUB_WIDTH, NUB_HEIGHT},

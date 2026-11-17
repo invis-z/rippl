@@ -1,5 +1,6 @@
 #include <stddef.h>
 
+#include "core/text.h"
 #include "tags_internal.h"
 
 enum {
@@ -82,19 +83,10 @@ static void read_name(const TagReader *reader, uint32_t offset, uint32_t length,
     }
 }
 
-static uint32_t length_of(const char *text)
-{
-    uint32_t length = 0;
-    while (text[length] != '\0') {
-        length++;
-    }
-    return length;
-}
-
 static int field_for(const char *name)
 {
     for (size_t index = 0; index < sizeof NAMES / sizeof NAMES[0]; index++) {
-        if (tag_same_text(name, length_of(name), NAMES[index].name)) {
+        if (tag_same_text(name, text_length(name), NAMES[index].name)) {
             return (int)NAMES[index].field;
         }
     }
@@ -146,7 +138,7 @@ static void read_picture(TagReader *reader, const Attribute *attribute)
 
 static void offer_attribute(TagReader *reader, const Attribute *attribute)
 {
-    if (tag_same_text(attribute->name, length_of(attribute->name), "WM/Picture")) {
+    if (tag_same_text(attribute->name, text_length(attribute->name), "WM/Picture")) {
         if (attribute->type == TYPE_BYTES) {
             read_picture(reader, attribute);
         }
