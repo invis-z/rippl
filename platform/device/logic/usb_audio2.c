@@ -235,22 +235,6 @@ _Static_assert(sizeof HEAD + USB_AUDIO2_LAST_ALT * sizeof SETTING + sizeof TAIL 
                    USB_AUDIO2_CONFIGURATION_LENGTH,
                "the configuration length matches its parts");
 
-static UsbReply stall(void)
-{
-    return (UsbReply){USB_REPLY_STALL, NULL, 0, USB_ACTION_NONE, 0};
-}
-
-static UsbReply status(void)
-{
-    return (UsbReply){USB_REPLY_STATUS, NULL, 0, USB_ACTION_NONE, 0};
-}
-
-static UsbReply data_reply(const uint8_t *bytes, uint16_t length, UsbSetup setup)
-{
-    uint16_t sent = length < setup.length ? length : setup.length;
-    return (UsbReply){USB_REPLY_DATA, bytes, sent, USB_ACTION_NONE, 0};
-}
-
 uint8_t usb_audio2_sample_bytes(uint8_t alt)
 {
     return alt == 0 ? 0 : alt == 1 ? 2 : 4;
@@ -301,7 +285,7 @@ static UsbReply configuration(UsbAudio *audio, uint8_t type, UsbSpeed speed, Usb
     uint8_t *tail = at;
     append(at, TAIL, sizeof TAIL);
     tail[TAIL_HID_INTERVAL] = high ? HIGH_SPEED_HID_INTERVAL : USB_HID_INTERVAL_MS;
-    return data_reply(audio->configuration, USB_AUDIO2_CONFIGURATION_LENGTH, setup);
+    return usb_reply_data(audio->configuration, USB_AUDIO2_CONFIGURATION_LENGTH, setup);
 }
 
 bool usb_audio2_owns_descriptor(UsbSetup setup)
@@ -318,9 +302,9 @@ UsbReply usb_audio2_descriptor(UsbAudio *audio, UsbSetup setup)
     UsbSpeed speed = audio->device->speed;
     switch (setup.value >> 8) {
     case DESCRIPTOR_DEVICE:
-        return data_reply(DEVICE_DESCRIPTOR, sizeof DEVICE_DESCRIPTOR, setup);
+        return usb_reply_data(DEVICE_DESCRIPTOR, sizeof DEVICE_DESCRIPTOR, setup);
     case DESCRIPTOR_DEVICE_QUALIFIER:
-        return data_reply(DEVICE_QUALIFIER, sizeof DEVICE_QUALIFIER, setup);
+        return usb_reply_data(DEVICE_QUALIFIER, sizeof DEVICE_QUALIFIER, setup);
     case DESCRIPTOR_OTHER_SPEED_CONFIGURATION:
         return configuration(audio, DESCRIPTOR_OTHER_SPEED_CONFIGURATION,
                              speed == USB_SPEED_HIGH ? USB_SPEED_FULL : USB_SPEED_HIGH, setup);
@@ -381,7 +365,7 @@ static UsbReply rate_range(UsbAudio *audio, UsbSetup setup)
         }
     }
     bytes_put_le(audio->range, count, 2);
-    return data_reply(audio->range, (uint16_t)(2 + count * RANGE_ENTRY_BYTES), setup);
+    return usb_reply_data(audio->range, (uint16_t)(2 + count * RANGE_ENTRY_BYTES), setup);
 }
 
 static UsbReply volume_range(UsbAudio *audio, UsbSetup setup)
@@ -390,13 +374,13 @@ static UsbReply volume_range(UsbAudio *audio, UsbSetup setup)
     bytes_put_le(audio->range + 2, (uint16_t)VOLUME_MIN, 2);
     bytes_put_le(audio->range + 4, VOLUME_MAX, 2);
     bytes_put_le(audio->range + 6, VOLUME_RESOLUTION, 2);
-    return data_reply(audio->range, 8, setup);
+    return usb_reply_data(audio->range, 8, setup);
 }
 
 static UsbReply current(UsbAudio *audio, uint32_t value, uint16_t length, UsbSetup setup)
 {
     bytes_put_le(audio->reply, value, length);
-    return data_reply(audio->reply, length, setup);
+    return usb_reply_data(audio->reply, length, setup);
 }
 
 UsbReply usb_audio2_class_in(UsbAudio *audio, UsbSetup setup)
@@ -405,10 +389,10 @@ UsbReply usb_audio2_class_in(UsbAudio *audio, UsbSetup setup)
     if (setup.request == REQUEST_RANGE) {
         return control == CONTROL2_FREQUENCY ? rate_range(audio, setup)
                : control == CONTROL2_VOLUME  ? volume_range(audio, setup)
-                                             : stall();
+                                             : usb_reply_stall();
     }
     if (setup.request != REQUEST_CUR) {
-        return stall();
+        return usb_reply_stall();
     }
     switch (control) {
     case CONTROL2_FREQUENCY:
@@ -420,7 +404,7 @@ UsbReply usb_audio2_class_in(UsbAudio *audio, UsbSetup setup)
     case CONTROL2_VOLUME:
         return current(audio, (uint16_t)audio->volume, 2, setup);
     default:
-        return stall();
+        return usb_reply_stall();
     }
 }
 
@@ -432,7 +416,8 @@ static bool writable(Control2 control)
 UsbReply usb_audio2_class_out(UsbSetup setup)
 {
     bool known = setup.request == REQUEST_CUR && setup.length > 0 && writable(control_of(setup));
-    return known ? (UsbReply){USB_REPLY_RECEIVE, NULL, setup.length, USB_ACTION_NONE, 0} : stall();
+    return known ? (UsbReply){USB_REPLY_RECEIVE, NULL, setup.length, USB_ACTION_NONE, 0}
+                 : usb_reply_stall();
 }
 
 UsbReply usb_audio2_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data, uint16_t length)
@@ -442,18 +427,18 @@ UsbReply usb_audio2_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data
                                  : control == CONTROL2_VOLUME  ? 2
                                                                : 1);
     if (!writable(control) || length < needed) {
-        return stall();
+        return usb_reply_stall();
     }
     uint32_t value = bytes_get_le(data, needed);
     if (control == CONTROL2_FREQUENCY) {
         if (!rate_offered(audio->device->speed, value)) {
-            return stall();
+            return usb_reply_stall();
         }
         if (audio->rate != value) {
             audio->rate = value;
             audio->changes |= USB_AUDIO_CHANGED_FORMAT;
         }
-        return status();
+        return usb_reply_status(USB_ACTION_NONE, 0);
     }
     if (control == CONTROL2_MUTE) {
         audio->muted = value != 0;
@@ -464,5 +449,5 @@ UsbReply usb_audio2_receive(UsbAudio *audio, UsbSetup setup, const uint8_t *data
                                                         : volume);
     }
     audio->changes |= USB_AUDIO_CHANGED_VOLUME;
-    return status();
+    return usb_reply_status(USB_ACTION_NONE, 0);
 }
