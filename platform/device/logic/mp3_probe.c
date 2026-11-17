@@ -1,5 +1,6 @@
 #include "device/mp3_probe.h"
 
+#include "core/bytes.h"
 #include "core/resident.h"
 
 enum {
@@ -52,12 +53,6 @@ typedef struct Header {
     uint32_t length;
     uint16_t samples;
 } Header;
-
-static uint32_t big_endian(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] << 24 | (uint32_t)bytes[1] << 16 | (uint32_t)bytes[2] << 8 |
-           (uint32_t)bytes[3];
-}
 
 static uint32_t little_endian(const uint8_t *bytes)
 {
@@ -231,12 +226,12 @@ static bool read_info(FlacInput input, uint32_t frame, const Header *header, uin
     }
     uint32_t at = HEADER_BYTES + side_info_bytes(header);
     if (same_tag(bytes + at, "Xing", 4) || same_tag(bytes + at, "Info", 4)) {
-        uint32_t flags = big_endian(bytes + at + 4);
+        uint32_t flags = bytes_get32_be(bytes + at + 4);
         uint32_t field = at + 8;
         if ((flags & XING_FRAMES_FLAG) == 0) {
             return false;
         }
-        stream->total_samples = big_endian(bytes + field) * header->samples;
+        stream->total_samples = bytes_get32_be(bytes + field) * header->samples;
         field += 4;
         if ((flags & XING_BYTES_FLAG) != 0) {
             field += 4;
@@ -257,7 +252,7 @@ static bool read_info(FlacInput input, uint32_t frame, const Header *header, uin
         return true;
     }
     if (same_tag(bytes + VBRI_OFFSET, "VBRI", 4)) {
-        stream->total_samples = big_endian(bytes + VBRI_OFFSET + 14) * header->samples;
+        stream->total_samples = bytes_get32_be(bytes + VBRI_OFFSET + 14) * header->samples;
         return true;
     }
     return false;

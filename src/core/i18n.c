@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 
+#include "core/bytes.h"
+
 enum {
     MAGIC_SIZE = 4,
     VERSION_FIELD = 4,
@@ -35,16 +37,6 @@ static const uint16_t ENGLISH_OFFSETS[STRING_COUNT] = {
 
 static const uint8_t *pack_bytes;
 
-static uint32_t read_u16(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << BITS_PER_BYTE;
-}
-
-static uint32_t read_u32(const uint8_t *bytes)
-{
-    return read_u16(bytes) | read_u16(bytes + OFFSET_BYTES) << (2 * BITS_PER_BYTE);
-}
-
 static uint32_t text_base(void)
 {
     return I18N_HEADER_BYTES + (uint32_t)STRING_COUNT * OFFSET_BYTES;
@@ -54,7 +46,7 @@ static bool offsets_are_valid(const uint8_t *pack, uint32_t size)
 {
     uint32_t base = text_base();
     for (uint32_t id = 0; id < STRING_COUNT; id++) {
-        uint32_t offset = read_u16(pack + I18N_HEADER_BYTES + id * OFFSET_BYTES);
+        uint32_t offset = bytes_get16(pack + I18N_HEADER_BYTES + id * OFFSET_BYTES);
         if (base + offset >= size) {
             return false;
         }
@@ -80,16 +72,17 @@ bool i18n_header_valid(const uint8_t *header, size_t file_size)
             return false;
         }
     }
-    uint32_t declared = read_u32(header + SIZE_FIELD);
-    return read_u16(header + VERSION_FIELD) == I18N_VERSION &&
-           read_u16(header + COUNT_FIELD) == STRING_COUNT && declared <= file_size &&
+    uint32_t declared = bytes_get32(header + SIZE_FIELD);
+    return bytes_get16(header + VERSION_FIELD) == I18N_VERSION &&
+           bytes_get16(header + COUNT_FIELD) == STRING_COUNT && declared <= file_size &&
            text_base() < declared;
 }
 
 bool i18n_attach(const uint8_t *pack, size_t size)
 {
     i18n_detach();
-    if (!i18n_header_valid(pack, size) || !offsets_are_valid(pack, read_u32(pack + SIZE_FIELD))) {
+    if (!i18n_header_valid(pack, size) ||
+        !offsets_are_valid(pack, bytes_get32(pack + SIZE_FIELD))) {
         return false;
     }
     pack_bytes = pack;
@@ -117,7 +110,7 @@ const char *i18n_text(StringId id)
         return "";
     }
     if (pack_bytes != NULL) {
-        uint32_t offset = read_u16(pack_bytes + I18N_HEADER_BYTES + (uint32_t)id * OFFSET_BYTES);
+        uint32_t offset = bytes_get16(pack_bytes + I18N_HEADER_BYTES + (uint32_t)id * OFFSET_BYTES);
         const char *text = (const char *)pack_bytes + text_base() + offset;
         if (text[0] != '\0') {
             return text;

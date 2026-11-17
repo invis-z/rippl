@@ -1,5 +1,6 @@
 #include "library/library.h"
 
+#include "core/bytes.h"
 #include "core/hash.h"
 #include "core/utf8.h"
 
@@ -45,16 +46,6 @@ static const uint16_t RECORD_SIZES[LIBRARY_SECTION_COUNT] = {
     [LIBRARY_LINKS] = INDEX_SIZE,       [LIBRARY_STRINGS] = STRING_SIZE,
 };
 
-static uint16_t u16_at(const uint8_t *bytes, uint32_t offset)
-{
-    return (uint16_t)(bytes[offset] | bytes[offset + 1] << BITS_PER_BYTE);
-}
-
-static uint32_t u32_at(const uint8_t *bytes, uint32_t offset)
-{
-    return (uint32_t)u16_at(bytes, offset) | (uint32_t)u16_at(bytes, offset + 2) << 16;
-}
-
 static bool read_source(const Library *library, uint32_t offset, void *buffer, uint32_t length)
 {
     return library->source.read(library->source.context, offset, buffer, length);
@@ -65,10 +56,10 @@ static LibrarySectionInfo decode_section(const uint8_t *header, int section, boo
     uint32_t size = wide ? WIDE_SECTION_ENTRY_SIZE : SECTION_ENTRY_SIZE;
     uint32_t entry = (uint32_t)SECTION_TABLE + (uint32_t)section * size;
     return (LibrarySectionInfo){
-        .offset = u32_at(header, entry),
-        .count = u32_at(header, entry + 4),
-        .record_size = u16_at(header, entry + 8),
-        .music = wide ? u32_at(header, entry + 12) : u16_at(header, entry + 10),
+        .offset = bytes_get32_at(header, entry),
+        .count = bytes_get32_at(header, entry + 4),
+        .record_size = bytes_get16_at(header, entry + 8),
+        .music = wide ? bytes_get32_at(header, entry + 12) : bytes_get16_at(header, entry + 10),
     };
 }
 
@@ -81,15 +72,15 @@ static bool section_fits(LibrarySectionInfo section, uint16_t expected_size, uin
 
 static LibraryStatus decode_header(Library *library, const uint8_t *header, uint32_t size)
 {
-    uint32_t magic = u32_at(header, 0);
+    uint32_t magic = bytes_get32_at(header, 0);
     bool wide = magic == WIDE_MAGIC;
     if (!wide && magic != NARROW_MAGIC) {
         return LIBRARY_BAD_MAGIC;
     }
-    if (u16_at(header, VERSION_FIELD) != (wide ? LIBRARY_WIDE_VERSION : LIBRARY_VERSION)) {
+    if (bytes_get16_at(header, VERSION_FIELD) != (wide ? LIBRARY_WIDE_VERSION : LIBRARY_VERSION)) {
         return LIBRARY_BAD_VERSION;
     }
-    if (u16_at(header, SECTION_COUNT_FIELD) !=
+    if (bytes_get16_at(header, SECTION_COUNT_FIELD) !=
         (wide ? LIBRARY_WIDE_SECTION_COUNT : LIBRARY_SECTION_COUNT)) {
         return LIBRARY_BAD_LAYOUT;
     }
@@ -225,11 +216,11 @@ static uint32_t field_value(const uint8_t *record, uint8_t field)
     case FIELD_U8:
         return record[offset];
     case FIELD_U16:
-        return u16_at(record, offset);
+        return bytes_get16_at(record, offset);
     case FIELD_U32:
-        return u32_at(record, offset);
+        return bytes_get32_at(record, offset);
     default:
-        return narrow_index(u16_at(record, offset));
+        return narrow_index(bytes_get16_at(record, offset));
     }
 }
 
@@ -465,8 +456,8 @@ bool library_album_key_at(const Library *library, uint32_t position, uint64_t *k
                      sizeof bytes)) {
         return false;
     }
-    *key = (uint64_t)u32_at(bytes, 4) << 32 | u32_at(bytes, 0);
-    *album = u32_at(bytes, 8);
+    *key = (uint64_t)bytes_get32_at(bytes, 4) << 32 | bytes_get32_at(bytes, 0);
+    *album = bytes_get32_at(bytes, 8);
     return *album < library->sections[LIBRARY_ALBUMS].count;
 }
 
@@ -493,7 +484,7 @@ bool library_album_rank(const Library *library, uint32_t album, uint32_t *rank)
                      sizeof bytes)) {
         return false;
     }
-    *rank = u32_at(bytes, 0);
+    *rank = bytes_get32_at(bytes, 0);
     return *rank < library->album_keys.count;
 }
 
@@ -530,8 +521,8 @@ static bool read_id(const Library *library, uint32_t row, uint64_t *id, uint32_t
     if (!read_source(library, library->ids.offset + row * LIBRARY_ID_SIZE, bytes, sizeof bytes)) {
         return false;
     }
-    *id = (uint64_t)u32_at(bytes, 4) << 32 | u32_at(bytes, 0);
-    *track = u32_at(bytes, 8);
+    *id = (uint64_t)bytes_get32_at(bytes, 4) << 32 | bytes_get32_at(bytes, 0);
+    *track = bytes_get32_at(bytes, 8);
     return true;
 }
 

@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "core/bytes.h"
 #include "core/hash.h"
 #include "image/cover_image.h"
 #include "library/covers.h"
@@ -88,24 +89,6 @@ typedef struct CoverState {
     uint32_t decode_size;
 } CoverState;
 
-static void put16(uint8_t *bytes, uint32_t value)
-{
-    bytes[0] = (uint8_t)value;
-    bytes[1] = (uint8_t)(value >> 8);
-}
-
-static void put32(uint8_t *bytes, uint32_t value)
-{
-    put16(bytes, value);
-    put16(bytes + 2, value >> 16);
-}
-
-static uint32_t get32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
-
 static uint32_t text_length(const char *text)
 {
     uint32_t length = 0;
@@ -118,9 +101,9 @@ static uint32_t text_length(const char *text)
 static uint32_t art_stamp(const char *path, uint32_t first, uint32_t second, uint32_t third)
 {
     uint8_t numbers[STAMP_NUMBERS * 4];
-    put32(numbers, first);
-    put32(numbers + 4, second);
-    put32(numbers + 8, third);
+    bytes_put32(numbers, first);
+    bytes_put32(numbers + 4, second);
+    bytes_put32(numbers + 8, third);
     uint32_t hash = hash_update(HASH_START, path, text_length(path));
     return hash_update(hash, numbers, sizeof numbers);
 }
@@ -352,10 +335,10 @@ static bool write_record(CoverState *state, SegmentStore *store, uint32_t slot)
     uint8_t *full = (uint8_t *)state->full;
     uint8_t *half = (uint8_t *)state->half;
     for (uint32_t index = 0; index < COVER_FULL_PIXELS; index++) {
-        put16(full + index * 2, state->full[index]);
+        bytes_put16(full + index * 2, state->full[index]);
     }
     for (uint32_t index = 0; index < COVER_HALF_PIXELS; index++) {
-        put16(half + index * 2, state->half[index]);
+        bytes_put16(half + index * 2, state->half[index]);
     }
     return length == offset && appended(state, store, full, COVER_FULL_BYTES) &&
            appended(state, store, half, COVER_HALF_BYTES);
@@ -406,7 +389,7 @@ static const uint8_t *row_at(Rows *rows, uint32_t index)
 
 static uint64_t key_of(const uint8_t *row)
 {
-    return (uint64_t)get32(row + 4) << 32 | get32(row);
+    return (uint64_t)bytes_get32(row + 4) << 32 | bytes_get32(row);
 }
 
 static void open_old(CoverState *state, SegmentStore *store)
@@ -453,8 +436,8 @@ static bool old_cover(CoverState *state, uint64_t key, uint32_t *slot, uint32_t 
     if (cover == NULL) {
         return false;
     }
-    *slot = get32(cover);
-    *stamp = get32(cover + 4);
+    *slot = bytes_get32(cover);
+    *stamp = bytes_get32(cover + 4);
     return *slot < old->slots && *stamp != 0;
 }
 
@@ -473,8 +456,8 @@ static ScanResult flush_rows(CoverState *state, SegmentStore *store)
 
 static ScanResult put_row(CoverState *state, SegmentStore *store, uint32_t slot, uint32_t stamp)
 {
-    put32(state->out + state->out_used, slot);
-    put32(state->out + state->out_used + 4, stamp);
+    bytes_put32(state->out + state->out_used, slot);
+    bytes_put32(state->out + state->out_used + 4, stamp);
     state->out_used += ROW_BYTES;
     return state->out_used == sizeof state->out ? flush_rows(state, store) : SCAN_OK;
 }
@@ -542,7 +525,7 @@ static ScanResult walk(CoverState *state, const CoverJob *job, CoverStats *stats
         }
         uint64_t key = key_of(entry);
         if (position == 0 || key != last_key) {
-            cover_album(state, job, get32(entry + 8), key, row, stats);
+            cover_album(state, job, bytes_get32(entry + 8), key, row, stats);
         }
         ScanResult result = put_row(state, job->store, row[0], row[1]);
         if (result != SCAN_OK) {

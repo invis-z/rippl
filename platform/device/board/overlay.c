@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "board.h"
+#include "core/bytes.h"
 #include "device/image_crc.h"
 #include "device/np_faces_gate.h"
 #include "emmc.h"
@@ -22,12 +23,6 @@ static NpFacesGate np_faces_gate;
 
 static const BoardOverlay NP_FACES_OVERLAY = {NP_FACES_IMAGE_OFFSET, NP_FACES_IMAGE_MAGIC,
                                               (uint8_t *)NP_FACES_BASE, NP_FACES_BYTES};
-
-static uint32_t le32(const uint8_t *bytes)
-{
-    return (uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 |
-           (uint32_t)bytes[3] << 24;
-}
 
 static uint32_t running_code_crc(void)
 {
@@ -55,10 +50,11 @@ static bool read_sectors(uint32_t first_sector, uint32_t sectors, uint8_t *targe
 static uint32_t header_size(const BoardOverlay *overlay)
 {
     const uint8_t *base = overlay->base;
-    uint32_t size = le32(base + 4);
+    uint32_t size = bytes_get32(base + 4);
     uint32_t sectors = (size + SECTOR_BYTES - 1) / SECTOR_BYTES;
-    if (le32(base) != overlay->magic || size < OVERLAY_HEADER_BYTES ||
-        sectors * SECTOR_BYTES > overlay->capacity || le32(base + 12) != running_code_crc()) {
+    if (bytes_get32(base) != overlay->magic || size < OVERLAY_HEADER_BYTES ||
+        sectors * SECTOR_BYTES > overlay->capacity ||
+        bytes_get32(base + 12) != running_code_crc()) {
         return 0;
     }
     return size;
@@ -68,7 +64,7 @@ static bool body_intact(const BoardOverlay *overlay, uint32_t size)
 {
     const uint8_t *base = overlay->base;
     return image_crc_update(0, base + OVERLAY_HEADER_BYTES, size - OVERLAY_HEADER_BYTES) ==
-           le32(base + 8);
+           bytes_get32(base + 8);
 }
 
 static uint32_t already_loaded(const BoardOverlay *overlay)
@@ -156,7 +152,8 @@ void board_np_faces_forget(void)
 static bool np_faces_header_intact(void)
 {
     const uint8_t *base = (const uint8_t *)(uintptr_t)NP_FACES_BASE;
-    return le32(base) == NP_FACES_IMAGE_MAGIC && le32(base + 12) == running_code_crc();
+    return bytes_get32(base) == NP_FACES_IMAGE_MAGIC &&
+           bytes_get32(base + 12) == running_code_crc();
 }
 
 static bool np_faces_may_load(void)
