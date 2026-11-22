@@ -14,8 +14,8 @@ sys.path.insert(0, str(TOOLS_DIRECTORY))
 import make_image
 
 RESET = 0x03050101
-IMAGE_SIZE = 0x500004
-FW_SIZE = 0x44C000
+IMAGE_SIZE = 0x800004
+FW_SIZE = 0x74C000
 CODE_OFFSET = 0xD68
 
 
@@ -147,11 +147,9 @@ class LargeLayoutTest(unittest.TestCase):
         parts = make_image.split_image(self.image)
         self.assertEqual(self.image, make_image.assemble(parts, make_image.SHAPES[8]))
 
-    def test_faces_too_big_for_5_mib_fit_8_mib(self):
+    def test_large_faces_fit_8_mib(self):
         sizes = [1_700_000, 1_700_000, 1_050_000, 1_050_000]
-        with self.assertRaises(make_image.ImageError):
-            make_image.glyph_face_offsets(sizes)
-        offsets = make_image.glyph_face_offsets(sizes, make_image.glyph_regions(0x74C000))
+        offsets = make_image.glyph_face_offsets(sizes)
         self.assertTrue(all(offset + size <= 0x74C000 for offset, size in zip(offsets, sizes)))
 
 
@@ -163,7 +161,7 @@ class LayoutTest(unittest.TestCase):
         cls.code_size = len(cls.parts.code)
         cls.data_size = len(cls.parts.data)
 
-    def test_the_image_is_5_mib_plus_the_trailer(self):
+    def test_the_image_is_8_mib_plus_the_trailer(self):
         self.assertEqual(IMAGE_SIZE, len(self.image))
 
     def test_the_fw_size_word_is_the_header_copy_offset(self):
@@ -198,10 +196,10 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(self.image[:0x200], self.image[FW_SIZE:FW_SIZE + 0x200])
 
     def test_everything_after_the_header_copy_is_zero(self):
-        self.assertFalse(any(self.image[FW_SIZE + 0x200:0x500000]))
+        self.assertFalse(any(self.image[FW_SIZE + 0x200:0x800000]))
 
     def test_the_trailer_is_the_crc_of_everything_before_it(self):
-        self.assertEqual(make_image.crc32(self.image[:0x500000]), word(self.image, 0x500000))
+        self.assertEqual(make_image.crc32(self.image[:0x800000]), word(self.image, 0x800000))
 
     def test_the_built_image_passes_the_updater_checks(self):
         self.assertEqual([], make_image.validate_image(self.image))
@@ -365,7 +363,7 @@ class ValidatorTest(unittest.TestCase):
 
     def test_a_bad_crc_is_reported(self):
         image = bytearray(build())
-        image[0x500000] ^= 1
+        image[0x800000] ^= 1
         self.assertIn("crc", " ".join(make_image.validate_image(bytes(image))))
 
     def test_a_short_file_is_reported(self):
@@ -514,12 +512,12 @@ class OverlayTest(unittest.TestCase):
         self.assertEqual(b"EOVL", image[make_image.OVERLAY_OFFSET:make_image.OVERLAY_OFFSET + 4])
         self.assertEqual([], make_image.validate_image(image))
 
-    def test_the_usb_overlay_sits_after_the_glyph_space_inside_the_header_copy(self):
-        end = make_image.USB_OVERLAY_OFFSET + make_image.USB_OVERLAY_CAPACITY
-        self.assertEqual(make_image.FW_SIZE, end)
+    def test_the_usb_overlay_sits_between_the_rescan_and_fit_overlays(self):
         self.assertEqual(0, make_image.USB_OVERLAY_OFFSET % 512)
-        self.assertIn((make_image.GLYPH_TABLE_OFFSET + make_image.GLYPH_TABLE_SIZE,
-                       make_image.USB_OVERLAY_OFFSET), make_image.GLYPH_REGIONS)
+        self.assertLessEqual(make_image.OVERLAY_OFFSET + make_image.OVERLAY_CAPACITY,
+                             make_image.USB_OVERLAY_OFFSET)
+        self.assertLessEqual(make_image.USB_OVERLAY_OFFSET + make_image.USB_OVERLAY_CAPACITY,
+                             make_image.FIT_OVERLAY_OFFSET)
 
     def test_a_usb_overlay_bigger_than_its_space_is_refused(self):
         with self.assertRaises(make_image.ImageError):
@@ -598,17 +596,25 @@ class ResidentTablesTest(unittest.TestCase):
         image = build(parts)
         self.assertEqual(make_image.crc32(parts.code), word(image, make_image.RESIDENT_OFFSET + 12))
 
-    def test_the_tables_sit_after_the_opus_program_and_before_the_mp3_slot(self):
-        opus_end = (make_image.CORE1_OPUS_OFFSET + make_image.CORE1_MODULE_HEADER_SIZE
-                    + make_image.CORE1_MODULE_CAPACITY)
-        self.assertEqual(opus_end, make_image.RESIDENT_OFFSET)
-        self.assertEqual(make_image.NP_FACES_OFFSET,
-                         make_image.RESIDENT_OFFSET + make_image.RESIDENT_CAPACITY)
-        self.assertEqual(make_image.CORE1_MP3_OFFSET,
-                         make_image.NP_FACES_OFFSET + make_image.NP_FACES_CAPACITY)
+    def test_the_slots_follow_each_other_before_the_glyph_table(self):
+        slots = [(make_image.NP_FACES_OFFSET, make_image.NP_FACES_CAPACITY),
+                 (make_image.RESIDENT_OFFSET, make_image.RESIDENT_CAPACITY),
+                 (make_image.OVERLAY_OFFSET, make_image.OVERLAY_CAPACITY),
+                 (make_image.USB_OVERLAY_OFFSET, make_image.USB_OVERLAY_CAPACITY),
+                 (make_image.FIT_OVERLAY_OFFSET, make_image.FIT_OVERLAY_CAPACITY),
+                 (make_image.CORE1_MP3_OFFSET, 512 + make_image.CORE1_MODULE_CAPACITY),
+                 (make_image.CORE1_FLAC_OFFSET, 512 + make_image.CORE1_MODULE_CAPACITY),
+                 (make_image.CORE1_AAC_OFFSET, 512 + make_image.CORE1_AAC_CAPACITY),
+                 (make_image.CORE1_OPUS_OFFSET, 512 + make_image.CORE1_MODULE_CAPACITY),
+                 (make_image.CORE1_FIT_OFFSET, 512 + make_image.CORE1_FIT_CAPACITY),
+                 (make_image.GLYPH_TABLE_OFFSET, make_image.GLYPH_TABLE_SIZE)]
+        self.assertLessEqual(make_image.GLYPH_PAYLOAD_LIMIT, slots[0][0])
+        for (offset, capacity), (following, _) in zip(slots, slots[1:]):
+            self.assertEqual(0, offset % 512)
+            self.assertLessEqual(offset + capacity, following)
+        self.assertEqual(((make_image.GLYPH_TABLE_OFFSET + make_image.GLYPH_TABLE_SIZE,
+                           make_image.LARGE_FW_SIZE),), make_image.GLYPH_REGIONS)
         self.assertEqual(0x0308F000, make_image.NP_FACES_END)
-        self.assertNotIn(0x23FA00, [low for low, _ in make_image.GLYPH_REGIONS])
-        self.assertEqual(3, len(make_image.GLYPH_REGIONS))
 
     def test_the_tables_are_not_loaded_at_start(self):
         with_tables = build(firmware(resident=self.resident()))
@@ -664,7 +670,7 @@ class NpFacesTest(unittest.TestCase):
         parts = firmware(code_tail=b"!C" * 40, np_faces=faces)
         image = build(parts)
         offset = make_image.NP_FACES_OFFSET
-        self.assertEqual(0x23CA00, offset)
+        self.assertEqual(0x034000, offset)
         self.assertEqual(b"ENPF", image[offset:offset + 4])
         self.assertEqual(len(faces), word(image, offset + 4))
         self.assertEqual(make_image.crc32(faces[16:]), word(image, offset + 8))
@@ -888,7 +894,7 @@ class Core1ModuleTest(unittest.TestCase):
         self.assertEqual(program, image[start:start + len(program)])
         self.assertEqual([], make_image.validate_image(image))
 
-    def test_the_aac_program_sits_between_the_flac_slot_and_the_glyph_table(self):
+    def test_the_aac_program_sits_between_the_flac_and_opus_slots(self):
         program = bytes(range(250)) * 7
         image = build(core1_aac=program, core1_flac=b"3" * 300)
         offset = make_image.CORE1_AAC_OFFSET
@@ -896,8 +902,8 @@ class Core1ModuleTest(unittest.TestCase):
                                 make_image.CORE1_MODULE_HEADER_SIZE +
                                 make_image.CORE1_MODULE_CAPACITY)
         self.assertEqual(0, offset % 512)
-        self.assertEqual(make_image.GLYPH_TABLE_OFFSET,
-                         offset + make_image.CORE1_MODULE_HEADER_SIZE + make_image.CORE1_AAC_CAPACITY)
+        self.assertLessEqual(offset + make_image.CORE1_MODULE_HEADER_SIZE + make_image.CORE1_AAC_CAPACITY,
+                             make_image.CORE1_OPUS_OFFSET)
         self.assertEqual(b"EC1M", image[offset:offset + 4])
         self.assertEqual(len(program), word(image, offset + 4))
         self.assertEqual(make_image.crc32(program), word(image, offset + 8))
@@ -909,13 +915,14 @@ class Core1ModuleTest(unittest.TestCase):
         with self.assertRaises(make_image.ImageError):
             build(core1_aac=bytes(make_image.CORE1_AAC_CAPACITY + 1))
 
-    def test_the_opus_program_sits_between_the_overlay_and_the_mp3_slot(self):
+    def test_the_opus_program_sits_between_the_aac_and_fit_slots(self):
         program = bytes(range(240)) * 9
         image = build(core1_opus=program, core1_mp3=bytes(300))
         offset = make_image.CORE1_OPUS_OFFSET
-        self.assertGreaterEqual(offset, make_image.OVERLAY_OFFSET + make_image.OVERLAY_CAPACITY)
+        self.assertGreaterEqual(offset, make_image.CORE1_AAC_OFFSET + make_image.CORE1_MODULE_HEADER_SIZE +
+                                make_image.CORE1_AAC_CAPACITY)
         self.assertLessEqual(offset + make_image.CORE1_MODULE_HEADER_SIZE +
-                             make_image.CORE1_MODULE_CAPACITY, make_image.CORE1_MP3_OFFSET)
+                             make_image.CORE1_MODULE_CAPACITY, make_image.CORE1_FIT_OFFSET)
         self.assertEqual(0, offset % 512)
         self.assertEqual(b"EC1M", image[offset:offset + 4])
         self.assertEqual(len(program), word(image, offset + 4))
@@ -952,23 +959,8 @@ class GlyphFaceTest(unittest.TestCase):
     def test_faces_stay_clear_of_everything_else(self):
         sizes = [1_720_000, 1_060_000, 35_000, 51_000, 53_000]
         offsets = make_image.glyph_face_offsets(sizes)
-        taken = [(make_image.OVERLAY_OFFSET, make_image.OVERLAY_OFFSET + make_image.OVERLAY_CAPACITY),
-                 (make_image.CORE1_MP3_OFFSET, make_image.CORE1_MP3_OFFSET + 512 +
-                  make_image.CORE1_MODULE_CAPACITY),
-                 (make_image.CORE1_FLAC_OFFSET, make_image.CORE1_FLAC_OFFSET + 512 +
-                  make_image.CORE1_MODULE_CAPACITY),
-                 (make_image.CORE1_AAC_OFFSET, make_image.GLYPH_TABLE_OFFSET),
-                 (make_image.CORE1_OPUS_OFFSET, make_image.CORE1_OPUS_OFFSET + 512 +
-                  make_image.CORE1_MODULE_CAPACITY),
-                 (make_image.GLYPH_TABLE_OFFSET, make_image.GLYPH_TABLE_OFFSET + 512),
-                 (make_image.RESIDENT_OFFSET,
-                  make_image.RESIDENT_OFFSET + make_image.RESIDENT_CAPACITY),
-                 (make_image.NP_FACES_OFFSET,
-                  make_image.NP_FACES_OFFSET + make_image.NP_FACES_CAPACITY),
-                 (make_image.USB_OVERLAY_OFFSET, make_image.FW_SIZE),
-                 (make_image.FIT_OVERLAY_OFFSET, make_image.CORE1_FIT_END),
-                 (make_image.FW_SIZE, make_image.IMAGE_SIZE),
-                 (0, make_image.GLYPH_PAYLOAD_LIMIT)]
+        taken = [(0, make_image.GLYPH_TABLE_OFFSET + make_image.GLYPH_TABLE_SIZE),
+                 (make_image.LARGE_FW_SIZE, make_image.LARGE_IMAGE_SIZE)]
         placed = sorted(zip(offsets, sizes))
         for (start, size), (next_start, _) in zip(placed, placed[1:]):
             self.assertLessEqual(start + size, next_start)
@@ -978,7 +970,7 @@ class GlyphFaceTest(unittest.TestCase):
 
     def test_faces_too_big_for_the_image_are_refused(self):
         with self.assertRaises(make_image.ImageError):
-            make_image.glyph_face_offsets([2_000_000, 2_000_000])
+            make_image.glyph_face_offsets([4_000_000, 4_000_000])
 
     def test_no_faces_leave_the_table_empty(self):
         offset = make_image.GLYPH_TABLE_OFFSET

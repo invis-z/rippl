@@ -8,38 +8,36 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 POLYNOMIAL = 0x04C10DB7
-IMAGE_SIZE = 0x500004
-FW_SIZE = 0x44C000
 HEADER_SIZE = 0x200
 OUTER_HEADER_SIZE = 0x1F8
 MAGIC = b"RKnanoFW"
 MAGIC_OFFSET = 0x1F8
 FW_SIZE_OFFSET = 0x1F4
 CODE_BASE = 0x03050000
-OVERLAY_OFFSET = 0x200000
+OVERLAY_OFFSET = 0x041000
 OVERLAY_BASE = 0x0307A000
 OVERLAY_CAPACITY = 0x15000
 OVERLAY_HEADER_SIZE = 16
 OVERLAY_MAGIC = b"EOVL"
-USB_OVERLAY_OFFSET = 0x43C000
+USB_OVERLAY_OFFSET = 0x059000
 USB_OVERLAY_CAPACITY = 0x10000
 USB_OVERLAY_MAGIC = b"EUSB"
-FIT_OVERLAY_OFFSET = 0x44C000
+FIT_OVERLAY_OFFSET = 0x06B000
 FIT_OVERLAY_CAPACITY = 0x8000
 FIT_OVERLAY_MAGIC = b"EEQF"
-CORE1_FIT_OFFSET = FIT_OVERLAY_OFFSET + FIT_OVERLAY_CAPACITY
+CORE1_FIT_OFFSET = 0x0F9000
 CORE1_FIT_CAPACITY = 0x10000
 CORE1_FIT_END = CORE1_FIT_OFFSET + 512 + CORE1_FIT_CAPACITY
-CORE1_MP3_OFFSET = 0x240000
-CORE1_FLAC_OFFSET = 0x280000
-CORE1_AAC_OFFSET = 0x2A0200
-CORE1_OPUS_OFFSET = 0x218000
-RESIDENT_OFFSET = 0x238200
+CORE1_MP3_OFFSET = 0x075000
+CORE1_FLAC_OFFSET = 0x096000
+CORE1_AAC_OFFSET = 0x0B7000
+CORE1_OPUS_OFFSET = 0x0D8000
+RESIDENT_OFFSET = 0x038000
 RESIDENT_BASE = 0x0309A800
 RESIDENT_CAPACITY = 0x4800
 RESIDENT_HEADER_SIZE = 16
 RESIDENT_MAGIC = b"ERES"
-NP_FACES_OFFSET = RESIDENT_OFFSET + RESIDENT_CAPACITY
+NP_FACES_OFFSET = 0x034000
 NP_FACES_BASE = 0x0308BA00
 NP_FACES_CAPACITY = 0x3600
 NP_FACES_END = NP_FACES_BASE + NP_FACES_CAPACITY
@@ -51,9 +49,9 @@ NP_FACES_SANCTIONED_TABLE = "NP_FACES_OVERLAY"
 CORE1_MODULE_CAPACITY = 0x20000
 CORE1_MODULE_HEADER_SIZE = 512
 CORE1_MODULE_MAGIC = b"EC1M"
-GLYPH_TABLE_OFFSET = 0x2C0000
+GLYPH_TABLE_OFFSET = 0x11A000
 GLYPH_TABLE_MAGIC = b"EGPT"
-CORE1_AAC_CAPACITY = GLYPH_TABLE_OFFSET - CORE1_AAC_OFFSET - CORE1_MODULE_HEADER_SIZE
+CORE1_AAC_CAPACITY = CORE1_MODULE_CAPACITY
 GLYPH_TABLE_SIZE = 512
 GLYPH_FACE_LIMIT = (GLYPH_TABLE_SIZE - 8) // 8
 GLYPH_PAYLOAD_LIMIT = 0x30000
@@ -62,23 +60,15 @@ LARGE_FW_SIZE = 0x74C000
 
 
 def glyph_regions(fw_size):
-    regions = [
-        (GLYPH_PAYLOAD_LIMIT, OVERLAY_OFFSET),
-        (GLYPH_TABLE_OFFSET + GLYPH_TABLE_SIZE, USB_OVERLAY_OFFSET),
-        (CORE1_MP3_OFFSET + CORE1_MODULE_HEADER_SIZE + CORE1_MODULE_CAPACITY, CORE1_FLAC_OFFSET),
-    ]
-    if fw_size > FW_SIZE:
-        regions.append((CORE1_FIT_END, fw_size))
-    return tuple(regions)
+    return ((GLYPH_TABLE_OFFSET + GLYPH_TABLE_SIZE, fw_size),)
 
 
-GLYPH_REGIONS = glyph_regions(FW_SIZE)
+GLYPH_REGIONS = glyph_regions(LARGE_FW_SIZE)
 TABLE_CAPACITY = 91
 TABLE_OFFSET = 0x208
 ROW = struct.Struct("<4I")
 PAYLOAD_OFFSET = TABLE_OFFSET + TABLE_CAPACITY * ROW.size
 CODE_OFFSET = PAYLOAD_OFFSET + TABLE_CAPACITY * ROW.size
-MARKER_OFFSET = FW_SIZE + HEADER_SIZE
 MARKER_SIZE = 8
 ROW0_TARGET = 0x03050B68
 CODE_LIMIT = OVERLAY_BASE
@@ -124,7 +114,7 @@ class Shape:
     fw_size: int
 
 
-SHAPES = {5: Shape(IMAGE_SIZE, FW_SIZE), 8: Shape(LARGE_IMAGE_SIZE, LARGE_FW_SIZE)}
+SHAPES = {8: Shape(LARGE_IMAGE_SIZE, LARGE_FW_SIZE)}
 
 
 @dataclass(frozen=True)
@@ -227,7 +217,7 @@ def word(data, offset):
     return struct.unpack_from("<I", data, offset)[0]
 
 
-def assemble(parts, shape=SHAPES[5]):
+def assemble(parts, shape=SHAPES[8]):
     if len(parts.header) != OUTER_HEADER_SIZE or len(parts.marker) != MARKER_SIZE:
         raise ImageError("header or marker has the wrong size")
     if len(parts.rows) != TABLE_CAPACITY:
@@ -496,7 +486,7 @@ def check_version(version):
         raise ImageError("the version must be major.minor.patch with parts up to 255, 255, 65535")
 
 
-def generated_header(version, fw_size=FW_SIZE):
+def generated_header(version, fw_size=LARGE_FW_SIZE):
     check_version(version)
     major, minor, patch = version
     header = bytearray(OUTER_HEADER_SIZE)
@@ -510,7 +500,7 @@ def generated_header(version, fw_size=FW_SIZE):
 
 def build_image(firmware, brand, build_tag, date, overlay=b"", core1_mp3=b"", core1_flac=b"",
                 version=DEFAULT_VERSION, glyph_faces=(), core1_aac=b"", core1_opus=b"",
-                usb_overlay=b"", shape=SHAPES[5], fit_overlay=b"", core1_fit=b""):
+                usb_overlay=b"", shape=SHAPES[8], fit_overlay=b"", core1_fit=b""):
     check_firmware(firmware)
     code_size, data_size = len(firmware.code), len(firmware.data)
     header = generated_header(version, shape.fw_size)
@@ -783,7 +773,7 @@ def parse_arguments(argv):
     parser.add_argument("--glyph-face", type=Path, action="append", default=[],
                         help="glyph pack face, in face order; a missing file is an empty face")
     parser.add_argument("--image-mib", type=int, choices=sorted(SHAPES), default=8,
-                        help="image size: 5 MiB (fw size 0x44C000) or 8 MiB (fw size 0x74C000)")
+                        help="image size: 8 MiB (fw size 0x74C000)")
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)
 

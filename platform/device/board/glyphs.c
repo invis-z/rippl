@@ -7,7 +7,7 @@
 #include "gfx/font_pack.h"
 #include "hal/system.h"
 
-#define GLYPH_TABLE_OFFSET 0x2C0000u
+#define GLYPH_TABLE_OFFSET 0x11A000u
 #define GLYPH_TABLE_MAGIC 0x54504745u
 #define NO_SECTOR 0xFFFFFFFFu
 
