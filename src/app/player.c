@@ -1,4 +1,5 @@
 #include "player.h"
+#include "core/resident.h"
 
 #include <stddef.h>
 

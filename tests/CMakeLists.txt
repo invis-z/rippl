@@ -8,7 +8,8 @@ function(rippl_add_unit_test)
     if(WIN32)
         target_sources(${TEST_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/cmake/windows_utf8.rc)
     endif()
-    target_link_libraries(${TEST_NAME} PRIVATE rippl_check rippl_options ${TEST_LIBRARIES})
+    target_link_libraries(${TEST_NAME} PRIVATE rippl_check rippl_options rippl_builtin_themes
+        ${TEST_LIBRARIES})
     target_include_directories(${TEST_NAME} PRIVATE ${TEST_PRIVATE_INCLUDES})
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endfunction()
@@ -149,7 +150,37 @@ add_library(rippl_ui_fixtures STATIC gfx/tiny_font.c ui/ui_test_theme.c ui/ui_te
 target_include_directories(rippl_ui_fixtures PUBLIC gfx ui)
 target_link_libraries(rippl_ui_fixtures PUBLIC rippl_ui PRIVATE rippl_options)
 
-foreach(ui_test theme theme_layout list_view list_navigation fast_scroll header menu_screen message_screen
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+file(GLOB RIPPL_TEST_THEME_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/themes/*.toml)
+set(RIPPL_TEST_THEMES ${CMAKE_CURRENT_BINARY_DIR}/themes)
+add_custom_command(
+    OUTPUT ${RIPPL_TEST_THEMES}/themes.stamp
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/theme_pack.py
+        --themes ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/themes
+        --definitions ${PROJECT_SOURCE_DIR}/src/ui/include/ui
+        --base ${PROJECT_SOURCE_DIR}/assets/themes/dark.toml
+        --output ${RIPPL_TEST_THEMES}
+    COMMAND ${CMAKE_COMMAND} -E touch ${RIPPL_TEST_THEMES}/themes.stamp
+    DEPENDS ${RIPPL_TEST_THEME_SOURCES} ${PROJECT_SOURCE_DIR}/tools/theme_pack.py
+    COMMENT "Packing the test themes"
+)
+add_custom_target(rippl_test_themes DEPENDS ${RIPPL_TEST_THEMES}/themes.stamp)
+set(RIPPL_THEME_SEARCH "${PROJECT_SOURCE_DIR}/src/themes/packs|${RIPPL_TEST_THEMES}")
+
+function(rippl_use_theme_fixtures target)
+    target_sources(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/app/theme_fixture.c)
+    target_compile_definitions(${target} PRIVATE RIPPL_THEME_SEARCH="${RIPPL_THEME_SEARCH}")
+    add_dependencies(${target} rippl_test_themes)
+endfunction()
+
+rippl_add_unit_test(NAME test_theme_package
+    SOURCES ui/test_theme_package.c
+    LIBRARIES rippl_ui_fixtures
+)
+target_compile_definitions(test_theme_package PRIVATE RIPPL_THEME_SEARCH="${RIPPL_THEME_SEARCH}")
+add_dependencies(test_theme_package rippl_test_themes)
+
+foreach(ui_test theme theme_layout backdrop box list_view list_navigation fast_scroll header menu_screen message_screen
         choice_screen toast status_bar)
     rippl_add_unit_test(NAME test_${ui_test}
         SOURCES ui/test_${ui_test}.c
@@ -190,6 +221,7 @@ rippl_add_unit_test(NAME test_app
     LIBRARIES rippl_app rippl_library_fixtures m
     PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
 )
+rippl_use_theme_fixtures(test_app)
 rippl_add_unit_test(NAME test_diagnostics_menu
     SOURCES app/test_diagnostics_menu.c app/fake_hal.c
     LIBRARIES rippl_app rippl_library_fixtures
@@ -310,6 +342,7 @@ rippl_add_unit_test(NAME test_settings_screens
     LIBRARIES rippl_app rippl_library_scan
     PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
 )
+rippl_use_theme_fixtures(test_settings_screens)
 rippl_add_unit_test(NAME test_folders_screen
     SOURCES app/test_folders_screen.c app/fake_hal.c
     LIBRARIES rippl_app rippl_library_scan

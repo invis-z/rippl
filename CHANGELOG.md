@@ -17,6 +17,7 @@ The first Rippl release.
 - 352.8 and 384 kHz WAV, FLAC and ALAC, and 32-bit FLAC and ALAC up to 96 kHz. 32-bit WAV goes to the DAC with all 32 bits.
 - **Hi-Res DAC** USB mode: a USB Audio Class 2.0 sound card at 44.1–384 kHz and 16, 24 or 32 bits, with clock feedback to the computer.
 - Tape Window, a Now Playing face that turns the screen into the player's window onto a cassette.
+- **Themes**, ported from EchoPod 0.13.0: `.rippltheme` files in `Themes` on the card change colours, boxes, spacing, icons, fonts and the picture behind the lists, and `tide themes` copies theme files to the card ([themes](docs/user/themes.md)).
 - Daylight saving for the clock: Europe, US & Canada, Australia, New Zealand, or the computer's rule through Tide.
 - **DRE** setting for the DACs' dynamic range enhancement.
 - `/.rippl/errors.log`, listing files the player couldn't open or use, with the reason.
@@ -35,7 +36,7 @@ The first Rippl release.
 - **Settings:** Start screen moves to System, Lyrics to Display.
 - **Buttons:** in portrait, taps turn the volume the other way while holds still skip and seek. Swap volume buttons reverses only the volume.
 - **Languages:** extra languages load as packs from the internal drive; the remaining English strings are translated; GBK and JIS X 0213 names draw.
-- **Memory:** the language pack and part of the code move to RAM free after start, giving room for a bigger glyph cache. Code that runs only while starting loads into the faces' memory and is dropped afterwards.
+- **Memory:** the language pack and part of the code move to RAM free after start, giving room for a bigger glyph cache. Code that runs only while starting loads into the faces' memory and is dropped afterwards, and theme drawing loads into High RAM.
 - **Firmware image:** rearranged so each loaded part has a slot with room to grow and all glyph data is in one region.
 - Updates: the install percentage has its own line, and the player restarts by itself after an update.
 - Folders list tracks by disc, number and file name again.

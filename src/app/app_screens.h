@@ -100,6 +100,7 @@ struct AppScreens {
     MenuItem home_items[HOME_ITEM_COUNT];
     DiagnosticsGate diagnostics_gate;
     HomeArt home_art;
+    MenuScene home_scene;
     MenuItem music_items[MUSIC_ITEM_COUNT];
     MenuItem diagnostics_items[DIAGNOSTICS_ITEM_COUNT];
     MenuItem diagnostics_groups[DIAGNOSTICS_GROUP_COUNT];

@@ -38,8 +38,8 @@ RESIDENT_CAPACITY = 0x4800
 RESIDENT_HEADER_SIZE = 16
 RESIDENT_MAGIC = b"ERES"
 NP_FACES_OFFSET = 0x034000
-NP_FACES_BASE = 0x0308BA00
-NP_FACES_CAPACITY = 0x3600
+NP_FACES_BASE = 0x0308B400
+NP_FACES_CAPACITY = 0x3C00
 NP_FACES_END = NP_FACES_BASE + NP_FACES_CAPACITY
 NP_FACES_HEADER_SIZE = 16
 NP_FACES_MAGIC = b"ENPF"
@@ -59,7 +59,12 @@ CODE2_MAGIC = b"ECD2"
 CORE1_MODULE_CAPACITY = 0x20000
 CORE1_MODULE_HEADER_SIZE = 512
 CORE1_MODULE_MAGIC = b"EC1M"
-GLYPH_TABLE_OFFSET = 0x11A000
+ENGINE_OFFSET = 0x11A000
+ENGINE_BASE = 0x0308AA00
+ENGINE_CAPACITY = 0xA00
+ENGINE_MAGIC = b"EENG"
+ENGINE_SECTION = ".engine"
+GLYPH_TABLE_OFFSET = 0x11C000
 GLYPH_TABLE_MAGIC = b"EGPT"
 CORE1_AAC_CAPACITY = CORE1_MODULE_CAPACITY
 GLYPH_TABLE_SIZE = 512
@@ -112,7 +117,7 @@ SHN_UNDEF = 0
 SHN_ABS = 0xFFF1
 SHF_ALLOC = 2
 SHT_NOBITS = 8
-FIRMWARE_SECTIONS = (".code", ".data", ".bss", ".resident", ".np_faces", ".code2", STARTUP_SECTION)
+FIRMWARE_SECTIONS = (".code", ".data", ".bss", ".resident", ".np_faces", ".code2", STARTUP_SECTION, ENGINE_SECTION)
 
 
 class ImageError(Exception):
@@ -140,6 +145,7 @@ class Firmware:
     code2: bytes = b""
     code2_regions: tuple = ()
     startup: bytes = b""
+    engine: bytes = b""
 
 
 @dataclass(frozen=True)
@@ -161,6 +167,7 @@ class ImageParts:
     fit_overlay: bytes = b""
     core1_fit: bytes = b""
     startup: bytes = b""
+    engine: bytes = b""
 
 
 def crc_table():
@@ -263,6 +270,7 @@ def assemble(parts, shape=SHAPES[8]):
     place_resident(image, parts)
     place_np_faces(image, parts)
     place_startup(image, parts)
+    place_engine(image, parts)
     place_code2(image, parts)
     place_core1_module(image, parts.core1_mp3, CORE1_MP3_OFFSET)
     place_core1_module(image, parts.core1_flac, CORE1_FLAC_OFFSET)
@@ -310,6 +318,11 @@ def place_resident(image, parts):
 def place_np_faces(image, parts):
     place_headed(image, parts, (parts.np_faces, NP_FACES_OFFSET, NP_FACES_CAPACITY,
                                 NP_FACES_MAGIC, "Now Playing faces"))
+
+
+def place_engine(image, parts):
+    place_headed(image, parts, (parts.engine, ENGINE_OFFSET, ENGINE_CAPACITY,
+                                ENGINE_MAGIC, "theme engine"))
 
 
 def place_startup(image, parts):
@@ -557,7 +570,7 @@ def build_image(firmware, brand, build_tag, date, overlay=b"", core1_mp3=b"", co
     return assemble(ImageParts(bytes(header), tuple(rows), payload, bytes(MARKER_SIZE), overlay,
                                core1_mp3, core1_flac, tuple(glyph_faces), core1_aac, core1_opus,
                                firmware.resident, usb_overlay, firmware.np_faces, firmware.code2,
-                               fit_overlay, core1_fit, firmware.startup),
+                               fit_overlay, core1_fit, firmware.startup, firmware.engine),
                     shape)
 
 
@@ -626,6 +639,9 @@ def check_sections(sections):
     code2 = sections.get(".code2")
     if code2 is not None and code2.size and code2.address != CODE2_BASE:
         raise ImageError(f".code2 must be at {CODE2_BASE:#010x}")
+    engine = sections.get(ENGINE_SECTION)
+    if engine is not None and engine.size and engine.address != ENGINE_BASE:
+        raise ImageError(f"{ENGINE_SECTION} must be at {ENGINE_BASE:#010x}")
     startup = sections.get(STARTUP_SECTION)
     if startup is not None and startup.size and startup.address != NP_FACES_BASE:
         raise ImageError(f"{STARTUP_SECTION} must share the faces window at {NP_FACES_BASE:#010x}")
@@ -641,11 +657,13 @@ def firmware_from_elf(elf):
     resident, faces = sections.get(".resident"), sections.get(".np_faces")
     code2 = sections.get(".code2")
     startup = sections.get(STARTUP_SECTION)
+    engine = sections.get(ENGINE_SECTION)
     return Firmware(code=code, data=data, bss_size=bss.size if bss is not None else 0,
                     resident=resident.content if resident is not None else b"",
                     np_faces=faces.content if faces is not None else b"",
                     code2=code2.content if code2 is not None else b"",
                     startup=startup.content if startup is not None else b"",
+                    engine=engine.content if engine is not None else b"",
                     regions=mapping_regions(elf),
                     code2_regions=mapping_regions(elf, ".code2"))
 

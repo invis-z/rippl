@@ -1,4 +1,5 @@
 #include "spoken_store.h"
+#include "core/resident.h"
 
 #include "core/format.h"
 #include "core/i18n.h"

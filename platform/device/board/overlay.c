@@ -21,9 +21,14 @@ extern const uint8_t device_code_end[];
 
 static NpFacesGate np_faces_gate;
 static bool startup_running;
+static uint32_t asset_wipes;
+static uint32_t scene_wipes;
 
 static const BoardOverlay NP_FACES_OVERLAY = {NP_FACES_IMAGE_OFFSET, NP_FACES_IMAGE_MAGIC,
                                               (uint8_t *)NP_FACES_BASE, NP_FACES_BYTES};
+
+static const BoardOverlay ENGINE_OVERLAY = {ENGINE_IMAGE_OFFSET, ENGINE_IMAGE_MAGIC,
+                                            (uint8_t *)ENGINE_BASE, ENGINE_BYTES};
 
 static const BoardOverlay STARTUP_OVERLAY = {STARTUP_IMAGE_OFFSET, STARTUP_IMAGE_MAGIC,
                                              (uint8_t *)NP_FACES_BASE, NP_FACES_BYTES};
@@ -137,6 +142,7 @@ static const void *load_window(uint32_t image_offset, uint32_t magic, uint32_t c
         return NULL;
     }
     board_np_faces_forget();
+    board_theme_assets_forget();
     board_audio_shut_down();
     return board_overlay_load(&overlay) ? base + OVERLAY_HEADER_BYTES : NULL;
 }
@@ -154,6 +160,34 @@ const void *hal_system_load_fit_code(void)
 void board_np_faces_forget(void)
 {
     np_faces_gate_forget(&np_faces_gate);
+    scene_wipes++;
+}
+
+void *hal_system_scene_memory(uint32_t *size)
+{
+    uint32_t loaded = header_size(&NP_FACES_OVERLAY);
+    uint32_t used = (loaded + SECTOR_BYTES - 1) / SECTOR_BYTES * SECTOR_BYTES;
+    bool ready = !startup_running && np_faces_gate.state == NP_FACES_READY && loaded != 0 &&
+                 used < NP_FACES_BYTES;
+    uint8_t *memory = ready ? (uint8_t *)NP_FACES_BASE + used : NULL;
+    __asm__("" : "+r"(memory));
+    *size = ready ? NP_FACES_BYTES - used : 0;
+    return memory;
+}
+
+uint32_t hal_system_scene_wipes(void)
+{
+    return scene_wipes;
+}
+
+void board_theme_assets_forget(void)
+{
+    asset_wipes++;
+}
+
+uint32_t hal_system_theme_asset_wipes(void)
+{
+    return asset_wipes;
 }
 
 static bool np_faces_header_intact(void)
@@ -167,28 +201,6 @@ static bool np_faces_may_load(void)
 {
     uint32_t status;
     return !hal_system_restart_pending() && emmc_status(&status);
-}
-
-__attribute__((noinline)) const void *hal_system_load_faces(void)
-{
-    if (startup_running) {
-        return NULL;
-    }
-    if (np_faces_gate.state == NP_FACES_READY) {
-        np_faces_gate_checked(&np_faces_gate, np_faces_header_intact());
-    }
-    if (np_faces_gate.state == NP_FACES_UNKNOWN &&
-        np_faces_gate_should_load(&np_faces_gate, np_faces_may_load())) {
-        np_faces_gate_loaded(&np_faces_gate, board_overlay_load(&NP_FACES_OVERLAY));
-    }
-    const void *entry = (const void *)(uintptr_t)NP_FACES_ENTRY;
-    __asm__("" : "+r"(entry));
-    return np_faces_gate.state == NP_FACES_READY ? entry : NULL;
-}
-
-const void *board_usb_overlay_load(void)
-{
-    return load_window(USB_OVERLAY_IMAGE_OFFSET, USB_OVERLAY_MAGIC, USB_OVERLAY_WINDOW_BYTES);
 }
 
 bool board_startup_keep(void)
@@ -208,4 +220,34 @@ __attribute__((noinline)) const void *hal_system_load_startup(void)
 void hal_system_release_startup(void)
 {
     startup_running = false;
+}
+
+__attribute__((noinline)) const void *hal_system_load_faces(void)
+{
+    if (startup_running) {
+        return NULL;
+    }
+    if (np_faces_gate.state == NP_FACES_READY) {
+        np_faces_gate_checked(&np_faces_gate, np_faces_header_intact());
+    }
+    if (np_faces_gate.state == NP_FACES_UNKNOWN &&
+        np_faces_gate_should_load(&np_faces_gate, np_faces_may_load())) {
+        np_faces_gate_loaded(&np_faces_gate, board_overlay_load(&NP_FACES_OVERLAY));
+        scene_wipes++;
+    }
+    const void *entry = (const void *)(uintptr_t)NP_FACES_ENTRY;
+    __asm__("" : "+r"(entry));
+    return np_faces_gate.state == NP_FACES_READY ? entry : NULL;
+}
+
+const void *board_usb_overlay_load(void)
+{
+    return load_window(USB_OVERLAY_IMAGE_OFFSET, USB_OVERLAY_MAGIC, USB_OVERLAY_WINDOW_BYTES);
+}
+
+__attribute__((noinline)) const void *hal_system_load_theme_engine(void)
+{
+    const void *entry = (const void *)(uintptr_t)(ENGINE_BASE + OVERLAY_HEADER_BYTES);
+    __asm__("" : "+r"(entry));
+    return board_overlay_load(&ENGINE_OVERLAY) ? entry : NULL;
 }

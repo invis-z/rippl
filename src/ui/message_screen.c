@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "ui/backdrop.h"
 #include "ui/header.h"
 #include "ui/label.h"
 #include "ui/navigation.h"
@@ -122,8 +123,8 @@ static void draw(void *context, Canvas *canvas)
     MessageScreen *message = context;
     const Theme *theme = message->config.theme;
     Rect content = theme_content_area(theme);
-    TextStyle style = {.font = theme->fonts.body, .color = theme->colors.text_secondary};
-    canvas_fill_rect(canvas, content, theme->colors.background);
+    TextStyle style = {.font = theme->fonts.body, .color = theme->colors->text_secondary};
+    backdrop_paint(canvas, theme, content);
     header_draw(canvas, theme, message->config.title);
     int padding = theme->metrics.padding;
     int width = content.width - 2 * padding;
@@ -148,12 +149,12 @@ static void draw(void *context, Canvas *canvas)
         int bar_top = top + layout->count * line_height + BAR_GAP;
         int lowest = content.y + content.height - BAR_HEIGHT;
         Rect bar = {content.x + padding, bar_top < lowest ? bar_top : lowest, width, BAR_HEIGHT};
-        canvas_fill_rect(canvas, bar, theme->colors.divider);
+        canvas_fill_rect(canvas, bar, theme->colors->divider);
         canvas_fill_rect(canvas,
                          (Rect){bar.x, bar.y,
                                 (int)((uint32_t)width * done / message->config.progress_total),
                                 bar.height},
-                         theme->colors.selection_background);
+                         theme->colors->selection_background);
     }
 }
 

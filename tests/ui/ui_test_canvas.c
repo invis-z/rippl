@@ -2,10 +2,13 @@
 
 #include "ui_test_theme.h"
 
+#include "ui/theme_engine.h"
+
 static Color pixels[TEST_SCREEN_WIDTH * TEST_SCREEN_HEIGHT];
 
 Canvas ui_test_canvas(void)
 {
+    theme_engine_use(&THEME_ENGINE);
     Canvas canvas = canvas_make(pixels, (Rect){0, 0, TEST_SCREEN_WIDTH, TEST_SCREEN_HEIGHT});
     canvas_clear(&canvas, 0x0821);
     return canvas;

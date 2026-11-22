@@ -4,13 +4,8 @@
 #include "ui/label.h"
 
 enum {
-    COVER_MARGIN_TOP = 8,
-    REFLECTION_LIGHT = 80,
     NOTICE_MARGIN = 6
 };
-
-static const Color PANEL_BACKGROUND = COLOR_RGB(8, 8, 10);
-static const Color NOTICE_TEXT = COLOR_RGB(200, 200, 206);
 
 void home_art_init(HomeArt *art, CoverCache *covers, const LibraryStore *store, Player *player,
                    const Theme *theme)
@@ -111,10 +106,11 @@ void home_art_draw(void *context, Canvas *canvas, Rect area)
     bool below = theme_is_portrait(art->theme);
     Rect divider =
         below ? (Rect){area.x, area.y, area.width, 1} : (Rect){area.x, area.y, 1, area.height};
-    canvas_fill_rect(canvas, area, PANEL_BACKGROUND);
-    canvas_fill_rect(canvas, divider, art->theme->colors.divider);
+    canvas_fill_rect(canvas, area, art->theme->colors->background);
+    canvas_fill_rect(canvas, divider, art->theme->colors->divider);
     if (art->notice != NULL) {
-        TextStyle style = {.font = art->theme->fonts.small, .color = NOTICE_TEXT};
+        TextStyle style = {.font = art->theme->fonts.small,
+                           .color = art->theme->colors->text_secondary};
         Rect line = {area.x + NOTICE_MARGIN, area.y, area.width - 2 * NOTICE_MARGIN, area.height};
         Rect text = label_centered_area(style.font, line, art->notice);
         label_draw(canvas, style, (Label){.area = text, .text = art->notice});
@@ -125,10 +121,7 @@ void home_art_draw(void *context, Canvas *canvas, Rect area)
         return;
     }
     int left = area.x + (area.width - COVER_FULL_SIZE) / 2;
-    int top = below ? area.y + (area.height - COVER_FULL_SIZE) / 2 : area.y + COVER_MARGIN_TOP;
+    int top = area.y + (area.height - COVER_FULL_SIZE) / 2;
     Quad quad = {left, COVER_FULL_SIZE, top, COVER_FULL_SIZE, top, COVER_FULL_SIZE};
     image_draw_quad(canvas, cover, quad);
-    int rows = area.y + area.height - (top + COVER_FULL_SIZE);
-    image_draw_reflection(canvas, cover, quad, (QuadLight){REFLECTION_LIGHT, REFLECTION_LIGHT},
-                          rows);
 }

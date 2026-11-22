@@ -7,6 +7,7 @@
 #include "hal/clock.h"
 #include "hal/storage.h"
 #include "language_files.h"
+#include "theme_store.h"
 
 enum {
     BRIGHTNESS_LEVEL_COUNT = SETTINGS_BRIGHTNESS_MAX - SETTINGS_BRIGHTNESS_MIN + 1,
@@ -459,6 +460,77 @@ RIPPL_RESIDENT static const SettingChoice CHOICES[SETTINGS_CHOICE_COUNT] = {
     OPTION_CHOICE(STR_DIAG_TITLE, SWITCH_OPTIONS, OPTION_DIAGNOSTICS),
 };
 
+static int current_theme(const void *context)
+{
+    int file = theme_store_current();
+    return file != THEME_STORE_NONE ? THEME_COUNT + file : current_slot(context);
+}
+
+static void choose_theme(void *context, int index)
+{
+    if (index < THEME_COUNT) {
+        choose_slot(context, index);
+        theme_store_choose_builtin(index);
+        return;
+    }
+    (void)theme_store_choose(index - THEME_COUNT);
+}
+
+static const char *accent_name(int accent)
+{
+    const ThemePackage *package = theme_store_package();
+    int name = package != NULL ? package->accents[accent].name : THEME_ACCENT_CUSTOM;
+    return name < ACCENT_COUNT ? i18n_text(ACCENT_OPTIONS[name]) : theme_store_accent_name(accent);
+}
+
+static int current_accent(const void *context)
+{
+    return default_theme_accent(theme_store_package(), current_slot(context));
+}
+
+static ScreenAction open_accent_choice(SettingsEntry *entry)
+{
+    SettingsScreens *screens = entry->owner;
+    const ThemePackage *package = theme_store_package();
+    const char **options = theme_store_options();
+    int count = package != NULL && options != NULL ? package->accent_count : 0;
+    for (int accent = 0; accent < count; accent++) {
+        options[accent] = accent_name(accent);
+    }
+    ChoiceConfig config = {
+        .title = i18n_text(entry->choice->title),
+        .options = options,
+        .option_count = count,
+        .current = current_accent,
+        .choose = choose_slot,
+        .context = entry,
+        .theme = screens->theme,
+    };
+    return screen_action_push(choice_screen_init(&screens->choice, config));
+}
+
+static ScreenAction open_theme_choice(SettingsEntry *entry)
+{
+    SettingsScreens *screens = entry->owner;
+    const char **options = theme_store_options();
+    int files = options != NULL ? theme_store_scan() : 0;
+    for (int theme = 0; options != NULL && theme < THEME_COUNT + files; theme++) {
+        options[theme] = theme < THEME_COUNT ? i18n_text(THEME_OPTIONS[theme])
+                                             : theme_store_name(theme - THEME_COUNT);
+    }
+    ChoiceConfig config = {
+        .title = i18n_text(entry->choice->title),
+        .options = options,
+        .option_ids = options != NULL ? NULL : entry->choice->options,
+        .option_count = THEME_COUNT + files,
+        .current = current_theme,
+        .choose = choose_theme,
+        .context = entry,
+        .theme = screens->theme,
+    };
+    return screen_action_push(choice_screen_init(&screens->choice, config));
+}
+
 static ScreenAction open_choice(void *context)
 {
     SettingsEntry *entry = context;
@@ -466,6 +538,12 @@ static ScreenAction open_choice(void *context)
     const SettingChoice *choice = entry->choice;
     if (choice->choose == choose_language) {
         return open_languages(screens, choice);
+    }
+    if (choice->slot - 1 == OPTION_THEME) {
+        return open_theme_choice(entry);
+    }
+    if (choice->slot - 1 == OPTION_ACCENT) {
+        return open_accent_choice(entry);
     }
     bool slot = choice->slot != 0;
     ChoiceConfig config = {
@@ -486,6 +564,14 @@ static const char *choice_value(const void *context)
     const SettingsEntry *entry = context;
     int current = entry->choice->slot != 0 ? current_slot(entry)
                                            : entry->choice->current(&entry->owner->context);
+    if (entry->choice->slot - 1 == OPTION_THEME && theme_store_card()) {
+        return theme_store_package()->name;
+    }
+    if (entry->choice->slot - 1 == OPTION_ACCENT) {
+        return default_theme_takes_accent(theme_store_package())
+                   ? accent_name(current_accent(entry))
+                   : "";
+    }
     if (current < 0 || current >= entry->choice->option_count) {
         return "";
     }
@@ -648,11 +734,11 @@ static ScreenAction open_group(void *context);
 static bool choice_shown(const void *context)
 {
     const SettingsEntry *entry = context;
-    int theme = settings_of(&entry->owner->context)->options[OPTION_THEME];
+    const ThemePackage *package = theme_store_package();
     if (entry->choice == &CHOICES[CHOICE_ACCENT]) {
-        return default_theme_takes_accent(theme);
+        return default_theme_takes_accent(package);
     }
-    return entry->choice != &CHOICES[CHOICE_HIGHLIGHT] || default_theme_takes_highlight(theme);
+    return entry->choice != &CHOICES[CHOICE_HIGHLIGHT] || default_theme_takes_highlight(package);
 }
 
 static MenuItem row_item(SettingsScreens *screens, int row)

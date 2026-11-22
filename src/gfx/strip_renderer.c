@@ -11,7 +11,10 @@ static void render_strip(const StripRenderer *renderer, Color *pixels, Rect stri
                          FrameDrawer drawer, FrameSink sink)
 {
     Canvas canvas = canvas_make(pixels, strip);
-    if (!renderer->drawer_paints_everything) {
+    if (!renderer->drawer_paints_everything && renderer->backdrop.draw != NULL) {
+        renderer->backdrop.draw(renderer->backdrop.context, &canvas);
+        canvas.backdrop_painted = true;
+    } else if (!renderer->drawer_paints_everything) {
         canvas_clear(&canvas, renderer->background);
     }
     drawer.draw(drawer.context, &canvas);

@@ -21,7 +21,19 @@
 #ifdef RIPPL_STARTUP_SECTIONS
 #define RIPPL_STARTUP_CODE __attribute__((section(".startup.text"), noinline))
 #define RIPPL_STARTUP_ENTRY __attribute__((section(".startup.entry"), used))
+#define RIPPL_STARTUP_DATA __attribute__((section(".startup.rodata")))
+#define RIPPL_STARTUP_HELPER __attribute__((section(".startup.text")))
 #else
 #define RIPPL_STARTUP_CODE
 #define RIPPL_STARTUP_ENTRY
+#define RIPPL_STARTUP_DATA
+#define RIPPL_STARTUP_HELPER
+#endif
+
+#ifdef RIPPL_ENGINE_SECTIONS
+#define RIPPL_ENGINE_CODE __attribute__((section(".engine.text")))
+#define RIPPL_ENGINE_ENTRY __attribute__((section(".engine.entry"), used))
+#else
+#define RIPPL_ENGINE_CODE
+#define RIPPL_ENGINE_ENTRY
 #endif

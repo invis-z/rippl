@@ -28,7 +28,7 @@ static Canvas blank_tall_canvas(void)
 {
     Rect bounds = {0, 0, TALL_WIDTH, TALL_HEIGHT};
     Canvas canvas = canvas_make(tall_pixels, bounds);
-    canvas_fill_rect(&canvas, bounds, TEST_THEME.colors.background);
+    canvas_fill_rect(&canvas, bounds, TEST_THEME.colors->background);
     return canvas;
 }
 
@@ -57,8 +57,8 @@ static void a_visible_toast_paints_its_box(void)
     Rect area = toast_area(&toast, &TEST_THEME);
     CHECK(area.width > 0);
     CHECK(area.y + area.height <= TEST_SCREEN_HEIGHT);
-    CHECK(ui_test_area_has_color(&canvas, area, TEST_THEME.colors.header_background));
-    CHECK(ui_test_area_has_color(&canvas, area, TEST_THEME.colors.header_text));
+    CHECK(ui_test_area_has_color(&canvas, area, TEST_THEME.colors->header_background));
+    CHECK(ui_test_area_has_color(&canvas, area, TEST_THEME.colors->header_text));
 }
 
 static void a_hidden_toast_paints_nothing(void)
@@ -69,7 +69,7 @@ static void a_hidden_toast_paints_nothing(void)
     Canvas canvas = ui_test_canvas();
     Rect screen = {0, 0, TEST_SCREEN_WIDTH, TEST_SCREEN_HEIGHT};
     toast_draw(&toast, &canvas, &TEST_THEME);
-    CHECK(!ui_test_area_has_color(&canvas, screen, TEST_THEME.colors.header_background));
+    CHECK(!ui_test_area_has_color(&canvas, screen, TEST_THEME.colors->header_background));
 }
 
 static void a_two_line_toast_wraps_and_stays_up_longer(void)
@@ -87,8 +87,8 @@ static void a_two_line_toast_wraps_and_stays_up_longer(void)
     int mid = two_lines.y + two_lines.height / 2;
     Rect top_half = {two_lines.x, two_lines.y, two_lines.width, mid - two_lines.y};
     Rect bottom_half = {two_lines.x, mid, two_lines.width, two_lines.y + two_lines.height - mid};
-    CHECK(ui_test_area_has_color(&canvas, top_half, theme.colors.header_text));
-    CHECK(ui_test_area_has_color(&canvas, bottom_half, theme.colors.header_text));
+    CHECK(ui_test_area_has_color(&canvas, top_half, theme.colors->header_text));
+    CHECK(ui_test_area_has_color(&canvas, bottom_half, theme.colors->header_text));
     toast_update(&wrapped, NOW_MS + TOAST_WRAPPED_DURATION_MS - 1);
     CHECK(wrapped.visible);
     toast_update(&wrapped, NOW_MS + TOAST_WRAPPED_DURATION_MS);

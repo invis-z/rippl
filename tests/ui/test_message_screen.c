@@ -43,9 +43,9 @@ static void the_message_is_drawn_below_the_header(void)
     Canvas canvas = ui_test_canvas();
     screen->draw(screen->context, &canvas);
     Rect content = theme_content_area(&TEST_THEME);
-    CHECK(ui_test_area_has_color(&canvas, content, TEST_THEME.colors.text_secondary));
+    CHECK(ui_test_area_has_color(&canvas, content, TEST_THEME.colors->text_secondary));
     CHECK(ui_test_area_has_color(&canvas, theme_header_area(&TEST_THEME),
-                                 TEST_THEME.colors.header_background));
+                                 TEST_THEME.colors->header_background));
 }
 
 static void a_message_too_wide_for_the_screen_wraps_onto_more_lines(void)
@@ -60,7 +60,7 @@ static void a_message_too_wide_for_the_screen_wraps_onto_more_lines(void)
     int last = -1;
     for (int y = content.y; y < content.y + content.height; y++) {
         Rect row = {content.x, y, content.width, 1};
-        if (ui_test_area_has_color(&canvas, row, TEST_THEME.colors.text_secondary)) {
+        if (ui_test_area_has_color(&canvas, row, TEST_THEME.colors->text_secondary)) {
             first = first < 0 ? y : first;
             last = y;
         }
@@ -173,7 +173,7 @@ static void a_progress_bar_fills_as_far_as_the_progress(void)
     Screen *screen = message_screen_init(&message, config);
     Canvas canvas = ui_test_canvas();
     screen->draw(screen->context, &canvas);
-    CHECK(!ui_test_area_has_color(&canvas, content, TEST_THEME.colors.selection_background));
+    CHECK(!ui_test_area_has_color(&canvas, content, TEST_THEME.colors->selection_background));
     config.progress = 1;
     config.progress_total = 4;
     screen = message_screen_init(&message, config);
@@ -184,9 +184,9 @@ static void a_progress_bar_fills_as_far_as_the_progress(void)
     Rect filled = {content.x + padding, content.y, width / 4, content.height};
     Rect empty = {content.x + padding + width / 4 + 1, content.y, width - width / 4 - 1,
                   content.height};
-    CHECK(ui_test_area_has_color(&canvas, filled, TEST_THEME.colors.selection_background));
-    CHECK(!ui_test_area_has_color(&canvas, empty, TEST_THEME.colors.selection_background));
-    CHECK(ui_test_area_has_color(&canvas, empty, TEST_THEME.colors.divider));
+    CHECK(ui_test_area_has_color(&canvas, filled, TEST_THEME.colors->selection_background));
+    CHECK(!ui_test_area_has_color(&canvas, empty, TEST_THEME.colors->selection_background));
+    CHECK(ui_test_area_has_color(&canvas, empty, TEST_THEME.colors->divider));
 }
 
 int main(void)

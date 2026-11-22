@@ -1,4 +1,5 @@
 #include "favorites_store.h"
+#include "core/resident.h"
 
 #include "core/i18n.h"
 #include "core/resident.h"

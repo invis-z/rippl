@@ -3,13 +3,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "draw_profile.h"
+#include "core/draw_profile.h"
 #include "gfx/canvas.h"
 #include "hal/audio.h"
 #include "ui/theme.h"
 
 enum {
-    FRAME_OVERLAY_LINES = 4,
+    FRAME_OVERLAY_LINES = 5,
     FRAME_OVERLAY_TEXT_CAPACITY = 48
 };
 

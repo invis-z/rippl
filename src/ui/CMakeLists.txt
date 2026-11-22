@@ -1,4 +1,6 @@
 add_library(rippl_ui STATIC
+    backdrop.c
+    box.c
     choice_screen.c
     cover_flow.c
     fade.c
@@ -18,6 +20,8 @@ add_library(rippl_ui STATIC
     screen_stack.c
     status_bar.c
     theme.c
+    theme_engine.c
+    theme_package.c
     toast.c
 )
 target_include_directories(rippl_ui PUBLIC include)
@@ -26,5 +30,8 @@ target_link_libraries(rippl_ui
     PRIVATE rippl_options rippl_compact rippl_lto
 )
 if(CMAKE_CROSSCOMPILING)
-    set_source_files_properties(toast.c PROPERTIES COMPILE_DEFINITIONS RIPPL_RESIDENT_TABLES)
+    set_source_files_properties(theme.c toast.c PROPERTIES COMPILE_DEFINITIONS RIPPL_RESIDENT_TABLES)
+    set_source_files_properties(theme_package.c PROPERTIES COMPILE_DEFINITIONS RIPPL_STARTUP_SECTIONS)
+    set_source_files_properties(box.c backdrop.c icons.c theme_engine.c PROPERTIES COMPILE_DEFINITIONS
+        RIPPL_ENGINE_SECTIONS)
 endif()

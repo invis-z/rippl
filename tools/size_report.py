@@ -17,11 +17,12 @@ from pathlib import Path
 CODE_WINDOW = 0x2666C
 DATA_WINDOW = 0x46000
 OVERLAY_CAPACITY = 0x15000
-USB_OVERLAY_WINDOW = 0x11A00
+USB_OVERLAY_WINDOW = 0x11400
 RESIDENT_CAPACITY = 0x4800
-NP_FACES_CAPACITY = 0x3600
-STARTUP_CAPACITY = 0x3600
-HIGH_RAM_CAPACITY = 0x11A00
+NP_FACES_CAPACITY = 0x3C00
+STARTUP_CAPACITY = 0x3C00
+ENGINE_CAPACITY = 0xA00
+HIGH_RAM_CAPACITY = 0x10A00
 USB_OVERLAY_IMAGE_CAPACITY = 0x10000
 CODE_SECTIONS = (".code",)
 RAM_SECTIONS = (".data", ".bss", ".noinit")
@@ -180,6 +181,11 @@ def limit_line(label, used, limit):
     return f"{label}: {used:,} of {limit:,} bytes, {free:,} free{state}"
 
 
+def scene_room(np_faces):
+    loaded = -(-(np_faces + OVERLAY_HEADER_BYTES) // SECTOR_BYTES) * SECTOR_BYTES
+    return NP_FACES_CAPACITY - loaded - SCENE_STAMP_BYTES - SCENE_WORK_BYTES
+
+
 def summary(device_map, overlay_map=None, usb_overlay_map=None):
     sizes = output_sizes(device_map)
     code = sizes.get(".code", 0)
@@ -193,6 +199,8 @@ def summary(device_map, overlay_map=None, usb_overlay_map=None):
         lines.append(limit_line("np_faces", sizes[".np_faces"], NP_FACES_CAPACITY))
     if ".startup" in sizes:
         lines.append(limit_line("start-up code", sizes[".startup"], STARTUP_CAPACITY))
+    if ".engine" in sizes:
+        lines.append(limit_line("theme engine", sizes[".engine"], ENGINE_CAPACITY))
     if ".high_ram" in sizes:
         lines.append(limit_line(".high_ram", sizes[".high_ram"], HIGH_RAM_CAPACITY))
     if overlay_map is not None:

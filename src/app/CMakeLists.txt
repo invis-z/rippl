@@ -6,6 +6,7 @@ add_library(rippl_app STATIC
     app_library.c
     app_notice.c
     app_power.c
+    app_theme.c
     card_files.c
     clock_store.c
     error_log.c
@@ -20,7 +21,6 @@ add_library(rippl_app STATIC
     diagnostics_values.c
     diagnostics_rows.c
     diagnostics_menu.c
-    draw_profile.c
     equalizer_files.c
     equalizer_fits.c
     equalizer_fits_refresh.c
@@ -35,6 +35,8 @@ add_library(rippl_app STATIC
     player.c
     settings_screens.c
     settings_store.c
+    theme_assets.c
+    theme_store.c
     spoken_store.c
     update_record.c
     screens/bluetooth_screen.c

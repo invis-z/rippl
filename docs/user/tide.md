@@ -68,6 +68,8 @@ After a USB session the player compares the music's names, sizes and times with 
 |---|---|
 | `tide languages` | List the language packs |
 | `tide languages install <code>` | Copy a pack to the player's internal drive |
+| `tide themes <card>` | List the theme files in the card's `Themes` folder |
+| `tide themes <card> install <file>...` | Copy `.rippltheme` files there, checking each first; `remove <name>...` takes them away |
 | `tide bookmarks <card>` | List audiobook and podcast bookmarks with positions; `--finished` lists finished ones, `--json` prints JSON |
 
 `tide` with no command runs `sync`.

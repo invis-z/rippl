@@ -1,4 +1,5 @@
 #include "app/app.h"
+#include "app/startup.h"
 
 #include "app/startup.h"
 #include "app_state.h"
@@ -67,36 +68,22 @@ static HalDisplayRotation rotation_for(Orientation orientation)
     return HAL_DISPLAY_LANDSCAPE;
 }
 
-static int theme_key(const Settings *settings)
-{
-    return (int)settings->orientation | settings->options[OPTION_ACCENT] << 2 |
-           settings->options[OPTION_HIGHLIGHT] << 5 | settings->options[OPTION_STATUS_BAR] << 7 |
-           settings->options[OPTION_THEME] << 8;
-}
-
 static void apply_orientation(void)
 {
-    const Settings *settings = &app.settings.settings;
-    Orientation orientation = settings->orientation;
-    app.shown_theme = theme_key(settings);
-    bool portrait = orientation != ORIENTATION_LANDSCAPE;
-    ThemeChoice choice = {.theme = settings->options[OPTION_THEME],
-                          .accent = settings->options[OPTION_ACCENT],
-                          .flat = settings->options[OPTION_HIGHLIGHT] != 0};
-    app.theme = default_theme_styled(portrait, choice);
-    app.stage_theme = default_theme_stage(portrait, choice);
-    if (settings->options[OPTION_STATUS_BAR] == STATUS_BAR_LARGE) {
-        default_theme_enlarge_status(&app.theme);
-        default_theme_enlarge_status(&app.stage_theme);
-    }
+    Orientation orientation = app.settings.settings.orientation;
+    app_dress_theme();
     hal_display_set_rotation(rotation_for(orientation));
     frame_diff_init(&app.frame_diff, app_row_hashes, app.theme.metrics.screen_height);
 }
 
 static void follow_orientation(void)
 {
-    if (theme_key(&app.settings.settings) != app.shown_theme) {
+    if (app_theme_key() != app.shown_theme) {
         apply_orientation();
+        app.frame_stable = false;
+    }
+    if (theme_store_tend_assets()) {
+        app.frame_stable = false;
     }
     app.power.menu_is_media = app.settings.settings.options[OPTION_MENU_KEY] == MENU_KEY_NEXT;
 }
@@ -445,6 +432,7 @@ RIPPL_STARTUP_CODE static void start_up(void)
     frame_stats_reset(&app.update_stats);
     frame_stats_reset(&app.draw_stats);
     frame_stats_reset(&app.send_stats);
+    draw_profile_use_clock(hal_clock_microseconds);
     app.options =
         (AppOptions){.show_frame_time = false, .ignore_power_taps = false, .log_fits = false};
     app.toast = (Toast){.visible = false};
@@ -461,6 +449,7 @@ RIPPL_STARTUP_CODE static void start_up(void)
     app.now_ms = now_ms;
     CardFilesReport files = card_files_prepare(app_show_card_setup);
     settings_store_load(&app.settings);
+    theme_store_start(app.settings.settings.options[OPTION_THEME]);
     hal_power_confirm_start(app.settings.settings.options[OPTION_POWER_ON] == POWER_ON_HOLD);
     clock_store_start(&app.clock, &app.settings.settings, now_ms);
     error_log_forget();
@@ -480,7 +469,8 @@ RIPPL_STARTUP_CODE static void start_up(void)
     }
 }
 
-RIPPL_STARTUP_ENTRY const AppStartup APP_STARTUP = {.magic = APP_STARTUP_MAGIC, .start = start_up};
+RIPPL_STARTUP_ENTRY const AppStartup APP_STARTUP = {
+    .magic = APP_STARTUP_MAGIC, .start = start_up, .themes = &THEME_LOADER};
 
 static void refuse_to_start(void)
 {
@@ -503,14 +493,34 @@ static void wait_after_refusal(void)
     }
 }
 
+static int startup_depth;
+static const AppStartup *startup_loaded;
+
+const AppStartup *app_startup_open(void)
+{
+    if (startup_depth++ == 0) {
+        const AppStartup *startup = hal_system_load_startup();
+        startup_loaded = startup != NULL && startup->magic == APP_STARTUP_MAGIC ? startup : NULL;
+    }
+    return startup_loaded;
+}
+
+void app_startup_close(void)
+{
+    if (--startup_depth == 0) {
+        startup_loaded = NULL;
+        hal_system_release_startup();
+    }
+}
+
 void app_start(void)
 {
-    const AppStartup *startup = hal_system_load_startup();
-    bool usable = startup != NULL && startup->magic == APP_STARTUP_MAGIC;
+    const AppStartup *startup = app_startup_open();
+    bool usable = startup != NULL;
     if (usable) {
         startup->start();
     }
-    hal_system_release_startup();
+    app_startup_close();
     app.start_refused = !usable;
     if (!usable) {
         refuse_to_start();

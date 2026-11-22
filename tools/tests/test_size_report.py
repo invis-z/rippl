@@ -47,7 +47,7 @@ LOAD platform/device/CMakeFiles/rippl_device.dir/board/audio.c.obj
 .noinit         0x03024008       0x30
  .noinit.record 0x03024008       0x30 platform/device/CMakeFiles/rippl_device.dir/board/start_info.c.obj
 
-.high_ram       0x0307a000    0x11000
+.high_ram       0x0307a000    0x10000
  .high_ram.decoding
                 0x0307a000     0xa050 platform/device/CMakeFiles/rippl_device.dir/board/audio.c.obj
 
@@ -146,9 +146,9 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(lines[1], "data RAM (.data + .bss): 131,080 of 286,720 bytes, "
                                    "155,640 free")
         self.assertEqual(lines[2], "resident tables: 15,152 of 18,432 bytes, 3,280 free")
-        self.assertEqual(lines[3], "np_faces: 6,160 of 13,824 bytes, 7,664 free")
-        self.assertEqual(lines[4], ".high_ram: 69,632 of 72,192 bytes, 2,560 free")
-        self.assertEqual(lines[5], "rescan overlay: 81,920 of 86,016 bytes, 4,096 free")
+        self.assertEqual(lines[3], "np_faces: 6,160 of 15,360 bytes, 9,200 free")
+        self.assertIn(".high_ram: 65,536 of 68,096 bytes, 2,560 free", lines)
+        self.assertIn("rescan overlay: 81,920 of 86,016 bytes, 4,096 free", lines)
 
     def test_summary_omits_the_faces_and_high_ram_lines_a_map_does_not_have(self):
         bare = MAP.split(".high_ram ")[0]
@@ -156,18 +156,18 @@ class ReportTest(unittest.TestCase):
                          [line.split(":")[0] for line in size_report.summary(bare)])
 
     def test_summary_flags_high_ram_and_the_faces_when_they_overflow(self):
-        over = MAP.replace(".high_ram       0x0307a000    0x11000",
-                           ".high_ram       0x0307a000    0x11a10")
+        over = MAP.replace(".high_ram       0x0307a000    0x10000",
+                           ".high_ram       0x0307a000    0x10a10")
         over = over.replace(".np_faces       0x0308c000     0x1810",
-                            ".np_faces       0x0308c000     0x3610")
+                            ".np_faces       0x0308c000     0x3c10")
         lines = size_report.summary(over)
-        self.assertIn("np_faces: 13,840 of 13,824 bytes, -16 free  OVER BY 16", lines)
-        self.assertIn(".high_ram: 72,208 of 72,192 bytes, -16 free  OVER BY 16", lines)
+        self.assertIn("np_faces: 15,376 of 15,360 bytes, -16 free  OVER BY 16", lines)
+        self.assertIn(".high_ram: 68,112 of 68,096 bytes, -16 free  OVER BY 16", lines)
 
     def test_summary_measures_the_usb_overlay_in_the_image_and_with_its_zeroed_memory(self):
         lines = size_report.summary(MAP, OVERLAY_MAP, USB_OVERLAY_MAP)
         self.assertIn("USB overlay code: 12,288 of 65,536 bytes, 53,248 free", lines)
-        self.assertIn("USB overlay code + .bss: 49,152 of 72,192 bytes, 23,040 free", lines)
+        self.assertIn("USB overlay code + .bss: 49,152 of 70,656 bytes, 21,504 free", lines)
 
     def test_summary_flags_a_limit_that_is_over(self):
         over = MAP.replace(".code           0x03050000     0x1000",

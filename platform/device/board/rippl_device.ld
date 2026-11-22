@@ -5,8 +5,9 @@ MEMORY
     DATA_RAM (rw) : ORIGIN = 0x03004000, LENGTH = 0x46000
     CODE_RAM (rx) : ORIGIN = 0x03050000, LENGTH = 0x2666C
     CODE2_RAM (rx) : ORIGIN = 0x03076670, LENGTH = 0x3990
-    HIGH_RAM (rw) : ORIGIN = 0x0307A000, LENGTH = 0x11A00
-    NP_FACES_RAM (rx) : ORIGIN = 0x0308BA00, LENGTH = 0x3600
+    HIGH_RAM (rw) : ORIGIN = 0x0307A000, LENGTH = 0x10A00
+    ENGINE_RAM (rx) : ORIGIN = 0x0308AA00, LENGTH = 0xA00
+    NP_FACES_RAM (rx) : ORIGIN = 0x0308B400, LENGTH = 0x3C00
     LANGUAGE_RAM (rw) : ORIGIN = 0x0304C000, LENGTH = 0x4000
     GLYPH_RAM (rw) : ORIGIN = 0x0308F000, LENGTH = 0xB800
     RESIDENT_RAM (rw) : ORIGIN = 0x0309A800, LENGTH = 0x4800
@@ -81,7 +82,15 @@ SECTIONS
         device_resident_end = .;
     } > RESIDENT_RAM
 
-    OVERLAY 0x0308BA00 : NOCROSSREFS
+    .engine :
+    {
+        LONG(0) LONG(0) LONG(0) LONG(0)
+        KEEP(*(.engine.entry))
+        *(.engine.text .engine.text.*)
+        . = ALIGN(4);
+    } > ENGINE_RAM
+
+    OVERLAY 0x0308B400 : NOCROSSREFS
     {
         .np_faces
         {
@@ -96,6 +105,7 @@ SECTIONS
             LONG(0) LONG(0) LONG(0) LONG(0)
             KEEP(*(.startup.entry))
             *(.startup.text .startup.text.*)
+            *(.startup.rodata .startup.rodata.*)
             . = ALIGN(4);
         }
     } > NP_FACES_RAM
@@ -115,10 +125,12 @@ ASSERT(ADDR(.data) == 0x03004000, "the entry vector must be at 0x03004000")
 ASSERT(SIZEOF(.data) == 8, "only the entry vector may be in .data: make initialised globals const")
 ASSERT(device_noinit_end <= 0x0304C000, ".data, .bss and .noinit must end below 0x0304C000")
 ASSERT(ADDR(.resident) == 0x0309A800, "the resident tables must start at 0x0309A800")
-ASSERT(ADDR(.np_faces) == 0x0308BA00, "the Now Playing faces must start at 0x0308BA00")
-ASSERT(NOW_PLAYING_FACES == 0x0308BA10, "the Now Playing faces entry must follow the 16-byte header")
-ASSERT(ADDR(.startup) == 0x0308BA00, "the start-up code must share the faces window at 0x0308BA00")
-ASSERT(APP_STARTUP == 0x0308BA10, "the start-up entry must follow the 16-byte header")
-ASSERT(SIZEOF(.startup) <= 0x3600, "the start-up code must fit the faces window")
+ASSERT(ADDR(.np_faces) == 0x0308B400, "the Now Playing faces must start at 0x0308B400")
+ASSERT(NOW_PLAYING_FACES == 0x0308B410, "the Now Playing faces entry must follow the 16-byte header")
+ASSERT(ADDR(.startup) == 0x0308B400, "the start-up code must share the faces window at 0x0308B400")
+ASSERT(APP_STARTUP == 0x0308B410, "the start-up entry must follow the 16-byte header")
+ASSERT(ADDR(.engine) == 0x0308AA00, "the theme engine must start at 0x0308AA00")
+ASSERT(THEME_ENGINE == 0x0308AA10, "the theme engine entry must follow the 16-byte header")
+ASSERT(SIZEOF(.startup) <= 0x3C00, "the start-up code must fit the faces window")
 ASSERT(ADDR(.code2) == 0x03076670, "code 2 must start at 0x03076670")
 ASSERT(device_code2_end - device_code2_start <= 28 * 512, "code 2 is read in whole sectors and must fit 28 of them below 0x0307A000")
