@@ -4,6 +4,7 @@
 
 #include "core/format.h"
 #include "core/i18n.h"
+#include "core/resident.h"
 #include "core/string_builder.h"
 #include "error_log.h"
 #include "hal/storage.h"
@@ -669,7 +670,7 @@ static void load_up_next(Player *player)
     }
 }
 
-bool player_restore(Player *player)
+RIPPL_STARTUP_CODE bool player_restore(Player *player)
 {
     ResumeState state;
     load_up_next(player);

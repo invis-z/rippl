@@ -22,7 +22,9 @@ A map of the Echo Mini hardware Rippl drives, for reading `platform/device`. Mos
 | `0x03004000`–`0x0304C000` | 288 KB | Core 0 data RAM (cleared by the boot ROM) |
 | `0x0304C000`–`0x03050000` | 16 KB | Free once Rippl runs: the language pack. FiiO's loader runs from `0x0304A000`–`0x0304D9DC` while it loads Rippl, so nothing loaded or cleared at boot may reach `0x0304A000` |
 | `0x03050000`–`0x0307A000` | 168 KB | Core 0 code |
-| `0x0307A000`–`0x0309EFFF` | 148 KB | High RAM: overlays (rescan, USB), glyph cache, resident tables |
+| `0x0307A000`–`0x0308BA00` | 70.5 KB | High RAM scratch: the Cover Flow shuffle mark; overlays (rescan, USB, EQ fit) load over it |
+| `0x0308BA00`–`0x0308F000` | 13.5 KB | Start-up code while starting, then the Now Playing faces |
+| `0x0308F000`–`0x0309EFFF` | 64 KB | Glyph cache, resident tables |
 | `0x01000000`–`0x0105FFFF` | 384 KB | Core 1 RAM; rescan scratch while playback is stopped |
 
 ## Display
@@ -94,7 +96,7 @@ Read through the ADC. Rippl shuts down below 3450 mV, as FiiO's firmware does.
 | Offset | Slot | Holds |
 |---|---|---|
 | `0x000000` | 192 KB | Header, load rows, code and data |
-| `0x030000` | 16 KB | Free, for start-up code |
+| `0x030000` | 16 KB | Start-up code (`ESTP`) |
 | `0x034000` | 16 KB | Now Playing faces (`ENPF`) |
 | `0x038000` | 20 KB | Resident tables (`ERES`) |
 | `0x041000` | 96 KB | Rescan overlay (`EOVL`) |
@@ -105,4 +107,5 @@ Read through the ADC. Rippl shuts down below 3450 mV, as FiiO's firmware does.
 | `0x11A200`–`0x74C000` | | Glyph faces and language packs |
 
 - Every loaded part starts with a 16-byte header: its magic, size, a CRC-32 of its body and the CRC-32 of the running code, so it only loads with the firmware it was built with.
+- **Start-up code.** What runs only while the player starts (settings, the player and stores, building the screens) is linked into `.startup` at the faces' address, loaded from its slot, run and released. If it can't be loaded the player says so and stays on while USB power is present, so a new image can still be copied.
 - FiiO's firmware installs the highest-numbered `HIFIECnn.IMG` at the top of internal storage. FiiO's own images are 32 MiB.

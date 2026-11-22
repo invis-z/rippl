@@ -4,6 +4,7 @@
 
 #include "core/string_builder.h"
 
+#include "core/resident.h"
 #include "equalizer_fits.h"
 #include "error_log.h"
 #include "hal/audio.h"
@@ -178,7 +179,7 @@ bool equalizer_store_file_curve(const char *name, EqualizerCurve *curve, Equaliz
     return false;
 }
 
-void equalizer_store_load(EqualizerStore *store)
+RIPPL_STARTUP_CODE void equalizer_store_load(EqualizerStore *store)
 {
     uint8_t bytes[EQUALIZER_FILE_SIZE] = {0};
     uint32_t length = 0;

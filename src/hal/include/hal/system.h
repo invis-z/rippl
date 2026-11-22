@@ -124,6 +124,9 @@ enum {
 };
 
 void *hal_system_cover_scratch(uint32_t *size);
+
+const void *hal_system_load_startup(void);
+void hal_system_release_startup(void);
 bool hal_system_restart_pending(void);
 const void *hal_system_load_rescan_code(void);
 const void *hal_system_load_fit_code(void);

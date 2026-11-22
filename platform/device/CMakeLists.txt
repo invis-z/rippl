@@ -324,6 +324,7 @@ target_link_options(rippl_device PRIVATE
     -flto -flto-partition=one
     ${RIPPL_OVERLAY_IMPORT_OPTIONS}
     -Wl,--require-defined=NOW_PLAYING_FACES
+    -Wl,--require-defined=APP_STARTUP
     -T${RIPPL_DEVICE_LINKER_SCRIPT}
     -Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/rippl_device.map
 )

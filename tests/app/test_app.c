@@ -3618,6 +3618,61 @@ static void a_clock_record_written_over_usb_sets_the_clock(void)
     CHECK_EQUAL(wall_clock_zone_of(60), settings.options[OPTION_TIME_ZONE]);
 }
 
+static void the_app_starts_through_its_loaded_start_up_code(void)
+{
+    start_app_with_library();
+    CHECK_EQUAL(1, fake_hal_startup_loads());
+    CHECK_EQUAL(1, fake_hal_startup_releases());
+    CHECK(title_is("Rippl"));
+    restart_app();
+    CHECK_EQUAL(2, fake_hal_startup_loads());
+    CHECK_EQUAL(2, fake_hal_startup_releases());
+}
+
+static void start_without_start_up_code(void)
+{
+    fake_hal_reset();
+    fake_hal_set_startup(false);
+    now_ms = START_MS;
+    fake_hal_set_milliseconds(now_ms);
+    app_start();
+}
+
+enum {
+    START_REFUSAL_SHOWN_MS = 5000
+};
+
+static void without_its_start_up_code_the_app_says_so_and_turns_off(void)
+{
+    start_without_start_up_code();
+    CHECK(fake_hal_display_on());
+    CHECK_EQUAL(1, fake_hal_startup_releases());
+    wait_ms(START_REFUSAL_SHOWN_MS - 1);
+    CHECK_EQUAL(0, fake_hal_power_off_count());
+    wait_ms(1);
+    CHECK_EQUAL(1, fake_hal_power_off_count());
+    wait_ms(1000);
+    CHECK_EQUAL(1, fake_hal_power_off_count());
+}
+
+static void without_its_start_up_code_the_app_stays_on_while_usb_powers_it(void)
+{
+    start_without_start_up_code();
+    charge_the_battery();
+    wait_ms(START_REFUSAL_SHOWN_MS * 3);
+    CHECK_EQUAL(0, fake_hal_power_off_count());
+}
+
+static void a_start_that_finds_its_code_again_runs_normally(void)
+{
+    start_without_start_up_code();
+    fake_hal_set_startup(true);
+    restart_app();
+    wait_ms(START_REFUSAL_SHOWN_MS + 1000);
+    CHECK_EQUAL(0, fake_hal_power_off_count());
+    CHECK(title_is("Rippl"));
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
@@ -3831,6 +3886,10 @@ int main(void)
         TEST_CASE(the_usb_choice_lights_the_screen_and_keeps_the_audio_served),
         TEST_CASE(the_last_setting_asks_whether_to_prompt_on_usb),
         TEST_CASE(choosing_daylight_saving_keeps_the_time_shown),
+        TEST_CASE(the_app_starts_through_its_loaded_start_up_code),
+        TEST_CASE(without_its_start_up_code_the_app_says_so_and_turns_off),
+        TEST_CASE(without_its_start_up_code_the_app_stays_on_while_usb_powers_it),
+        TEST_CASE(a_start_that_finds_its_code_again_runs_normally),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

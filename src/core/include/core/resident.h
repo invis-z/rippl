@@ -15,3 +15,11 @@
 #define RIPPL_NP_FACES_DATA
 #define RIPPL_NP_FACES_ENTRY
 #endif
+
+#ifdef RIPPL_STARTUP_SECTIONS
+#define RIPPL_STARTUP_CODE __attribute__((section(".startup.text"), noinline))
+#define RIPPL_STARTUP_ENTRY __attribute__((section(".startup.entry"), used))
+#else
+#define RIPPL_STARTUP_CODE
+#define RIPPL_STARTUP_ENTRY
+#endif

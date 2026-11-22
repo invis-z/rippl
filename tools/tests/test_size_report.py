@@ -166,8 +166,8 @@ class ReportTest(unittest.TestCase):
 
     def test_summary_measures_the_usb_overlay_in_the_image_and_with_its_zeroed_memory(self):
         lines = size_report.summary(MAP, OVERLAY_MAP, USB_OVERLAY_MAP)
-        self.assertEqual(lines[6], "USB overlay code: 12,288 of 65,536 bytes, 53,248 free")
-        self.assertEqual(lines[7], "USB overlay code + .bss: 49,152 of 86,016 bytes, 36,864 free")
+        self.assertIn("USB overlay code: 12,288 of 65,536 bytes, 53,248 free", lines)
+        self.assertIn("USB overlay code + .bss: 49,152 of 72,192 bytes, 23,040 free", lines)
 
     def test_summary_flags_a_limit_that_is_over(self):
         over = MAP.replace(".code           0x03050000     0x1000",

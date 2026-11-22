@@ -122,6 +122,8 @@ typedef struct AppState {
     AppOptions options;
     bool display_on;
     bool powered_off;
+    bool start_refused;
+    uint32_t refused_ms;
     bool charging;
     uint32_t charge_lit_until_ms;
     HalBattery charge_battery;

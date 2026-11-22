@@ -597,7 +597,8 @@ class ResidentTablesTest(unittest.TestCase):
         self.assertEqual(make_image.crc32(parts.code), word(image, make_image.RESIDENT_OFFSET + 12))
 
     def test_the_slots_follow_each_other_before_the_glyph_table(self):
-        slots = [(make_image.NP_FACES_OFFSET, make_image.NP_FACES_CAPACITY),
+        slots = [(make_image.STARTUP_OFFSET, make_image.STARTUP_CAPACITY),
+                 (make_image.NP_FACES_OFFSET, make_image.NP_FACES_CAPACITY),
                  (make_image.RESIDENT_OFFSET, make_image.RESIDENT_CAPACITY),
                  (make_image.OVERLAY_OFFSET, make_image.OVERLAY_CAPACITY),
                  (make_image.USB_OVERLAY_OFFSET, make_image.USB_OVERLAY_CAPACITY),
@@ -716,7 +717,7 @@ class NpFacesTest(unittest.TestCase):
             make_image.firmware_from_elf(firmware_elf(parts, [section]))
 
     def test_the_new_fields_come_last_in_the_image_parts(self):
-        self.assertEqual(["usb_overlay", "np_faces", "fit_overlay", "core1_fit"],
+        self.assertEqual(["np_faces", "fit_overlay", "core1_fit", "startup"],
                          list(make_image.ImageParts.__dataclass_fields__)[-4:])
 
 
