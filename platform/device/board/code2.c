@@ -5,7 +5,7 @@
 #include "hal/system.h"
 #include "overlay.h"
 
-#define CODE2_IMAGE_OFFSET 0x438000u
+#define CODE2_IMAGE_OFFSET 0x03D000u
 #define CODE2_MAGIC 0x32444345u
 #define CODE2_END 0x0307A000u
 

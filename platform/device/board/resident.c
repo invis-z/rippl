@@ -4,7 +4,7 @@
 #include "board.h"
 #include "overlay.h"
 
-#define RESIDENT_IMAGE_OFFSET 0x238200u
+#define RESIDENT_IMAGE_OFFSET 0x038000u
 #define RESIDENT_MAGIC 0x53455245u
 #define RESIDENT_END 0x0309F000u
 

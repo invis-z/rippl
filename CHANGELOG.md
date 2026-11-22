@@ -36,6 +36,7 @@ The first Rippl release.
 - **Buttons:** in portrait, taps turn the volume the other way while holds still skip and seek. Swap volume buttons reverses only the volume.
 - **Languages:** extra languages load as packs from the internal drive; the remaining English strings are translated; GBK and JIS X 0213 names draw.
 - **Memory:** the language pack and part of the code move to RAM free after start, giving room for a bigger glyph cache.
+- **Firmware image:** rearranged so each loaded part has a slot with room to grow and all glyph data is in one region.
 - Updates: the install percentage has its own line, and the player restarts by itself after an update.
 - Folders list tracks by disc, number and file name again.
 

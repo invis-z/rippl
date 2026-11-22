@@ -26,7 +26,7 @@ A map of the Echo Mini hardware Rippl drives, for reading `platform/device`. Mos
 | `0x0307A000`–`0x0309EFFF` | 148 KB | High RAM: overlays (rescan, USB), glyph cache, resident tables |
 | `0x01000000`–`0x0105FFFF` | 384 KB | Core 1 RAM; rescan scratch while playback is stopped |
 
-The second code area holds the Bluetooth protocol and the Bluetooth, Equaliser, Music folders and Date & time screens. It loads at start from image offset `0x438000` behind an `ECD2` header; if it fails, those screens ask for a reinstall and Bluetooth stays off. `tools/check_code2.py` fails the build if outside code calls into it without checking `hal_system_code2_ready()`.
+The second code area holds the Bluetooth protocol and the Bluetooth, Equaliser, Music folders and Date & time screens. It loads at start from image offset `0x03D000` behind an `ECD2` header; if it fails, those screens ask for a reinstall and Bluetooth stays off. `tools/check_code2.py` fails the build if outside code calls into it without checking `hal_system_code2_ready()`.
 
 ## Display
 
@@ -91,5 +91,22 @@ Read through the ADC. Rippl shuts down below 3450 mV, as FiiO's firmware does.
 
 ## Firmware image
 
-- An image is a 5 or 8 MiB `RKnanoFW` container: an outer header, a table of load rows, code and data, a copy of the first 512 bytes at the firmware size (`0x44C000` or `0x74C000`), and a CRC-32 trailer at `0x500000` or `0x800000`. `tools/make_image.py` builds it.
+- An image is an 8 MiB `RKnanoFW` container: an outer header, a table of load rows, code and data, a copy of the first 512 bytes at the firmware size (`0x74C000`), and a CRC-32 trailer at `0x800000`. `tools/make_image.py` builds it. The installer still accepts older 5 MiB images.
+- After the code and data, each part the player loads on demand has a slot with room to grow, then the glyph data fills the rest:
+
+| Offset | Slot | Holds |
+|---|---|---|
+| `0x000000` | 192 KB | Header, load rows, code and data |
+| `0x030000` | 16 KB | Free, for start-up code |
+| `0x034000` | 16 KB | Now Playing faces (`ENPF`) |
+| `0x038000` | 20 KB | Resident tables (`ERES`) |
+| `0x03D000` | 16 KB | Second code area (`ECD2`) |
+| `0x041000` | 96 KB | Rescan overlay (`EOVL`) |
+| `0x059000` | 72 KB | USB overlay (`EUSB`) |
+| `0x06B000` | 40 KB | EQ fit overlay (`EEQF`) |
+| `0x075000` | 5 × 132 KB | Core 1 programs: MP3, FLAC, AAC, Opus, EQ fit (`EC1M`) |
+| `0x11A000` | 512 B | Glyph table (`EGPT`) |
+| `0x11A200`–`0x74C000` | | Glyph faces and language packs |
+
+- Every loaded part starts with a 16-byte header: its magic, size, a CRC-32 of its body and the CRC-32 of the running code, so it only loads with the firmware it was built with.
 - FiiO's firmware installs the highest-numbered `HIFIECnn.IMG` at the top of internal storage. FiiO's own images are 32 MiB.
