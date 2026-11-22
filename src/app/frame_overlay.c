@@ -15,7 +15,7 @@ static const Color OVERLAY_TEXT = COLOR_RGB(124, 252, 0);
 
 static int line_count(const Theme *theme)
 {
-    return theme_is_portrait(theme) ? FRAME_OVERLAY_LINES : FRAME_OVERLAY_LINES / 2;
+    return theme_is_portrait(theme) ? FRAME_OVERLAY_LINES : FRAME_OVERLAY_LINES - 2;
 }
 
 Rect frame_overlay_area(const Theme *theme)
@@ -76,22 +76,26 @@ static void put(LineWriter *writer, const char *label, uint32_t value, uint32_t 
 int frame_overlay_lines(FrameBreakdown breakdown, const uint32_t *parts_us, HalAudioStats stats,
                         bool portrait, char lines[FRAME_OVERLAY_LINES][FRAME_OVERLAY_TEXT_CAPACITY])
 {
-    static const char *const PARTS[DRAW_PART_COUNT] = {"cv", "r", "t", "bg", "h", "a"};
+    static const char *const PARTS[DRAW_PART_HASH] = {"cv", "r", "t", "bg", "bx", "sh"};
     LineWriter writer = {lines, -1, {0}, true};
     next_line(&writer);
     put(&writer, "F", milliseconds(breakdown.total_us), 3, STAT_MEASURE);
     put(&writer, "u", milliseconds(breakdown.update_us), 2, STAT_MEASURE);
     put(&writer, "d", milliseconds(breakdown.draw_us), 3, STAT_MEASURE);
     put(&writer, "s", milliseconds(breakdown.send_us), 3, STAT_MEASURE);
+    put(&writer, "h", milliseconds(parts_us[DRAW_PART_HASH]), 2, STAT_MEASURE);
     if (portrait) {
-        put(&writer, "h", milliseconds(parts_us[DRAW_PART_HASH]), 2, STAT_MEASURE);
         next_line(&writer);
-        put(&writer, "a", milliseconds(parts_us[DRAW_PART_AUDIO]), 2, STAT_MEASURE);
     }
-    for (int part = 0; part < DRAW_PART_COUNT; part++) {
-        if (!portrait || (part != DRAW_PART_HASH && part != DRAW_PART_AUDIO)) {
-            put(&writer, PARTS[part], milliseconds(parts_us[part]), 2, STAT_MEASURE);
+    put(&writer, "a", milliseconds(parts_us[DRAW_PART_AUDIO]), 2, STAT_MEASURE);
+    if (!portrait) {
+        next_line(&writer);
+    }
+    for (int part = 0; part < DRAW_PART_HASH; part++) {
+        if (portrait && part == DRAW_PART_BOXES) {
+            next_line(&writer);
         }
+        put(&writer, PARTS[part], milliseconds(parts_us[part]), 2, STAT_MEASURE);
     }
     next_line(&writer);
     put(&writer, "b", stats.buffered_ms, 3, STAT_MEASURE);

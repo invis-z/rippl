@@ -11,7 +11,7 @@ static void draw_fade(Canvas *canvas, const Fade *fade, const char *text)
     const Theme *theme = app_current_theme();
     Rect screen = app_whole_screen();
     Color color =
-        color_blend(theme->colors.background, theme->colors.text, fade_alpha(fade, app.now_ms));
+        color_blend(theme->colors->background, theme->colors->text, fade_alpha(fade, app.now_ms));
     TextStyle style = {.font = theme->fonts.title, .color = color};
     label_draw(canvas, style,
                (Label){.area = label_centered_area(style.font, screen, text), .text = text});
@@ -23,7 +23,7 @@ static void draw_splash(Canvas *canvas)
     const RipplLogo *logo = &RIPPL_LOGO_SPLASH;
     Point origin = {screen.x + (screen.width - logo->side) / 2,
                     screen.y + (screen.height - logo->side) / 2};
-    rippl_logo_draw(canvas, logo, origin, app_current_theme()->colors.text,
+    rippl_logo_draw(canvas, logo, origin, app_current_theme()->colors->text,
                     fade_alpha(&app.splash, app.now_ms));
 }
 
@@ -164,8 +164,17 @@ StatusBarState app_current_status_bar(void)
     };
 }
 
+static void paint_backdrop(void *context, Canvas *canvas)
+{
+    (void)context;
+    backdrop_paint(canvas, app_current_theme(), canvas->clip);
+}
+
 void app_render(FrameDrawer drawer, bool drawer_paints_everything, int strip_height)
 {
+    theme_store_watch_assets();
+    const Wallpaper *wallpaper = app_current_theme()->wallpaper;
+    bool papered = wallpaper != NULL && wallpaper->ready;
     hal_display_wait();
     strip_height = (strip_height + 1) / 2;
     StripRenderer renderer = {
@@ -174,7 +183,8 @@ void app_render(FrameDrawer drawer, bool drawer_paints_everything, int strip_hei
         .screen_width = app_current_theme()->metrics.screen_width,
         .screen_height = app_current_theme()->metrics.screen_height,
         .strip_height = strip_height,
-        .background = app_current_theme()->colors.background,
+        .background = app_current_theme()->colors->background,
+        .backdrop = {.draw = papered ? paint_backdrop : NULL},
         .drawer_paints_everything = drawer_paints_everything,
     };
     FrameSink sink = {.write = write_to_display, .context = NULL};
@@ -196,7 +206,7 @@ void app_render_frame(void)
     frame_stats_record(&app.send_stats, app.send_us);
     frame_stats_record(&app.draw_stats, render_us - app.send_us);
     draw_profile_finish_frame();
-    app.frame_stable = !app.frame_changed;
+    app.frame_stable = !app.frame_changed || marquee_frame_paced();
     app.idle_render_ms = hal_clock_milliseconds() + IDLE_RENDER_MS;
     uint32_t marquee_wait_ms = marquee_frame_wait_ms();
     if (marquee_wait_ms > 0 &&

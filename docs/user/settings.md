@@ -18,7 +18,7 @@ Volume has 85 steps of 1 dB.
 
 | Setting | Values |
 |---|---|
-| Theme | Dark (default), Light, Fjord, Dusk, Neon, Phosphor, Paper, Olive, High contrast |
+| Theme | Dark (default), Light, Fjord, Dusk, Neon, Phosphor, Paper, Olive, High contrast, then up to eight theme files from `Themes` on the card ([themes](themes.md)) |
 | Accent colour | The selection bar's colour, on Dark and Light |
 | Highlight | Gradient or flat, on themes with a gradient bar |
 | Now Playing | Standard, Cassette, Turntable, Tape Window ([playback](playback.md#now-playing)) |
@@ -30,7 +30,7 @@ Volume has 85 steps of 1 dB.
 | Portrait status bar | Standard, Large |
 | Clock | Show the time in the status bar |
 
-Cover Flow and the cover panel on Home stay dark on every theme.
+Cover Flow keeps its black stage on every theme, with the theme's text colours, or the dark look's on light themes such as Light, Paper, Olive and Tape Window. The cover panel on Home takes the theme's background.
 
 ## Library
 

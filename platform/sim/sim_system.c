@@ -1,13 +1,19 @@
+#include <string.h>
+
 #include "app/startup.h"
 #include "core/wall_clock.h"
 #include "hal/system.h"
 #include "library/library_scan.h"
 #include "np_faces/now_playing_face.h"
+#include "themes/builtin_themes.h"
+#include "ui/theme_engine.h"
 
 extern const NowPlayingFaces NOW_PLAYING_FACES;
 
 enum {
     BOOT_CLOCK_MHZ = 24,
+    SIM_THEME_MEMORY_WORDS = HAL_THEME_MEMORY_BYTES / sizeof(uint32_t),
+    SIM_SCENE_MEMORY_WORDS = HAL_SCENE_MEMORY_BYTES / sizeof(uint32_t),
     BUILD_YEAR_DIVISOR = 10000,
     BUILD_MONTH_DIVISOR = 100
 };
@@ -132,6 +138,59 @@ void *hal_system_borrow_scratch(uint32_t *size)
     return scratch;
 }
 
+void *hal_system_theme_memory(uint32_t *size)
+{
+    static uint32_t memory[SIM_THEME_MEMORY_WORDS];
+    *size = sizeof memory;
+    return memory;
+}
+
+uint32_t hal_system_builtin_theme_size(uint32_t theme)
+{
+    return theme < BUILTIN_THEME_COUNT ? BUILTIN_THEMES[theme].size : 0;
+}
+
+bool hal_system_builtin_theme_read(uint32_t theme, uint32_t offset, void *target, uint32_t length)
+{
+    uint32_t size = hal_system_builtin_theme_size(theme);
+    if (offset > size || length > size - offset) {
+        return false;
+    }
+    memcpy(target, BUILTIN_THEMES[theme].bytes + offset, length);
+    return true;
+}
+
+void *hal_system_theme_file(uint32_t *size)
+{
+    static uint32_t file[HAL_THEME_FILE_BYTES / sizeof(uint32_t)];
+    *size = sizeof file;
+    return file;
+}
+
+void *hal_system_theme_assets(uint32_t *size)
+{
+    static uint32_t memory[HAL_THEME_ASSET_BYTES / sizeof(uint32_t)];
+    *size = sizeof memory;
+    return memory;
+}
+
+uint32_t hal_system_theme_asset_wipes(void)
+{
+    return 0;
+}
+
+void *hal_system_scene_memory(uint32_t *size)
+{
+    static uint32_t memory[SIM_SCENE_MEMORY_WORDS];
+    *size = sizeof memory;
+    return memory;
+}
+
+uint32_t hal_system_scene_wipes(void)
+{
+    return 0;
+}
+
 void *hal_system_borrow_listing(uint32_t *size)
 {
     static uint8_t listing[96 * 1024];
@@ -196,6 +255,11 @@ void *hal_system_cover_scratch(uint32_t *size)
 const void *hal_system_load_startup(void)
 {
     return &APP_STARTUP;
+}
+
+const void *hal_system_load_theme_engine(void)
+{
+    return &THEME_ENGINE;
 }
 
 void hal_system_release_startup(void)

@@ -12,12 +12,16 @@
 #define USB_OVERLAY_MAGIC 0x42535545u
 #define FIT_OVERLAY_IMAGE_OFFSET 0x06B000u
 #define FIT_OVERLAY_MAGIC 0x46514545u
-#define NP_FACES_BASE 0x0308BA00u
-#define NP_FACES_BYTES 0x3600u
+#define NP_FACES_BASE 0x0308B400u
+#define NP_FACES_BYTES 0x3C00u
 #define NP_FACES_ENTRY (NP_FACES_BASE + OVERLAY_HEADER_BYTES)
 #define NP_FACES_IMAGE_OFFSET 0x034000u
 #define NP_FACES_IMAGE_MAGIC 0x46504E45u
 #define STARTUP_IMAGE_OFFSET 0x030000u
+#define ENGINE_BASE 0x0308AA00u
+#define ENGINE_BYTES 0xA00u
+#define ENGINE_IMAGE_OFFSET 0x11A000u
+#define ENGINE_IMAGE_MAGIC 0x474E4545u
 #define STARTUP_IMAGE_MAGIC 0x50545345u
 #define USB_OVERLAY_WINDOW_BYTES (NP_FACES_BASE - OVERLAY_WINDOW_BASE)
 
@@ -31,4 +35,5 @@ typedef struct BoardOverlay {
 bool board_overlay_load(const BoardOverlay *overlay);
 const void *board_usb_overlay_load(void);
 void board_np_faces_forget(void);
+void board_theme_assets_forget(void);
 bool board_startup_keep(void);

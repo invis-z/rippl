@@ -11,6 +11,7 @@
 | [Getting started](user/getting-started.md) | First start, buttons, Home, portrait mode, charging |
 | [Library](user/library.md) | Where music goes, scanning, music folders, browsing |
 | [Playback](user/playback.md) | Formats, Now Playing and faces, the queue, lyrics, the equaliser |
+| [Themes](user/themes.md) | Using, making and sharing themes |
 | [Settings](user/settings.md) | Every setting, languages and the clock |
 | [USB](user/usb.md) | Copying music, DAC and Hi-Res DAC |
 | [Bluetooth](user/bluetooth.md) | Pairing and using headphones |
@@ -35,5 +36,6 @@
 |---|---|
 | [Hardware](reference/hardware.md) | The SoC, memory map, display, storage, audio, USB and more |
 | [File formats](reference/file-formats.md) | Every file in `/.rippl` |
+| [Theme format](reference/theme-format.md) | Theme sources, scenes, fonts, wallpapers and icons |
 
 See also the [changelog](../CHANGELOG.md) and [credits](../CREDITS.md).

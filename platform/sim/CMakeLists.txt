@@ -40,4 +40,4 @@ add_executable(rippl_sim
 )
 string(TIMESTAMP RIPPL_SIM_BUILD_DATE "%Y%m%d" UTC)
 target_compile_definitions(rippl_sim PRIVATE SDL_MAIN_HANDLED RIPPL_SIM_BUILD_DATE=${RIPPL_SIM_BUILD_DATE})
-target_link_libraries(rippl_sim PRIVATE rippl_app rippl_sim_glyphs rippl_sim_language rippl_library_scan rippl_sim_options rippl_sim_decoder rippl_sim_storage rippl_options SDL2::SDL2 $<$<PLATFORM_ID:Linux>:m>)
+target_link_libraries(rippl_sim PRIVATE rippl_app rippl_builtin_themes rippl_sim_glyphs rippl_sim_language rippl_library_scan rippl_sim_options rippl_sim_decoder rippl_sim_storage rippl_options SDL2::SDL2 $<$<PLATFORM_ID:Linux>:m>)

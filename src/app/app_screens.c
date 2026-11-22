@@ -1,4 +1,5 @@
 #include "app_screens.h"
+#include "core/resident.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -10,6 +11,7 @@
 #include "hal/power.h"
 #include "hal/storage.h"
 #include "hal/system.h"
+#include "theme_store.h"
 
 typedef enum MusicSource {
     MUSIC_COVER_FLOW,
@@ -221,6 +223,9 @@ static MenuItem shelf_item(AppScreens *screens, AppScreensContext context, Spoke
         .shown = shelf_present,
         .shown_context = entry};
 }
+
+_Static_assert(THEME_ICON_COUNT - THEME_ICON_HOME_MUSIC == HOME_ITEM_COUNT,
+               "Home has an icon for each of its items");
 
 static void build_home(AppScreens *screens, AppScreensContext context)
 {

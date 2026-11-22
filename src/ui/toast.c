@@ -4,6 +4,7 @@
 
 #include "core/deadline.h"
 #include "core/utf8.h"
+#include "ui/box.h"
 #include "ui/label.h"
 #include "ui/marquee.h"
 
@@ -227,9 +228,8 @@ void toast_draw(Toast *toast, Canvas *canvas, const Theme *theme)
     if (rect_is_empty(rect_intersection(area, canvas->clip))) {
         return;
     }
-    TextStyle style = {.font = theme->fonts.body, .color = theme->colors.header_text};
-    canvas_fill_rect(canvas, area, theme->colors.divider);
-    canvas_fill_rect(canvas, inner, theme->colors.header_background);
+    TextStyle style = {.font = theme->fonts.body, .color = theme->colors->header_text};
+    box_draw(canvas, theme->colors, &theme->boxes->toast, area);
     if (layout.line_count == 2) {
         int line_height = font_line_height(style.font);
         int top = inner.y + (inner.height - (2 * line_height + TOAST_LINE_GAP)) / 2;

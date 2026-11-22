@@ -115,11 +115,11 @@ static void draw_volume(Canvas *canvas, const Theme *theme, uint8_t volume, int 
     int width = theme->metrics.screen_width - 2 * padding;
     Rect bar = {padding, bottom - VOLUME_BLOCK_HEIGHT, width, VOLUME_BAR_HEIGHT};
     uint8_t level = volume < HAL_AUDIO_VOLUME_MAX ? volume : HAL_AUDIO_VOLUME_MAX;
-    canvas_fill_rect(canvas, bar, theme->colors.divider);
+    canvas_fill_rect(canvas, bar, theme->colors->divider);
     canvas_fill_rect(canvas, (Rect){bar.x, bar.y, width * level / HAL_AUDIO_VOLUME_MAX, bar.height},
-                     theme->colors.selection_background);
+                     theme->colors->selection_background);
     Rect row = {padding, bar.y + VOLUME_BAR_HEIGHT + VOLUME_TEXT_GAP, width, VOLUME_TEXT_HEIGHT};
-    TextStyle style = {.font = theme->fonts.small, .color = theme->colors.text_secondary};
+    TextStyle style = {.font = theme->fonts.small, .color = theme->colors->text_secondary};
     label_draw(canvas, style, (Label){.area = row, .text = i18n_text(STR_MENU_VOLUME)});
     char number[VOLUME_CAPACITY];
     StringBuilder builder = string_builder_make(number, sizeof number);
@@ -191,7 +191,7 @@ static void draw_message(Canvas *canvas, const Theme *theme, const char *message
 {
     char lines[MESSAGE_LINES][MESSAGE_CAPACITY];
     int padding = theme->metrics.padding;
-    TextStyle style = {.font = theme->fonts.body, .color = theme->colors.text};
+    TextStyle style = {.font = theme->fonts.body, .color = theme->colors->text};
     int count = wrap_message(style.font, message, area.width - 2 * padding, lines);
     int height = font_line_height(style.font);
     int top = area.y + (area.height - count * height) / 2;
@@ -224,7 +224,7 @@ static void draw_compact_format(Canvas *canvas, const Theme *theme, const AppDac
     string_builder_append(&builder, KHZ);
     string_builder_append(&builder, "  ");
     string_builder_append(&builder, bits);
-    TextStyle style = {.font = theme->fonts.title, .color = theme->colors.text};
+    TextStyle style = {.font = theme->fonts.title, .color = theme->colors->text};
     label_draw(canvas, style,
                (Label){.area = label_centered_area(style.font, area, line), .text = line});
 }
@@ -235,9 +235,9 @@ static void draw_format(Canvas *canvas, const Theme *theme, const AppDacView *vi
     char bits[BITS_CAPACITY];
     dac_screen_rate_text(view->rate, rate, sizeof rate);
     bits_text(view->bits, bits, sizeof bits);
-    TextStyle digits = {.font = &FONT_INTER_SEMIBOLD_48, .color = theme->colors.text};
-    TextStyle unit = {.font = theme->fonts.title, .color = theme->colors.text_secondary};
-    TextStyle depth = {.font = theme->fonts.title, .color = theme->colors.selection_top};
+    TextStyle digits = {.font = &FONT_INTER_SEMIBOLD_48, .color = theme->colors->text};
+    TextStyle unit = {.font = theme->fonts.title, .color = theme->colors->text_secondary};
+    TextStyle depth = {.font = theme->fonts.title, .color = theme->colors->selection_top};
     int title_height = font_line_height(theme->fonts.title);
     int width = theme->metrics.screen_width;
     if (theme_is_portrait(theme)) {
@@ -262,7 +262,7 @@ static void draw_format(Canvas *canvas, const Theme *theme, const AppDacView *vi
 void dac_screen_draw(Canvas *canvas, const Theme *theme, const AppDacView *view)
 {
     Rect content = theme_content_area(theme);
-    canvas_fill_rect(canvas, content, theme->colors.background);
+    canvas_fill_rect(canvas, content, theme->colors->background);
     header_draw(canvas, theme, view->title);
     int bottom = theme->metrics.screen_height;
     if (view->stats != NULL) {

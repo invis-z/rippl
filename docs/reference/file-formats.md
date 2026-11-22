@@ -19,6 +19,7 @@ The files Rippl keeps in `/.rippl` on the card. Everything is little-endian. Che
 | `update.bin` | Player | What the firmware installer last did |
 | `clock.bin` | Tide | The computer's time and daylight saving rule |
 | `errors.log` | Player | Text: files the player couldn't open or use |
+| `theme.bin` | Player | The theme file chosen in Settings |
 
 ## Segment store
 
@@ -185,3 +186,23 @@ A folder key is the FNV-1a of the folder's library path: its name for a card fol
 | 28 | 4 | Checksum |
 
 The player accepts a record with a time in 2024–2099, an offset from −12:00 to +14:00 and a valid rule, once per new record. It sets the chip to standard local time, stores the offset as its time zone and sets Daylight saving to From computer (Off without a rule).
+
+## theme.bin
+
+28 bytes: the magic `RPLC`, then the chosen theme file's name without `.rippltheme`, in 24 bytes, zero-filled. Empty when a built-in theme is chosen; which one is in `settings.bin`.
+
+## Theme files
+
+A `.rippltheme` file lives in `Themes` at the top of the card, and the built-in themes are the same files inside the image. They are packed by `tools/theme_pack.py` from TOML sources ([theme format](theme-format.md)), little-endian:
+
+| Bytes | Holds |
+|---|---|
+| 0–3 | `RPLT` |
+| 4–5 | Version, 1 |
+| 6–7 | Header size, 48, or 52 when there are assets |
+| 8–11 | Size of the checked part (header, tables and icons), at most 3,072 |
+| 12–15 | FNV-1a of the checked part from byte 16 |
+| 16– | Colour, box, spacing and icon counts, the selection box, the name in 24 bytes |
+
+Then the colours (RGB565), boxes (11 bytes each), spacings, the asset table, accents and icon masks, and after the checked part the assets: wallpapers (16 colours, 4 bits a pixel) and fonts. Each asset carries its own FNV-1a. Ids are only ever added at the end, so older and newer firmware read each other's files and ignore what they don't know.
+

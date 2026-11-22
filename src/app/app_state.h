@@ -8,6 +8,7 @@
 #include "card_files.h"
 #include "clock_store.h"
 #include "core/deadline.h"
+#include "core/draw_profile.h"
 #include "core/i18n.h"
 #include "core/key_tracker.h"
 #include "core/low_battery.h"
@@ -17,7 +18,6 @@
 #include "cover_cache.h"
 #include "dac_screen.h"
 #include "default_theme.h"
-#include "draw_profile.h"
 #include "equalizer_fits.h"
 #include "equalizer_store.h"
 #include "error_log.h"
@@ -41,6 +41,8 @@
 #include "screens/charge_screen.h"
 #include "settings/rocker.h"
 #include "settings_store.h"
+#include "theme_store.h"
+#include "ui/backdrop.h"
 #include "ui/choice_screen.h"
 #include "ui/fade.h"
 #include "ui/header.h"
@@ -69,6 +71,7 @@ typedef struct AppState {
     KeyTracker keys;
     bool rocker_swapped[KEY_COUNT];
     uint32_t dac_volume_until_ms;
+    ThemeColors colors;
     Theme theme;
     Theme stage_theme;
     int shown_theme;
@@ -158,6 +161,8 @@ void app_update_power(uint32_t now_ms);
 void app_charge_step(uint32_t now_ms);
 StatusBarState app_current_status_bar(void);
 void app_render_frame(void);
+int app_theme_key(void);
+void app_dress_theme(void);
 void app_draw_notice(void *context, Canvas *canvas);
 extern uint32_t app_row_hashes[HAL_DISPLAY_LONG_SIDE];
 void app_check_debug_file(void);

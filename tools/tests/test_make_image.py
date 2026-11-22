@@ -608,6 +608,7 @@ class ResidentTablesTest(unittest.TestCase):
                  (make_image.CORE1_AAC_OFFSET, 512 + make_image.CORE1_AAC_CAPACITY),
                  (make_image.CORE1_OPUS_OFFSET, 512 + make_image.CORE1_MODULE_CAPACITY),
                  (make_image.CORE1_FIT_OFFSET, 512 + make_image.CORE1_FIT_CAPACITY),
+                 (make_image.ENGINE_OFFSET, make_image.ENGINE_CAPACITY),
                  (make_image.GLYPH_TABLE_OFFSET, make_image.GLYPH_TABLE_SIZE)]
         self.assertLessEqual(make_image.GLYPH_PAYLOAD_LIMIT, slots[0][0])
         for (offset, capacity), (following, _) in zip(slots, slots[1:]):
@@ -705,7 +706,7 @@ class NpFacesTest(unittest.TestCase):
 
     def test_the_faces_come_from_the_elf_section_at_their_address(self):
         parts = firmware(np_faces=self.faces(b"\x01\x02\x03\x04"))
-        section = (".np_faces", SHT_PROGBITS, SHF_ALLOC, 0x0308BA00, parts.np_faces,
+        section = (".np_faces", SHT_PROGBITS, SHF_ALLOC, 0x0308B400, parts.np_faces,
                    len(parts.np_faces))
         self.assertEqual(parts, make_image.firmware_from_elf(firmware_elf(parts, [section])))
 
@@ -717,12 +718,12 @@ class NpFacesTest(unittest.TestCase):
             make_image.firmware_from_elf(firmware_elf(parts, [section]))
 
     def test_the_new_fields_come_last_in_the_image_parts(self):
-        self.assertEqual(["np_faces", "fit_overlay", "core1_fit", "startup"],
+        self.assertEqual(["fit_overlay", "core1_fit", "startup", "engine"],
                          list(make_image.ImageParts.__dataclass_fields__)[-4:])
 
 
 class WindowReferenceTest(unittest.TestCase):
-    INSIDE = 0x0308BA10
+    INSIDE = 0x0308B410
     HERE = make_image.CODE_BASE + 256
 
     def code_with(self, patch):
@@ -736,7 +737,7 @@ class WindowReferenceTest(unittest.TestCase):
                                          sanctioned=sanctioned, regions=regions))
 
     def test_the_encoder_and_decoder_agree(self):
-        for target in (0x03050000, 0x03051000, 0x0308BA10, 0x0308EFFC):
+        for target in (0x03050000, 0x03051000, 0x0308B410, 0x0308EFFC):
             self.assertEqual(target, decoded(encode_branch(0x03050100, target), 0x03050100))
             self.assertEqual(target, decoded(encode_branch(0x03050100, target, False), 0x03050100))
 
@@ -759,10 +760,10 @@ class WindowReferenceTest(unittest.TestCase):
             self.build_code(code)
 
     def test_the_edges_of_the_region_are_inside_and_outside(self):
-        for target in (0x0308BA00, 0x0308EFFC):
+        for target in (0x0308B400, 0x0308EFFC):
             with self.assertRaises(make_image.ImageError):
                 self.build_code(self.code_with(encode_branch(self.HERE, target)))
-        for target in (0x0308F000, 0x0308B9FC):
+        for target in (0x0308F000, 0x0308B3FC):
             self.build_code(self.code_with(encode_branch(self.HERE, target)))
 
     def test_a_bl_to_the_main_program_is_fine(self):
@@ -814,7 +815,7 @@ class WindowReferenceTest(unittest.TestCase):
         self.assertEqual(((0x03050000, "t"), (0x03050140, "d")), make_image.mapping_regions(elf))
 
     def test_symbols_in_the_region_must_come_from_np_faces(self):
-        good = (0x0308BA10, 4, "NOW_PLAYING_FACES", "/w/src/np_faces/np_faces.c")
+        good = (0x0308B410, 4, "NOW_PLAYING_FACES", "/w/src/np_faces/np_faces.c")
         make_image.check_np_faces_symbols([good])
         with self.assertRaises(make_image.ImageError):
             make_image.check_np_faces_symbols(
@@ -839,16 +840,16 @@ class WindowReferenceTest(unittest.TestCase):
                          make_image.sanctioned_ranges(rows))
 
     def test_the_nm_rows_are_parsed_with_their_sources(self):
-        output = ("0308ba11 00000004 T draw\t/w/src/np_faces/np_faces.c:12\n"
-                  "0308ba10 R no_size\n")
+        output = ("0308b411 00000004 T draw\t/w/src/np_faces/np_faces.c:12\n"
+                  "0308b410 R no_size\n")
         with mock_nm(output):
             rows = make_image.run_nm("x.elf", "nm")
-        self.assertEqual([(0x0308BA10, 4, "draw", "/w/src/np_faces/np_faces.c"),
-                          (0x0308BA10, 0, "no_size", "")], rows)
+        self.assertEqual([(0x0308B410, 4, "draw", "/w/src/np_faces/np_faces.c"),
+                          (0x0308B410, 0, "no_size", "")], rows)
 
     def test_main_checks_symbols_when_the_elf_has_faces(self):
         parts = firmware(np_faces=bytes(16) + b"\x5A" * 8)
-        section = (".np_faces", SHT_PROGBITS, SHF_ALLOC, 0x0308BA00, parts.np_faces,
+        section = (".np_faces", SHT_PROGBITS, SHF_ALLOC, 0x0308B400, parts.np_faces,
                    len(parts.np_faces))
         with tempfile.TemporaryDirectory() as directory:
             elf = Path(directory) / "rippl.elf"

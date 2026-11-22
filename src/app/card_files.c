@@ -16,6 +16,7 @@
 #include "player.h"
 #include "settings_store.h"
 #include "spoken_store.h"
+#include "theme_store.h"
 
 enum {
     SMALL_FILE_BYTES = 4096
@@ -32,7 +33,7 @@ static const CardFile CARD_FILES[] = {
     {PLAYER_UP_NEXT_PATH, SMALL_FILE_BYTES},  {SPOKEN_STORE_PATH, SMALL_FILE_BYTES},
     {RESCAN_TIMES_PATH, SMALL_FILE_BYTES},    {BLUETOOTH_STORE_PATH, SMALL_FILE_BYTES},
     {EQUALIZER_STORE_PATH, SMALL_FILE_BYTES}, {UPDATE_RECORD_PATH, SMALL_FILE_BYTES},
-    {FOLDERS_STORE_PATH, SMALL_FILE_BYTES},
+    {FOLDERS_STORE_PATH, SMALL_FILE_BYTES},   {THEME_STORE_PATH, SMALL_FILE_BYTES},
 };
 
 RIPPL_STARTUP_CODE CardFilesReport card_files_prepare(void (*creating)(void))

@@ -61,17 +61,19 @@ Turn it on in Settings → System → Diagnostics, or put an empty file named `d
 
 ### Performance overlay
 
-Green monospaced text at the top left, over the status bar, on a darkened strip. Two lines in landscape and four in portrait: frame times and draw parts, then the audio buffer and loads, then per-block times. Each field is a letter and a zero-padded number of fixed width, so nothing moves as values change; times are in milliseconds.
+Green monospaced text at the top left, over the status bar, on a darkened strip. Three lines in landscape and five in portrait: frame times and draw parts, then the audio buffer and loads, then per-block times. Each field is a letter and a zero-padded number of fixed width, so nothing moves as values change; times are in milliseconds.
 
 ```
-F016 u02 d009 s004 cv09 r03 t02 bg01 h02 a00
+F016 u02 d009 s004 h02 a00
+cv09 r03 t02 bg01 bx00 sh00
 b380 x000 o000 L12%/45% dec01/003 rd00/002
 ```
 
 | Field | Meaning |
 |---|---|
 | `F` `u` `d` `s` | Frame time, then update, draw and send |
-| `cv` `r` `t` `bg` `h` `a` | Draw parts: covers, reflections, text, backdrop, frame hash, audio service |
+| `h` `a` | Frame hash and audio service |
+| `cv` `r` `t` `bg` `bx` `sh` | Draw parts: covers, reflections, text, backdrop, boxes, scene shapes |
 | `b` | Audio buffered (ms), at most 437 |
 | `x` `o` | Underruns and output underruns. They count past 999 by starting again at 000, and the letter turns upper case (`X`, `O`) |
 | `L` | Core 0 audio load / core 1 load, `00`–`99` %, `xx` at 100 % or more |

@@ -36,6 +36,7 @@ Rippl is early firmware made by one person and tested on one player. Read this b
 
 - Going back to an older Rippl after choosing a new theme resets all settings; choose Dark or Light first. It also resets the Now Playing face to Standard.
 - The faces' battery cost hasn't been measured. If the face code can't be loaded from internal storage, Now Playing shows Standard until the next restart.
+- Settings → Theme lists at most eight theme files.
 
 ## Languages
 
