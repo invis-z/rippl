@@ -66,3 +66,11 @@ HalHighRamTest hal_system_high_ram_test(void)
     return (HalHighRamTest){
         .status = status, .size = HIGH_RAM_END - HIGH_RAM_BASE, .call_result = result};
 }
+
+static uint32_t cover_scratch[HAL_COVER_SCRATCH_BYTES / 4] __attribute__((section(".high_ram")));
+
+void *hal_system_cover_scratch(uint32_t *size)
+{
+    *size = (uint32_t)sizeof cover_scratch;
+    return cover_scratch;
+}

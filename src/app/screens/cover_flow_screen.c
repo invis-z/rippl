@@ -8,6 +8,8 @@
 #include "draw_profile.h"
 #include "hal/audio.h"
 #include "hal/clock.h"
+#include "hal/system.h"
+#include "library/covers.h"
 #include "settings/settings.h"
 #include "ui/cover_flow.h"
 #include "ui/label.h"
@@ -27,8 +29,13 @@ enum {
     ORDER_BY_TITLE = -2,
     REPEATS_PER_SPEED_UP = 8,
     FASTEST_STEP = 4,
-    SHUFFLE_SIZE = 48,
-    SHUFFLE_STROKE = 4,
+    SHUFFLE_SIZE = COVER_FULL_SIZE,
+    SHUFFLE_PIXELS = SHUFFLE_SIZE * SHUFFLE_SIZE,
+    SHUFFLE_SEAL_PIXELS = 4,
+    SHUFFLE_GRID = 48,
+    SHUFFLE_HALF_STROKE_Q8 = 2 * SHUFFLE_SIZE * 256 / SHUFFLE_GRID,
+    Q8 = 256,
+    Q16 = 65536,
     STACK_TITLE_TOP = 272,
     STACK_ARTIST_TOP = 294,
     STACK_FLOOR_TOP = 266,
@@ -79,8 +86,9 @@ static const char STAR_PREFIX[] = "\xE2\x98\x85 ";
 static const Color SHUFFLE_BACKGROUND = COLOR_RGB(44, 46, 58);
 static const Color SHUFFLE_MARK = COLOR_RGB(255, 255, 255);
 
-static Color shuffle_pixels[SHUFFLE_SIZE * SHUFFLE_SIZE];
-static bool shuffle_drawn;
+static Color *shuffle_pixels;
+
+static const Color SHUFFLE_SEAL[SHUFFLE_SEAL_PIXELS] = {0x5248, 0x5546, 0x464C, 0x4553};
 
 static int min_of(int first, int second)
 {
@@ -310,46 +318,135 @@ static void fill_tiles(CoverFlowScreen *flow)
     }
 }
 
-static void plot(int x, int y)
+static const int16_t SHUFFLE_LINES[][4] = {
+    {9, 34, 16, 34},  {16, 34, 30, 14}, {30, 14, 39, 14}, {39, 14, 34, 9},
+    {39, 14, 34, 19}, {9, 14, 16, 14},  {16, 14, 22, 23}, {25, 27, 30, 34},
+    {30, 34, 39, 34}, {39, 34, 34, 29}, {39, 34, 34, 39},
+};
+
+typedef struct {
+    int32_t ax;
+    int32_t ay;
+    int32_t dx;
+    int32_t dy;
+    int64_t inverse;
+} ShuffleSegment;
+
+static ShuffleSegment shuffle_segment(const int16_t *line)
 {
-    for (int row = y - SHUFFLE_STROKE / 2; row < y + SHUFFLE_STROKE / 2; row++) {
-        for (int column = x - SHUFFLE_STROKE / 2; column < x + SHUFFLE_STROKE / 2; column++) {
-            if (row >= 0 && row < SHUFFLE_SIZE && column >= 0 && column < SHUFFLE_SIZE) {
-                shuffle_pixels[row * SHUFFLE_SIZE + column] = SHUFFLE_MARK;
-            }
-        }
-    }
+    ShuffleSegment segment;
+    segment.ax = line[0] * SHUFFLE_SIZE * Q8 / SHUFFLE_GRID;
+    segment.ay = line[1] * SHUFFLE_SIZE * Q8 / SHUFFLE_GRID;
+    segment.dx = line[2] * SHUFFLE_SIZE * Q8 / SHUFFLE_GRID - segment.ax;
+    segment.dy = line[3] * SHUFFLE_SIZE * Q8 / SHUFFLE_GRID - segment.ay;
+    int64_t length = (int64_t)segment.dx * segment.dx + (int64_t)segment.dy * segment.dy;
+    segment.inverse = length == 0 ? 0 : ((int64_t)1 << 48) / length;
+    return segment;
 }
 
-static void stroke(int from_x, int from_y, int to_x, int to_y)
+static int64_t segment_distance_squared(int x, int y, const ShuffleSegment *segment)
 {
-    int steps = max_of(max_of(to_x - from_x, from_x - to_x), max_of(to_y - from_y, from_y - to_y));
-    for (int step = 0; step <= steps; step++) {
-        int x = from_x + (to_x - from_x) * step / max_of(steps, 1);
-        int y = from_y + (to_y - from_y) * step / max_of(steps, 1);
-        plot(x, y);
+    int64_t px = (int64_t)x * Q8 + Q8 / 2 - segment->ax;
+    int64_t py = (int64_t)y * Q8 + Q8 / 2 - segment->ay;
+    int64_t along = (px * segment->dx + py * segment->dy) * segment->inverse >> 32;
+    along = along < 0 ? 0 : along > Q16 ? Q16 : along;
+    int64_t cx = segment->dx * along / Q16 - px;
+    int64_t cy = segment->dy * along / Q16 - py;
+    return cx * cx + cy * cy;
+}
+
+static uint32_t root(uint32_t value)
+{
+    uint32_t result = 0;
+    uint32_t bit = (uint32_t)1 << 30;
+    while (bit > value) {
+        bit >>= 2;
+    }
+    while (bit != 0) {
+        if (value >= result + bit) {
+            value -= result + bit;
+            result = (result >> 1) + bit;
+        } else {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+    return result;
+}
+
+static int pixel_floor(int32_t value)
+{
+    int pixel = value < 0 ? 0 : (int)(value / Q8);
+    return pixel >= SHUFFLE_SIZE ? SHUFFLE_SIZE - 1 : pixel;
+}
+
+static void stroke_segment(const ShuffleSegment *segment)
+{
+    int32_t outer = SHUFFLE_HALF_STROKE_Q8 + Q8 / 2;
+    int32_t bx = segment->ax + segment->dx;
+    int32_t by = segment->ay + segment->dy;
+    int left = pixel_floor((segment->ax < bx ? segment->ax : bx) - outer);
+    int right = pixel_floor((segment->ax > bx ? segment->ax : bx) + outer);
+    int top = pixel_floor((segment->ay < by ? segment->ay : by) - outer);
+    int bottom = pixel_floor((segment->ay > by ? segment->ay : by) + outer);
+    for (int y = top; y <= bottom; y++) {
+        for (int x = left; x <= right; x++) {
+            int64_t distance = segment_distance_squared(x, y, segment);
+            if (distance >= (int64_t)outer * outer) {
+                continue;
+            }
+            int32_t inside = outer - (int32_t)root((uint32_t)distance);
+            Color alpha = (Color)(inside >= Q8 ? 255 : inside * 255 / Q8);
+            Color *pixel = &shuffle_pixels[y * SHUFFLE_SIZE + x];
+            *pixel = alpha > *pixel ? alpha : *pixel;
+        }
     }
 }
 
 static void draw_shuffle_mark(void)
 {
-    for (int index = 0; index < SHUFFLE_SIZE * SHUFFLE_SIZE; index++) {
-        shuffle_pixels[index] = SHUFFLE_BACKGROUND;
+    for (int index = 0; index < SHUFFLE_PIXELS; index++) {
+        shuffle_pixels[index] = 0;
     }
-    static const int16_t LINES[][4] = {
-        {9, 34, 16, 34},  {16, 34, 30, 14}, {30, 14, 39, 14}, {39, 14, 34, 9},
-        {39, 14, 34, 19}, {9, 14, 16, 14},  {16, 14, 22, 23}, {25, 27, 30, 34},
-        {30, 34, 39, 34}, {39, 34, 34, 29}, {39, 34, 34, 39},
-    };
-    for (size_t index = 0; index < sizeof LINES / sizeof LINES[0]; index++) {
-        stroke(LINES[index][0], LINES[index][1], LINES[index][2], LINES[index][3]);
+    for (size_t index = 0; index < sizeof SHUFFLE_LINES / sizeof SHUFFLE_LINES[0]; index++) {
+        ShuffleSegment segment = shuffle_segment(SHUFFLE_LINES[index]);
+        stroke_segment(&segment);
     }
-    shuffle_drawn = true;
+    for (int index = 0; index < SHUFFLE_PIXELS; index++) {
+        shuffle_pixels[index] =
+            color_blend(SHUFFLE_BACKGROUND, SHUFFLE_MARK, (uint8_t)shuffle_pixels[index]);
+    }
+    for (int index = 0; index < SHUFFLE_SEAL_PIXELS; index++) {
+        shuffle_pixels[SHUFFLE_PIXELS + index] = SHUFFLE_SEAL[index];
+    }
+}
+
+static bool shuffle_memory(void)
+{
+    uint32_t size = 0;
+    shuffle_pixels = hal_system_cover_scratch(&size);
+    if (size < (SHUFFLE_PIXELS + SHUFFLE_SEAL_PIXELS) * sizeof(Color)) {
+        shuffle_pixels = NULL;
+    }
+    return shuffle_pixels != NULL;
+}
+
+static bool shuffle_sealed(void)
+{
+    for (int index = 0; index < SHUFFLE_SEAL_PIXELS; index++) {
+        if (shuffle_pixels[SHUFFLE_PIXELS + index] != SHUFFLE_SEAL[index]) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static Image shuffle_image(void)
 {
-    if (!shuffle_drawn) {
+    if (!shuffle_memory()) {
+        return (Image){.pixels = NULL, .width = 0, .height = 0};
+    }
+    if (!shuffle_sealed()) {
         draw_shuffle_mark();
     }
     return (Image){.pixels = shuffle_pixels, .width = SHUFFLE_SIZE, .height = SHUFFLE_SIZE};
@@ -681,6 +778,7 @@ static void enter(void *context, uint32_t now_ms)
     flow->position = (int32_t)flow->target * COVER_FLOW_ONE;
     flow->last_ms = now_ms;
     flow->now_ms = now_ms;
+    (void)shuffle_image();
     fill_tiles(flow);
     refresh_text(flow, true);
 }
@@ -704,7 +802,7 @@ static bool cover_image(const CoverFlowScreen *flow, int position, Image *image)
 {
     if (is_random(flow, position)) {
         *image = shuffle_image();
-        return true;
+        return image->pixels != NULL;
     }
     uint16_t album = album_of(flow, position);
     return cover_cache_full(flow->config.covers, album, image) == COVER_LOADED ||

@@ -1439,3 +1439,11 @@ const void *hal_system_load_faces(void)
 {
     return fake.np_faces_missing ? NULL : &NOW_PLAYING_FACES;
 }
+
+static uint32_t cover_scratch[HAL_COVER_SCRATCH_BYTES / 4];
+
+void *hal_system_cover_scratch(uint32_t *size)
+{
+    *size = (uint32_t)sizeof cover_scratch;
+    return cover_scratch;
+}

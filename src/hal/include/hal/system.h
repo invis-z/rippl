@@ -116,6 +116,11 @@ typedef struct HalHighRamTest {
 } HalHighRamTest;
 
 HalHighRamTest hal_system_high_ram_test(void);
+enum {
+    HAL_COVER_SCRATCH_BYTES = 26 * 1024
+};
+
+void *hal_system_cover_scratch(uint32_t *size);
 bool hal_system_restart_pending(void);
 const void *hal_system_load_rescan_code(void);
 const void *hal_system_load_faces(void);
