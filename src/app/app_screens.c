@@ -5,6 +5,7 @@
 
 #include "app/app.h"
 #include "core/i18n.h"
+#include "core/resident.h"
 #include "diagnostics_values.h"
 #include "hal/power.h"
 #include "hal/storage.h"
@@ -253,7 +254,7 @@ static void build_home(AppScreens *screens, AppScreensContext context)
     menu_screen_init(&screens->home, home);
 }
 
-Screen *app_screens_init(AppScreens *screens, AppScreensContext context)
+RIPPL_STARTUP_CODE Screen *app_screens_init(AppScreens *screens, AppScreensContext context)
 {
     const Theme *theme = context.theme;
     bool card = hal_storage_card_ready();

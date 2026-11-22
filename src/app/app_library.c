@@ -1,6 +1,7 @@
 #include "app/app.h"
 
 #include "app_state.h"
+#include "core/resident.h"
 
 static void number_text(char *text, size_t capacity, uint32_t value);
 
@@ -16,7 +17,7 @@ void app_check_debug_file(void)
     app.screens.diagnostics_gate.debug_file = found;
 }
 
-void app_report_card_files(CardFilesReport files, uint32_t now_ms)
+RIPPL_STARTUP_CODE void app_report_card_files(CardFilesReport files, uint32_t now_ms)
 {
     if (files.card_full) {
         toast_show(&app.toast, i18n_text(STR_BOOT_CARD_FULL), now_ms);

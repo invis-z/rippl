@@ -2,6 +2,7 @@
 
 #include "core/bytes.h"
 #include "core/hash.h"
+#include "core/resident.h"
 #include "hal/storage.h"
 #include "hal/system.h"
 #include "hal/time.h"
@@ -157,7 +158,8 @@ static void read_chip(ClockStore *store, uint32_t now_ms)
     store->next_read_ms = now_ms + CLOCK_READ_INTERVAL_MS;
 }
 
-void clock_store_start(ClockStore *store, const Settings *settings, uint32_t now_ms)
+RIPPL_STARTUP_CODE void clock_store_start(ClockStore *store, const Settings *settings,
+                                          uint32_t now_ms)
 {
     if (!store->started) {
         ClockRecord record;

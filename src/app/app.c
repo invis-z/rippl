@@ -1,6 +1,8 @@
 #include "app/app.h"
 
+#include "app/startup.h"
 #include "app_state.h"
+#include "core/resident.h"
 
 const KeyConfig APP_KEY_CONFIG = {
     .timing =
@@ -33,6 +35,8 @@ static const uint32_t SCREEN_ON_CLOCK_MHZ = 200;
 static const uint32_t IDLE_CLOCK_MHZ = 96;
 const FadeTiming APP_GOODBYE_TIMING = {.fade_ms = 600, .hold_ms = 400, .rising = false};
 const char APP_GOODBYE_TEXT[] = "Goodbye";
+static const char START_CODE_MISSING[] = "Start-up code missing: reinstall the update";
+static const uint32_t START_REFUSAL_MS = 5000;
 
 Screen *app_top_screen(void)
 {
@@ -350,7 +354,7 @@ static bool frame_needed(uint32_t now_ms)
     return busy || !app.frame_stable || deadline_reached(now_ms, app.idle_render_ms);
 }
 
-static void start_playback(void)
+RIPPL_STARTUP_CODE static void start_playback(void)
 {
     cover_cache_close(&app.covers);
     library_store_open(&app.library);
@@ -363,7 +367,7 @@ static void start_playback(void)
     cover_cache_open(&app.covers, &app.library.library, &app.library.segments);
 }
 
-static void start_hardware(uint32_t now_ms)
+RIPPL_STARTUP_CODE static void start_hardware(uint32_t now_ms)
 {
     power_policy_init(&app.power, settings_screen_timeout_ms(&app.settings.settings), now_ms);
     power_policy_set_auto_off(&app.power, settings_auto_off_ms(&app.settings.settings), now_ms);
@@ -381,7 +385,7 @@ static void open_start_screen(uint32_t now_ms)
     }
 }
 
-static void start_screens(uint32_t now_ms)
+RIPPL_STARTUP_CODE static void start_screens(uint32_t now_ms)
 {
     AppScreensContext context = {
         .options = &app.options,
@@ -417,7 +421,7 @@ static bool attach_language(Language language)
     return hal_language_pack((uint32_t)language, &pack, &size) && i18n_attach(pack, size);
 }
 
-static void apply_language(Language language)
+RIPPL_STARTUP_CODE static void apply_language(Language language)
 {
     if (attach_language(language)) {
         return;
@@ -432,7 +436,7 @@ static void apply_language(Language language)
     }
 }
 
-void app_start(void)
+RIPPL_STARTUP_CODE static void start_up(void)
 {
     uint32_t now_ms = hal_clock_milliseconds();
     apply_language(LANGUAGE_ENGLISH);
@@ -476,6 +480,43 @@ void app_start(void)
     }
 }
 
+RIPPL_STARTUP_ENTRY const AppStartup APP_STARTUP = {.magic = APP_STARTUP_MAGIC, .start = start_up};
+
+static void refuse_to_start(void)
+{
+    bool updated = hal_system_restart_pending();
+    app_show_notice("Rippl", updated ? i18n_text(STR_RESCAN_RESTART_NEEDED) : START_CODE_MISSING);
+    app.refused_ms = hal_clock_milliseconds();
+}
+
+static void wait_after_refusal(void)
+{
+    uint32_t now_ms = hal_clock_milliseconds();
+    if (hal_power_battery().usb_power) {
+        app.refused_ms = now_ms;
+        return;
+    }
+    if (now_ms - app.refused_ms >= START_REFUSAL_MS) {
+        app.start_refused = false;
+        app.powered_off = true;
+        hal_power_off();
+    }
+}
+
+void app_start(void)
+{
+    const AppStartup *startup = hal_system_load_startup();
+    bool usable = startup != NULL && startup->magic == APP_STARTUP_MAGIC;
+    if (usable) {
+        startup->start();
+    }
+    hal_system_release_startup();
+    app.start_refused = !usable;
+    if (!usable) {
+        refuse_to_start();
+    }
+}
+
 void app_push_screen(Screen *screen, uint32_t now_ms)
 {
     if (screen_stack_apply(&app.stack, screen_action_push(screen), now_ms)) {
@@ -486,6 +527,10 @@ void app_push_screen(Screen *screen, uint32_t now_ms)
 void app_step(void)
 {
     if (app.powered_off) {
+        return;
+    }
+    if (app.start_refused) {
+        wait_after_refusal();
         return;
     }
     app.idle = false;

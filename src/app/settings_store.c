@@ -1,5 +1,6 @@
 #include "settings_store.h"
 
+#include "core/resident.h"
 #include "error_log.h"
 #include "hal/audio.h"
 #include "hal/display.h"
@@ -49,7 +50,7 @@ static void remember(SettingsStore *store, const uint8_t *bytes)
     store->has_saved = true;
 }
 
-void settings_store_load(SettingsStore *store)
+RIPPL_STARTUP_CODE void settings_store_load(SettingsStore *store)
 {
     uint8_t bytes[SETTINGS_FILE_SIZE] = {0};
     store->has_saved = false;

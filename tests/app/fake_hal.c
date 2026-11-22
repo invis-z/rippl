@@ -2,6 +2,8 @@
 
 #include "hal/system.h"
 
+#include "app/startup.h"
+
 #include "hal/audio.h"
 #include "hal/bluetooth.h"
 #include "hal/clock.h"
@@ -158,6 +160,9 @@ typedef struct FakeHal {
     int opens[FILE_CAPACITY];
     int open_file_limit;
     bool np_faces_missing;
+    bool startup_missing;
+    int startup_loads;
+    int startup_releases;
 } FakeHal;
 
 static FakeHal fake;
@@ -1605,6 +1610,32 @@ void *hal_system_cover_scratch(uint32_t *size)
 {
     *size = (uint32_t)sizeof cover_scratch;
     return cover_scratch;
+}
+
+void fake_hal_set_startup(bool present)
+{
+    fake.startup_missing = !present;
+}
+
+int fake_hal_startup_loads(void)
+{
+    return fake.startup_loads;
+}
+
+int fake_hal_startup_releases(void)
+{
+    return fake.startup_releases;
+}
+
+const void *hal_system_load_startup(void)
+{
+    fake.startup_loads++;
+    return fake.startup_missing ? NULL : &APP_STARTUP;
+}
+
+void hal_system_release_startup(void)
+{
+    fake.startup_releases++;
 }
 
 uint32_t hal_file_read_start(HalFile file, uint32_t offset, void *buffer, uint32_t length)

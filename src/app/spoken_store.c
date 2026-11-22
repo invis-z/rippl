@@ -2,6 +2,7 @@
 
 #include "core/format.h"
 #include "core/i18n.h"
+#include "core/resident.h"
 #include "core/string_builder.h"
 #include "error_log.h"
 #include "hal/storage.h"
@@ -31,7 +32,7 @@ static bool read_bookmarks(uint8_t *bytes, uint32_t *length)
     return read;
 }
 
-void spoken_store_load(SpokenStore *store, const Library *library)
+RIPPL_STARTUP_CODE void spoken_store_load(SpokenStore *store, const Library *library)
 {
     uint8_t bytes[BOOKMARKS_FILE_CAPACITY];
     uint32_t length = 0;

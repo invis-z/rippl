@@ -1,3 +1,4 @@
+#include "app/startup.h"
 #include "core/wall_clock.h"
 #include "hal/system.h"
 #include "library/library_scan.h"
@@ -195,4 +196,13 @@ void *hal_system_cover_scratch(uint32_t *size)
 {
     *size = (uint32_t)sizeof cover_scratch;
     return cover_scratch;
+}
+
+const void *hal_system_load_startup(void)
+{
+    return &APP_STARTUP;
+}
+
+void hal_system_release_startup(void)
+{
 }

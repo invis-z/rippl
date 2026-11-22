@@ -17,6 +17,9 @@
 #define NP_FACES_ENTRY (NP_FACES_BASE + OVERLAY_HEADER_BYTES)
 #define NP_FACES_IMAGE_OFFSET 0x034000u
 #define NP_FACES_IMAGE_MAGIC 0x46504E45u
+#define STARTUP_IMAGE_OFFSET 0x030000u
+#define STARTUP_IMAGE_MAGIC 0x50545345u
+#define USB_OVERLAY_WINDOW_BYTES (NP_FACES_BASE - OVERLAY_WINDOW_BASE)
 
 typedef struct BoardOverlay {
     uint32_t image_offset;
@@ -28,3 +31,4 @@ typedef struct BoardOverlay {
 bool board_overlay_load(const BoardOverlay *overlay);
 const void *board_usb_overlay_load(void);
 void board_np_faces_forget(void);
+bool board_startup_keep(void);

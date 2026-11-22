@@ -5,6 +5,7 @@
 
 #include "app/update_record.h"
 #include "bluetooth_store.h"
+#include "core/resident.h"
 #include "equalizer_store.h"
 #include "favorites_store.h"
 #include "folders_store.h"
@@ -34,7 +35,7 @@ static const CardFile CARD_FILES[] = {
     {FOLDERS_STORE_PATH, SMALL_FILE_BYTES},
 };
 
-CardFilesReport card_files_prepare(void (*creating)(void))
+RIPPL_STARTUP_CODE CardFilesReport card_files_prepare(void (*creating)(void))
 {
     CardFilesReport report = {.created = false, .card_full = false};
     for (size_t index = 0; index < sizeof CARD_FILES / sizeof CARD_FILES[0]; index++) {
