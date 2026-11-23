@@ -21,6 +21,10 @@ USB_OVERLAY_WINDOW = 0x11400
 RESIDENT_CAPACITY = 0x4800
 NP_FACES_CAPACITY = 0x3C00
 STARTUP_CAPACITY = 0x3C00
+SECTOR_BYTES = 512
+OVERLAY_HEADER_BYTES = 16
+SCENE_STAMP_BYTES = 44
+SCENE_WORK_BYTES = 1280
 ENGINE_CAPACITY = 0xA00
 HIGH_RAM_CAPACITY = 0x10A00
 USB_OVERLAY_IMAGE_CAPACITY = 0x10000
@@ -197,6 +201,7 @@ def summary(device_map, overlay_map=None, usb_overlay_map=None):
         lines.append(limit_line("resident tables", sizes[".resident"], RESIDENT_CAPACITY))
     if ".np_faces" in sizes:
         lines.append(limit_line("np_faces", sizes[".np_faces"], NP_FACES_CAPACITY))
+        lines.append(f"room for scenes after np_faces: {scene_room(sizes['.np_faces']):,} bytes")
     if ".startup" in sizes:
         lines.append(limit_line("start-up code", sizes[".startup"], STARTUP_CAPACITY))
     if ".engine" in sizes:

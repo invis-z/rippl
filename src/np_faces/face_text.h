@@ -52,6 +52,7 @@ typedef struct FaceBar {
     Color hot;
 } FaceBar;
 
+bool face_text_visible(const Canvas *canvas, const Font *font, Rect area);
 int face_scroll_offset(MarqueeTiming timing, int text_width, int view_width, uint32_t elapsed_ms);
 Rect face_fitted_area(const Font *font, Rect area, const char *text, FaceAlign align);
 void face_line(Canvas *canvas, const NowPlayingFrame *frame, const FaceLine *line,
@@ -62,6 +63,7 @@ void face_feedback_line(Canvas *canvas, const NowPlayingFrame *frame, const Face
 void face_times_text(const NowPlayingFrame *frame, FaceTimes *times);
 void face_times_draw(Canvas *canvas, const NowPlayingFrame *frame, const FaceLine *line);
 int face_progress_width(uint32_t position_ms, uint32_t duration_ms, int width);
+int face_queue_progress(const NowPlayingFrame *frame, int whole);
 int face_volume_width(uint8_t volume, int width);
 FaceFill face_bar_fill(const NowPlayingFrame *frame, int width);
 void face_bar_draw(Canvas *canvas, const NowPlayingFrame *frame, const FaceBar *bar);
@@ -72,3 +74,4 @@ void face_outline(Canvas *canvas, Rect box, Color color);
 int face_codec_width(const Font *font, const char *codec);
 void face_codec_draw(Canvas *canvas, const FaceLine *line, const char *codec);
 void face_format_row(Canvas *canvas, const NowPlayingFrame *frame, const FaceLine *line);
+Image face_logo_cover(void *scratch, uint32_t scratch_size, Color background, Color foreground);

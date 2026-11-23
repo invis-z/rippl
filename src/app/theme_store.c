@@ -10,6 +10,7 @@
 #include "default_theme.h"
 #include "hal/storage.h"
 #include "hal/system.h"
+#include "np_faces/scene.h"
 #include "ui/theme_engine.h"
 
 enum {
@@ -18,7 +19,21 @@ enum {
     PATH_CAPACITY = 64,
     SUFFIX_BYTES = 11,
     CASE_BIT = 0x20,
-    NO_BUILTIN = -1
+    NO_BUILTIN = -1,
+    SCENE_MAGIC = 0x4E435345,
+    WORD_BYTES = 4
+};
+
+typedef struct SceneStamp {
+    uint32_t magic;
+    uint32_t wipes;
+    uint32_t revision;
+    ThemePackageScene scenes[THEME_SCENE_COUNT];
+} SceneStamp;
+
+enum {
+    SCENE_HEADER_BYTES = (sizeof(SceneStamp) + WORD_BYTES - 1) / WORD_BYTES * WORD_BYTES,
+    SCENE_SPARE_BYTES = SCENE_HEADER_BYTES + SCENE_WORK_BYTES
 };
 
 const char THEME_STORE_PATH[] = "/.rippl/theme.bin";
@@ -108,7 +123,7 @@ RIPPL_STARTUP_HELPER static bool decode(ThemeMemory *block, uint32_t size)
     return true;
 }
 
-RIPPL_STARTUP_HELPER static bool open_card(const char *name, ThemeSource *source)
+static bool open_card(const char *name, ThemeSource *source)
 {
     char path[PATH_CAPACITY];
     StringBuilder builder = string_builder_make(path, sizeof path);
@@ -124,21 +139,21 @@ RIPPL_STARTUP_HELPER static bool open_card(const char *name, ThemeSource *source
     return true;
 }
 
-RIPPL_STARTUP_HELPER static bool open_builtin(int theme, ThemeSource *source)
+static bool open_builtin(int theme, ThemeSource *source)
 {
     source->builtin = theme;
     source->size = theme >= 0 ? hal_system_builtin_theme_size((uint32_t)theme) : 0;
     return source->size > 0;
 }
 
-RIPPL_STARTUP_HELPER static void close_source(ThemeSource *source)
+static void close_source(ThemeSource *source)
 {
     if (source->builtin == NO_BUILTIN) {
         hal_file_close(&source->file);
     }
 }
 
-RIPPL_STARTUP_HELPER static bool open_worn(const ThemeMemory *block, ThemeSource *source)
+static bool open_worn(const ThemeMemory *block, ThemeSource *source)
 {
     return block->card ? open_card(block->package.name, source)
                        : open_builtin(block->builtin, source);
@@ -310,6 +325,103 @@ RIPPL_STARTUP_CODE static bool load_tend(void)
     bool changed = theme_assets_tend(&block->assets, &block->package, &source);
     close_source(&source);
     return changed || reread;
+}
+
+static ThemePackageScene scene_slot(const ThemePackage *package, int which)
+{
+    return which == THEME_SCENE_HOME ? package->home_scene : package->scene;
+}
+
+bool theme_store_has_scene(int which)
+{
+    const ThemeMemory *block = memory();
+    return block != NULL && block->active && scene_slot(&block->package, which).code_bytes > 0;
+}
+
+static uint32_t scene_bytes(ThemePackageScene scene)
+{
+    uint32_t chrome = (scene.flags & THEME_SCENE_CHROME) != 0 ? THEME_SCENE_CHROME_BYTES : 0;
+    return chrome + scene.code_bytes + scene.string_bytes;
+}
+
+static uint32_t section_bytes(ThemePackageScene scene)
+{
+    return (scene_bytes(scene) + WORD_BYTES - 1) / WORD_BYTES * WORD_BYTES;
+}
+
+static bool read_scene(ThemeSource *source, ThemePackageScene scene, uint8_t *room)
+{
+    uint32_t bytes = scene_bytes(scene);
+    return bytes == 0 || (theme_source_read(source, scene.offset, room, bytes) &&
+                          hash_update(HASH_START, room, bytes) == scene.checksum);
+}
+
+static bool load_scenes(ThemeMemory *block, uint8_t *memory, uint32_t size)
+{
+    SceneStamp *stamp = (SceneStamp *)(void *)memory;
+    uint8_t *room = memory + SCENE_HEADER_BYTES;
+    ThemePackageScene first = block->package.scene;
+    ThemePackageScene second = block->package.home_scene;
+    ThemeSource source;
+    stamp->magic = 0;
+    if (section_bytes(first) + section_bytes(second) > size - SCENE_SPARE_BYTES ||
+        !open_worn(block, &source)) {
+        return false;
+    }
+    bool loaded = read_scene(&source, first, room) &&
+                  read_scene(&source, second, room + section_bytes(first));
+    close_source(&source);
+    if (loaded) {
+        *stamp =
+            (SceneStamp){SCENE_MAGIC, hal_system_scene_wipes(), block->revision, {first, second}};
+    }
+    return loaded;
+}
+
+bool theme_store_scene_whole_screen(int which)
+{
+    const ThemeMemory *block = memory();
+    return theme_store_has_scene(which) &&
+           (scene_slot(&block->package, which).flags & THEME_SCENE_WHOLE_SCREEN) != 0;
+}
+
+bool theme_store_scene_smooth(int which)
+{
+    const ThemeMemory *block = memory();
+    return theme_store_has_scene(which) &&
+           (scene_slot(&block->package, which).flags & THEME_SCENE_SMOOTH) != 0;
+}
+
+bool theme_store_scene(int which, SceneCode *code, const ThemeColors **chrome)
+{
+    ThemeMemory *block = memory();
+    uint32_t size = 0;
+    uint8_t *place = theme_store_has_scene(which) ? hal_system_scene_memory(&size) : NULL;
+    if (place == NULL || size <= SCENE_SPARE_BYTES) {
+        return false;
+    }
+    const SceneStamp *stamp = (const SceneStamp *)(const void *)place;
+    bool current = stamp->magic == SCENE_MAGIC && stamp->wipes == hal_system_scene_wipes() &&
+                   stamp->revision == block->revision &&
+                   stamp->scenes[0].checksum == block->package.scene.checksum &&
+                   stamp->scenes[1].checksum == block->package.home_scene.checksum;
+    if (!current && !load_scenes(block, place, size)) {
+        return false;
+    }
+    ThemePackageScene scene = stamp->scenes[which == THEME_SCENE_HOME];
+    const uint8_t *section = place + SCENE_HEADER_BYTES +
+                             (which == THEME_SCENE_HOME ? section_bytes(stamp->scenes[0]) : 0);
+    bool tinted = (scene.flags & THEME_SCENE_CHROME) != 0;
+    *chrome = tinted ? (const ThemeColors *)(const void *)section : NULL;
+    section += tinted ? THEME_SCENE_CHROME_BYTES : 0;
+    uint32_t work_at = (size - SCENE_WORK_BYTES) / WORD_BYTES * WORD_BYTES;
+    *code = (SceneCode){section,
+                        scene.code_bytes,
+                        (const char *)section + scene.code_bytes,
+                        scene.string_bytes,
+                        place + work_at,
+                        SCENE_WORK_BYTES};
+    return true;
 }
 
 uint8_t theme_store_revision(void)

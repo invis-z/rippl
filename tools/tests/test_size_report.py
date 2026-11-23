@@ -147,6 +147,7 @@ class ReportTest(unittest.TestCase):
                                    "155,640 free")
         self.assertEqual(lines[2], "resident tables: 15,152 of 18,432 bytes, 3,280 free")
         self.assertEqual(lines[3], "np_faces: 6,160 of 15,360 bytes, 9,200 free")
+        self.assertEqual(lines[4], "room for scenes after np_faces: 7,380 bytes")
         self.assertIn(".high_ram: 65,536 of 68,096 bytes, 2,560 free", lines)
         self.assertIn("rescan overlay: 81,920 of 86,016 bytes, 4,096 free", lines)
 

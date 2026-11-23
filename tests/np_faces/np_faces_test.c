@@ -3,7 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "np_faces/scene.h"
 #include "tiny_font.h"
+#include "ui/theme_engine.h"
+#include "ui/theme_package.h"
 #include "ui_test_theme.h"
 
 enum {
@@ -18,9 +21,8 @@ enum {
 };
 
 const NpTestLayout NP_TEST_LAYOUTS[NP_TEST_LAYOUT_COUNT] = {
-    {320, 170, {0, 24, 320, 146}},
-    {170, 320, {0, 40, 170, 280}},
-    {170, 320, {0, 46, 170, 274}},
+    {320, 170, {0, 0, 320, 170}},
+    {170, 320, {0, 0, 170, 320}},
 };
 
 const char NP_TEST_LONG_TITLE[] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -67,16 +69,65 @@ static void apply_state(NpTestScene *scene, NpTestState state)
     if (state == NP_TEST_BADGE) {
         frame->feedback = NOW_PLAYING_FEEDBACK_NEXT;
     }
-    if (state == NP_TEST_LYRIC) {
-        frame->lyric = "AB";
-    }
     if (state == NP_TEST_NO_COVER) {
         frame->cover = (Image){0};
     }
 }
 
+static const char *const FACE_FILES[NP_FACE_COUNT] = {
+    [NP_FACE_CASSETTE] = "cassette",
+    [NP_FACE_TURNTABLE] = "turntable",
+    [NP_FACE_TAPE_WINDOW] = "tape_window",
+};
+
+static const uint8_t *face_theme(uint8_t face, uint32_t *size)
+{
+    static uint8_t bytes[NP_FACE_COUNT][NP_TEST_THEME_BYTES];
+    static uint32_t sizes[NP_FACE_COUNT];
+    if (face <= NP_FACE_STANDARD || face >= NP_FACE_COUNT) {
+        return NULL;
+    }
+    if (sizes[face] == 0) {
+        char path[512];
+        snprintf(path, sizeof path, "%s/%s.rippltheme", RIPPL_PACKED_THEMES, FACE_FILES[face]);
+        FILE *file = fopen(path, "rb");
+        if (file == NULL) {
+            return NULL;
+        }
+        sizes[face] = (uint32_t)fread(bytes[face], 1, sizeof bytes[face], file);
+        fclose(file);
+    }
+    *size = sizes[face];
+    return bytes[face];
+}
+
+bool np_test_scene_code(uint8_t face, SceneCode *code, const ThemeColors **chrome)
+{
+    *code = (SceneCode){0};
+    *chrome = NULL;
+    uint32_t size = 0;
+    const uint8_t *bytes = face_theme(face, &size);
+    ThemePackage package = {0};
+    if (bytes == NULL || !theme_package_decode(bytes, size, &package)) {
+        return false;
+    }
+    const uint8_t *section = bytes + package.scene.offset;
+    bool tinted = (package.scene.flags & THEME_SCENE_CHROME) != 0;
+    *chrome = tinted ? (const ThemeColors *)(const void *)section : NULL;
+    section += tinted ? THEME_SCENE_CHROME_BYTES : 0;
+    static uint32_t work[SCENE_WORK_BYTES / sizeof(uint32_t)];
+    *code = (SceneCode){section,
+                        package.scene.code_bytes,
+                        (const char *)section + package.scene.code_bytes,
+                        package.scene.string_bytes,
+                        work,
+                        sizeof work};
+    return package.scene.code_bytes > 0;
+}
+
 NpTestScene np_test_scene(uint8_t face, NpTestLayout layout, NpTestState state)
 {
+    theme_engine_use(&THEME_ENGINE);
     NpTestScene scene = {.theme = scene_theme(), .layout = layout};
     scene.status = (PlayerStatus){.state = PLAYER_PLAYING,
                                   .has_track = true,
@@ -96,17 +147,21 @@ NpTestScene np_test_scene(uint8_t face, NpTestLayout layout, NpTestState state)
                                     .text_ms = TEXT_MS,
                                     .shown_ms = POSITION_MS,
                                     .tick = POSITION_MS / TICK_MS,
-                                    .face = face,
                                     .playing = true};
+    const ThemeColors *chrome;
+    (void)np_test_scene_code(face, &scene.frame.scene, &chrome);
     apply_state(&scene, state);
     return scene;
 }
 
 NowPlayingFrame np_test_frame(const NpTestScene *scene)
 {
+    static uint32_t scratch[1536];
     NowPlayingFrame frame = scene->frame;
     frame.theme = &scene->theme;
     frame.status = &scene->status;
+    frame.scratch = scratch;
+    frame.scratch_size = (uint32_t)sizeof scratch;
     return frame;
 }
 

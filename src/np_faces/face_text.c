@@ -6,6 +6,7 @@
 #include "core/string_builder.h"
 #include "core/text.h"
 #include "ui/label.h"
+#include "ui/rippl_logo.h"
 
 enum {
     MILLISECONDS_PER_SECOND = 1000,
@@ -54,41 +55,54 @@ RIPPL_NP_FACES_CODE int face_scroll_offset(MarqueeTiming timing, int text_width,
     return (int)((phase - timing.pause_ms) * timing.speed_px_per_s / MILLISECONDS_PER_SECOND);
 }
 
-RIPPL_NP_FACES_CODE Rect face_fitted_area(const Font *font, Rect area, const char *text,
-                                          FaceAlign align)
+RIPPL_NP_FACES_CODE bool face_text_visible(const Canvas *canvas, const Font *font, Rect area)
 {
-    int width = smaller(text_width(font, text), area.width);
+    int line = font_line_height(font);
+    if (line > area.height) {
+        area.y -= (line - area.height) / HALF;
+        area.height = line;
+    }
+    return !rect_is_empty(rect_intersection(canvas->clip, area));
+}
+
+RIPPL_NP_FACES_CODE static Rect fitted_with_width(Rect area, int width, FaceAlign align)
+{
+    int used = smaller(width, area.width);
     if (align == FACE_ALIGN_CENTRE) {
-        return (Rect){area.x + (area.width - width) / HALF, area.y, width, area.height};
+        return (Rect){area.x + (area.width - used) / HALF, area.y, used, area.height};
     }
     if (align == FACE_ALIGN_RIGHT) {
-        return (Rect){area.x + area.width - width, area.y, width, area.height};
+        return (Rect){area.x + area.width - used, area.y, used, area.height};
     }
     return area;
 }
 
-RIPPL_NP_FACES_CODE static void scroll_draw(Canvas *canvas, const NowPlayingFrame *frame,
-                                            TextStyle style, Label label)
+RIPPL_NP_FACES_CODE Rect face_fitted_area(const Font *font, Rect area, const char *text,
+                                          FaceAlign align)
 {
-    MarqueeTiming timing = frame->theme->marquee;
-    int width = text_width(style.font, label.text);
-    uint32_t since = label.text == frame->lyric ? frame->lyric_ms : frame->text_ms;
-    int offset = face_scroll_offset(timing, width, label.area.width, frame->now_ms - since);
-    label_draw_scrolling(canvas, style, label, (Marquee){offset, timing.gap_px});
+    if (align == FACE_ALIGN_LEFT) {
+        return area;
+    }
+    return fitted_with_width(area, text_width(font, text), align);
 }
 
 RIPPL_NP_FACES_CODE void face_line(Canvas *canvas, const NowPlayingFrame *frame,
                                    const FaceLine *line, const char *text)
 {
-    if (text == NULL) {
+    if (text == NULL || !face_text_visible(canvas, line->font, line->area)) {
         return;
     }
     TextStyle style = {line->font, line->color};
-    if (text_width(line->font, text) <= line->area.width) {
-        Rect fitted = face_fitted_area(line->font, line->area, text, line->align);
+    int width = text_width(line->font, text);
+    if (width <= line->area.width) {
+        Rect fitted = fitted_with_width(line->area, width, line->align);
         label_draw(canvas, style, (Label){fitted, text});
     } else if (frame->playing && !frame->scrubbing) {
-        scroll_draw(canvas, frame, style, (Label){line->area, text});
+        MarqueeTiming timing = frame->theme->marquee;
+        int offset =
+            face_scroll_offset(timing, width, line->area.width, frame->now_ms - frame->text_ms);
+        label_draw_scrolling(canvas, style, (Label){line->area, text},
+                             (Marquee){offset, timing.gap_px});
     } else {
         label_draw(canvas, style, (Label){line->area, text});
     }
@@ -113,15 +127,14 @@ RIPPL_NP_FACES_CODE const char *face_feedback_text(const NowPlayingFrame *frame,
 RIPPL_NP_FACES_CODE void face_feedback_line(Canvas *canvas, const NowPlayingFrame *frame,
                                             const FaceLine *line, const char *text)
 {
+    if (!face_text_visible(canvas, line->font, line->area)) {
+        return;
+    }
     char buffer[FACE_FEEDBACK_CAPACITY];
     const char *feedback = face_feedback_text(frame, buffer, sizeof buffer);
-    FaceLine emphasised = *line;
-    emphasised.color = line->emphasis;
     if (feedback != NULL) {
         Rect fitted = face_fitted_area(line->font, line->area, feedback, line->align);
         label_draw(canvas, (TextStyle){line->font, line->emphasis}, (Label){fitted, feedback});
-    } else if (has_text(frame->lyric)) {
-        face_line(canvas, frame, &emphasised, frame->lyric);
     } else {
         face_line(canvas, frame, line, text);
     }
@@ -140,6 +153,9 @@ RIPPL_NP_FACES_CODE void face_times_text(const NowPlayingFrame *frame, FaceTimes
 RIPPL_NP_FACES_CODE void face_times_draw(Canvas *canvas, const NowPlayingFrame *frame,
                                          const FaceLine *line)
 {
+    if (!face_text_visible(canvas, line->font, line->area)) {
+        return;
+    }
     FaceTimes times;
     face_times_text(frame, &times);
     label_draw(canvas, (TextStyle){line->font, line->emphasis}, (Label){line->area, times.elapsed});
@@ -150,6 +166,21 @@ RIPPL_NP_FACES_CODE void face_times_draw(Canvas *canvas, const NowPlayingFrame *
 RIPPL_NP_FACES_CODE int face_progress_width(uint32_t position_ms, uint32_t duration_ms, int width)
 {
     return (int)text_progress_width(position_ms, duration_ms, width);
+}
+
+RIPPL_NP_FACES_CODE int face_queue_progress(const NowPlayingFrame *frame, int whole)
+{
+    const PlayerStatus *status = frame->status;
+    if (status->shuffle == SHUFFLE_SONGS) {
+        return 0;
+    }
+    int song = face_progress_width(frame->shown_ms, status->duration_ms, whole);
+    uint32_t number = status->place.number;
+    uint32_t total = status->place.total;
+    if (number == 0 || total == 0 || number > total) {
+        return song;
+    }
+    return (int)(((uint64_t)(number - 1) * (uint64_t)whole + (uint64_t)song) / total);
 }
 
 RIPPL_NP_FACES_CODE int face_volume_width(uint8_t volume, int width)
@@ -258,7 +289,7 @@ RIPPL_NP_FACES_CODE int face_codec_width(const Font *font, const char *codec)
 
 RIPPL_NP_FACES_CODE void face_codec_draw(Canvas *canvas, const FaceLine *line, const char *codec)
 {
-    if (!has_text(codec)) {
+    if (!has_text(codec) || !face_text_visible(canvas, line->font, line->area)) {
         return;
     }
     face_outline(canvas, line->area, line->color);
@@ -272,12 +303,18 @@ RIPPL_NP_FACES_CODE static int format_origin(const FaceLine *line, int box_width
     if (line->align == FACE_ALIGN_CENTRE && total < line->area.width) {
         return line->area.x + (line->area.width - total) / HALF;
     }
+    if (line->align == FACE_ALIGN_RIGHT && total < line->area.width) {
+        return line->area.x + line->area.width - total;
+    }
     return line->area.x;
 }
 
 RIPPL_NP_FACES_CODE void face_format_row(Canvas *canvas, const NowPlayingFrame *frame,
                                          const FaceLine *line)
 {
+    if (!face_text_visible(canvas, line->font, line->area)) {
+        return;
+    }
     const char *stream = frame->stream;
     int box_width = face_codec_width(line->font, frame->codec);
     int stream_width = has_text(stream) ? text_width(line->font, stream) : 0;
@@ -292,4 +329,58 @@ RIPPL_NP_FACES_CODE void face_format_row(Canvas *canvas, const NowPlayingFrame *
         Rect rest = {x, line->area.y, line->area.x + line->area.width - x, line->area.height};
         label_draw(canvas, (TextStyle){line->font, line->color}, (Label){rest, stream});
     }
+}
+
+enum {
+    LOGO_LABEL_MARGIN = 3,
+    LOGO_LABEL_BASE = 48,
+    LOGO_LABEL_SIDE = LOGO_LABEL_BASE + 2 * LOGO_LABEL_MARGIN,
+    LOGO_LABEL_MAGIC_A = 0x4C424C52u,
+    LOGO_LABEL_MAGIC_B = 0x524C424Cu
+};
+
+typedef struct FaceLogoCache {
+    uint32_t magic_a;
+    uint32_t magic_b;
+    Color background;
+    Color foreground;
+    Color pixels[LOGO_LABEL_SIDE * LOGO_LABEL_SIDE];
+} FaceLogoCache;
+
+RIPPL_NP_FACES_CODE Image face_logo_cover(void *scratch, uint32_t scratch_size, Color background,
+                                          Color foreground)
+{
+    if (scratch == NULL || scratch_size < sizeof(FaceLogoCache)) {
+        return (Image){0};
+    }
+    uintptr_t end = (uintptr_t)scratch + scratch_size;
+    uintptr_t at = (end - sizeof(FaceLogoCache)) & ~(uintptr_t)3u;
+    if (at < (uintptr_t)scratch) {
+        return (Image){0};
+    }
+    FaceLogoCache *cache = (FaceLogoCache *)at;
+    if (cache->magic_a != LOGO_LABEL_MAGIC_A || cache->magic_b != LOGO_LABEL_MAGIC_B ||
+        cache->background != background || cache->foreground != foreground) {
+        Color palette[COLOR_ALPHA_OPAQUE + 1];
+        for (uint8_t level = 0; level <= COLOR_ALPHA_OPAQUE; level++) {
+            palette[level] = color_blend(background, foreground, level);
+        }
+        for (int index = 0; index < LOGO_LABEL_SIDE * LOGO_LABEL_SIDE; index++) {
+            cache->pixels[index] = background;
+        }
+        int side =
+            RIPPL_LOGO_LABEL.side < LOGO_LABEL_BASE ? RIPPL_LOGO_LABEL.side : LOGO_LABEL_BASE;
+        for (int y = 0; y < side; y++) {
+            Color *dst =
+                &cache->pixels[(y + LOGO_LABEL_MARGIN) * LOGO_LABEL_SIDE + LOGO_LABEL_MARGIN];
+            for (int x = 0; x < side; x++) {
+                dst[x] = palette[rippl_logo_alpha(&RIPPL_LOGO_LABEL, x, y)];
+            }
+        }
+        cache->background = background;
+        cache->foreground = foreground;
+        cache->magic_a = LOGO_LABEL_MAGIC_A;
+        cache->magic_b = LOGO_LABEL_MAGIC_B;
+    }
+    return (Image){cache->pixels, LOGO_LABEL_SIDE, LOGO_LABEL_SIDE};
 }

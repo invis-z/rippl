@@ -165,12 +165,13 @@ add_custom_command(
     COMMENT "Packing the test themes"
 )
 add_custom_target(rippl_test_themes DEPENDS ${RIPPL_TEST_THEMES}/themes.stamp)
-set(RIPPL_THEME_SEARCH "${PROJECT_SOURCE_DIR}/src/themes/packs|${RIPPL_TEST_THEMES}")
+set(RIPPL_THEME_SEARCH
+    "${PROJECT_SOURCE_DIR}/src/themes/packs|${RIPPL_TEST_THEMES}|${CMAKE_BINARY_DIR}/themes")
 
 function(rippl_use_theme_fixtures target)
     target_sources(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/app/theme_fixture.c)
     target_compile_definitions(${target} PRIVATE RIPPL_THEME_SEARCH="${RIPPL_THEME_SEARCH}")
-    add_dependencies(${target} rippl_test_themes)
+    add_dependencies(${target} rippl_test_themes rippl_themes)
 endfunction()
 
 rippl_add_unit_test(NAME test_theme_package
@@ -191,25 +192,20 @@ endforeach()
 add_library(rippl_np_faces_fixtures STATIC np_faces/np_faces_test.c)
 target_include_directories(rippl_np_faces_fixtures PUBLIC np_faces)
 target_link_libraries(rippl_np_faces_fixtures PUBLIC rippl_np_faces rippl_ui_fixtures PRIVATE rippl_options)
+target_compile_definitions(rippl_np_faces_fixtures PRIVATE RIPPL_PACKED_THEMES="${CMAKE_BINARY_DIR}/themes")
+add_dependencies(rippl_np_faces_fixtures rippl_themes)
 
-foreach(np_faces_test np_faces face_cassette face_vu face_turntable face_lcd)
-    rippl_add_unit_test(NAME test_${np_faces_test}
-        SOURCES np_faces/test_${np_faces_test}.c
-        LIBRARIES rippl_np_faces_fixtures
-    )
-endforeach()
-rippl_add_unit_test(NAME test_face_contrast
-    SOURCES np_faces/test_face_contrast.c
-    LIBRARIES rippl_np_faces_fixtures rippl_fonts m
+rippl_add_unit_test(NAME test_np_faces
+    SOURCES np_faces/test_np_faces.c
+    LIBRARIES rippl_np_faces_fixtures
 )
 rippl_add_unit_test(NAME test_face_shapes
     SOURCES np_faces/test_face_shapes.c
     LIBRARIES rippl_np_faces_fixtures
 )
-rippl_add_unit_test(NAME test_face_text
-    SOURCES np_faces/test_face_text.c
+rippl_add_unit_test(NAME test_scene
+    SOURCES np_faces/test_scene.c
     LIBRARIES rippl_np_faces_fixtures
-    PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/np_faces
 )
 rippl_add_unit_test(NAME test_dac_screen
     SOURCES app/test_dac_screen.c
@@ -242,6 +238,7 @@ rippl_add_unit_test(NAME test_spoken_word
     LIBRARIES rippl_app rippl_library_fixtures
     PRIVATE_INCLUDES ${PROJECT_SOURCE_DIR}/src/app
 )
+rippl_use_theme_fixtures(test_spoken_word)
 rippl_add_unit_test(NAME test_cover_cache
     SOURCES app/test_cover_cache.c app/fake_hal.c
     LIBRARIES rippl_app rippl_library_fixtures

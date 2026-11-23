@@ -22,7 +22,19 @@ typedef struct QuadLight {
     uint16_t right;
 } QuadLight;
 
+enum {
+    IMAGE_TURN_SHIFT = 16
+};
+
+typedef struct ImageRowStep {
+    int u;
+    int v;
+    int du;
+    int dv;
+} ImageRowStep;
+
 void image_draw_quad(Canvas *canvas, Image image, Quad quad);
 void image_draw_quad_lit(Canvas *canvas, Image image, Quad quad, QuadLight light);
 void image_draw_reflection(Canvas *canvas, Image image, Quad quad, QuadLight light, int rows);
 void image_fill_quad(Canvas *canvas, Quad quad, Color color);
+void image_draw_turned_row(Color *dst, const Image *image, const ImageRowStep *step, int count);

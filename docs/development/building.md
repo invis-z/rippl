@@ -41,6 +41,8 @@ cmake --preset device && cmake --build --preset device
 
 A firmware build writes `RIPPL.IMG` (8 MiB) and prints how full each memory region is. [Device testing](device-testing.md) covers installing it.
 
+The `dev` build also packs the themes from `assets/themes` into `build/dev/themes` (including `cassette.rippltheme`, `turntable.rippltheme`, `tape_window.rippltheme`), ready to copy to a card's `Themes` folder.
+
 ## Tests
 
 `ctest --preset dev` runs the host tests: unit and app tests against a fake HAL, the formatting check, the firmware build and its memory audit, and checks that generated files (language packs, glyph packs, test libraries) are up to date. To regenerate those, run the tool the failing test names, for example:

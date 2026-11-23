@@ -25,11 +25,10 @@ Playback is gapless. MP3 needs the LAME tag that LAME and ffmpeg write; without 
 
 Now Playing shows the cover, title, artist and album, the format and the progress. Hold ▶ to seek (vol± move, ▶ jumps there, ↩ cancels). Playback resumes, paused, where it left off after power-off.
 
-Settings → Display → **Now Playing** picks a face:
+The face comes with the theme. The built-in themes show the standard face in their colours; three themes for the card draw their own ([themes](themes.md#face-themes)):
 
-| Face | Looks like |
+| Theme | Looks like |
 |---|---|
-| **Standard** | The default, in the theme's colours |
 | **Cassette** | A tape deck whose tape winds across the whole album or playlist; the tape at the head is the song's progress |
 | **Turntable** | A record at 16⅔ RPM with the cover as its label, and a tonearm that crosses the whole album or playlist |
 | **Tape Window** | The player's own window onto a cassette, drawn at a Walkman's scale, with the song on the label and the hubs turning |

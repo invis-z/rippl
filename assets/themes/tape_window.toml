@@ -1,0 +1,27 @@
+name = "Tape Window"
+author = "Rippl"
+description = "A cassette's label and window, the hubs turning while a track plays"
+cover_flow = "dark"
+
+[colors]
+background = "#eeece4"
+text = "#222228"
+text_secondary = "#606068"
+text_tertiary = "#78787c"
+selection_background = "#18181a"
+selection_top = "#343438"
+selection_shine = "#5c3a24"
+selection_text = "#eeece4"
+header_background = "#e2e0d6"
+header_top = "#c8c4ba"
+header_text = "#222228"
+divider = "#c8c4ba"
+scrollbar_thumb = "#78787c"
+danger = "#b3261e"
+success = "#1f7a45"
+chevron = "#78787c"
+
+[now_playing_scene]
+file = "tape_window.scene"
+whole_screen = true
+smooth = true

@@ -1,0 +1,26 @@
+name = "Cassette"
+author = "Rippl"
+adapted_from = "hva314"
+description = "A tape in its shell, the reels turning while a track plays"
+
+[colors]
+background = "#181418"
+text = "#f0e4c8"
+text_secondary = "#c0b498"
+text_tertiary = "#908470"
+selection_background = "#c84028"
+selection_top = "#b83018"
+selection_shine = "#e89828"
+selection_text = "#ffffff"
+header_background = "#181418"
+header_top = "#383438"
+header_text = "#f0e4c8"
+divider = "#302c30"
+scrollbar_thumb = "#908470"
+danger = "#f86048"
+success = "#78c860"
+chevron = "#908470"
+
+[now_playing_scene]
+file = "cassette.scene"
+whole_screen = true

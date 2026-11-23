@@ -217,3 +217,61 @@ void image_fill_quad(Canvas *canvas, Quad quad, Color color)
         }
     }
 }
+
+enum {
+    TURN_SPREAD_MASK = 0x07E0F81F,
+    TURN_ROUND_HALF = 0x01004008
+};
+
+static inline uint32_t spread_pixel(Color color)
+{
+    return ((uint32_t)color | ((uint32_t)color << 16)) & (uint32_t)TURN_SPREAD_MASK;
+}
+
+void image_draw_turned_row(Color *dst, const Image *image, const ImageRowStep *step, int count)
+{
+    int width = image->width;
+    int max_x = width - 1;
+    int max_y = image->height - 1;
+    int max_u = max_x << IMAGE_TURN_SHIFT;
+    int max_v = max_y << IMAGE_TURN_SHIFT;
+    const Color *src = image->pixels;
+    int u = step->u;
+    int v = step->v;
+    int du = step->du;
+    int dv = step->dv;
+    for (; count > 0; count--) {
+        int cu = u < 0 ? 0 : u > max_u ? max_u : u;
+        int cv = v < 0 ? 0 : v > max_v ? max_v : v;
+        int sx = cu >> IMAGE_TURN_SHIFT;
+        int sy = cv >> IMAGE_TURN_SHIFT;
+        const Color *p0 = src + sy * width + sx;
+        const Color *p1 = sy < max_y ? p0 + width : p0;
+        int dx = sx < max_x ? 1 : 0;
+        Color c00 = p0[0];
+        Color c10 = p0[dx];
+        Color c01 = p1[0];
+        Color c11 = p1[dx];
+        if (((c00 ^ c10) | (c00 ^ c01) | (c00 ^ c11)) == 0) {
+            *dst++ = c00;
+        } else {
+            uint32_t fx = (uint32_t)((cu >> (IMAGE_TURN_SHIFT - 4)) & 15);
+            uint32_t fy = (uint32_t)((cv >> (IMAGE_TURN_SHIFT - 4)) & 15);
+            uint32_t inv_x = 16u - fx;
+            uint32_t inv_y = 16u - fy;
+            uint32_t top =
+                ((spread_pixel(c00) * inv_x + spread_pixel(c10) * fx + (uint32_t)TURN_ROUND_HALF) >>
+                 4) &
+                (uint32_t)TURN_SPREAD_MASK;
+            uint32_t bot =
+                ((spread_pixel(c01) * inv_x + spread_pixel(c11) * fx + (uint32_t)TURN_ROUND_HALF) >>
+                 4) &
+                (uint32_t)TURN_SPREAD_MASK;
+            uint32_t mix = ((top * inv_y + bot * fy + (uint32_t)TURN_ROUND_HALF) >> 4) &
+                           (uint32_t)TURN_SPREAD_MASK;
+            *dst++ = (Color)(mix | (mix >> 16));
+        }
+        u += du;
+        v += dv;
+    }
+}

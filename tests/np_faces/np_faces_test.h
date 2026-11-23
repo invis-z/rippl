@@ -12,10 +12,11 @@ enum {
     NP_TEST_PIXELS = NP_TEST_MAX_WIDTH * NP_TEST_MAX_HEIGHT,
     NP_TEST_STRIP_ROWS = 34,
     NP_TEST_SENTINEL = 0x0821,
-    NP_TEST_LAYOUT_COUNT = 3,
+    NP_TEST_LAYOUT_COUNT = 2,
     NP_TEST_STATE_COUNT = 7,
     NP_TEST_TITLE_COUNT = 3,
-    NP_TEST_PAUSED_SKEW_MS = 7300
+    NP_TEST_PAUSED_SKEW_MS = 7300,
+    NP_TEST_THEME_BYTES = 16384
 };
 
 typedef enum NpTestState {
@@ -24,7 +25,6 @@ typedef enum NpTestState {
     NP_TEST_SCRUBBING,
     NP_TEST_VOLUME,
     NP_TEST_BADGE,
-    NP_TEST_LYRIC,
     NP_TEST_NO_COVER
 } NpTestState;
 
@@ -46,6 +46,7 @@ typedef bool (*NpTestCheck)(const NpTestScene *scene);
 extern const NpTestLayout NP_TEST_LAYOUTS[NP_TEST_LAYOUT_COUNT];
 extern const char NP_TEST_LONG_TITLE[];
 
+bool np_test_scene_code(uint8_t face, SceneCode *code, const ThemeColors **chrome);
 NpTestScene np_test_scene(uint8_t face, NpTestLayout layout, NpTestState state);
 NowPlayingFrame np_test_frame(const NpTestScene *scene);
 void np_test_clear(Color *pixels);
