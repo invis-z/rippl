@@ -116,6 +116,7 @@ typedef struct ThemeMetrics {
     int detail_gap;
     int status_icon_size;
     int status_height;
+    int selection_slide_ms;
 } ThemeMetrics;
 
 typedef enum ThemeSelection {

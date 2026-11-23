@@ -2500,6 +2500,7 @@ static void moving_the_selection_sends_only_part_of_the_screen(void)
     step();
     long pixels = fake_hal_pixels_written();
     tap(KEY_VOLUME_UP);
+    wait_ms(SLIDE_DURATION_MS);
     long sent = fake_hal_pixels_written() - pixels;
     CHECK(sent > 0);
     CHECK(sent < FULL_FRAME_PIXELS / 2);

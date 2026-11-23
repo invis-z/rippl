@@ -18,6 +18,7 @@ The first Rippl release.
 - **Hi-Res DAC** USB mode: a USB Audio Class 2.0 sound card at 44.1–384 kHz and 16, 24 or 32 bits, with clock feedback to the computer.
 - Tape Window, a Now Playing face that turns the screen into the player's window onto a cassette.
 - **Themes**, ported from EchoPod 0.13.0: `.rippltheme` files in `Themes` on the card change colours, boxes, spacing, icons and the picture behind the lists, and `tide themes` copies theme files to the card ([themes](docs/user/themes.md)).
+- The selection slides from row to row; held keys still jump.
 - Daylight saving for the clock: Europe, US & Canada, Australia, New Zealand, or the computer's rule through Tide.
 - **DRE** setting for the DACs' dynamic range enhancement.
 - `/.rippl/errors.log`, listing files the player couldn't open or use, with the reason.

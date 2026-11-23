@@ -1,5 +1,9 @@
 #include "app_state.h"
 
+enum {
+    SELECTION_SLIDE_MS = 120
+};
+
 static int theme_key(const Settings *settings)
 {
     return (int)settings->orientation | settings->options[OPTION_ACCENT] << 2 |
@@ -51,4 +55,7 @@ void app_dress_theme(void)
         default_theme_enlarge_status(&app.stage_theme);
     }
     wear_theme_file(&app.theme);
+    int slide_ms = (int)settings_animation_ms(settings->options, SELECTION_SLIDE_MS);
+    app.theme.metrics.selection_slide_ms = slide_ms;
+    app.stage_theme.metrics.selection_slide_ms = slide_ms;
 }
