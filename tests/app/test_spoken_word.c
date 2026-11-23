@@ -11,6 +11,8 @@
 #include "settings/settings.h"
 #include "spoken_library.h"
 #include "spoken_store.h"
+#include "theme_fixture.h"
+#include "theme_store.h"
 #include "ui/marquee.h"
 
 enum {
@@ -409,8 +411,10 @@ static uint8_t face_options[SETTINGS_OPTION_COUNT];
 
 static void show_a_face_at(uint32_t position_ms)
 {
+    uint32_t size = 0;
     memset(face_options, 0, sizeof face_options);
-    face_options[OPTION_NOW_PLAYING_FACE] = NP_FACE_CASSETTE;
+    theme_fixture_on_card("cassette.rippltheme", "cassette.rippltheme", &size);
+    CHECK(theme_store_wear("cassette"));
     NowPlayingConfig config = {
         .player = &player, .library = library, .theme = &DEFAULT_THEME, .options = face_options};
     Screen *screen = now_playing_screen_init(&face_screen, config);

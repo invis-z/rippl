@@ -1,0 +1,71 @@
+const PAPER = #eeece4
+const BAND = #706c64
+const RULE = #78787c
+const INK = #222228
+const INK_SOFT = #606068
+const SHELL = #18181a
+const SHELL_HI = #343438
+const TAPE = #5c3a24
+const CLEAR = #c8c4ba
+const HUB = #ecece8
+const BORE = #343438
+const SPINDLE = #141416
+const SPINDLE_EDGE = #54545a
+const SPINDLE_TOP = #222226
+const HIGH = 2149
+const LOW = 910
+
+if height > width {
+    turn(flipped ? 2 : 1)
+}
+
+rect(0, 0, 320, 170, BAND)
+rect(0, 0, 320, 70, PAPER)
+rect(34, 21, 286, 1, RULE)
+rect(34, 45, 286, 1, RULE)
+rounded(4, 70, 312, 86, 43, SHELL)
+
+let played = queue_progress(HIGH * HIGH - LOW * LOW)
+clip(98, 80, 124, 66)
+rect(98, 80, 124, 66, CLEAR)
+ring(48 * 16 + 8, 112 * 16 + 8, isqrt(HIGH * HIGH - played) & -16, 0, TAPE)
+ring(271 * 16 + 8, 112 * 16 + 8, isqrt(LOW * LOW + played) & -16, 0, TAPE)
+unclip()
+outline(98, 80, 124, 66, SHELL_HI)
+
+let angle = 0 - position % 3200 * 1024 / 3200
+repeat side from 0 to 2 {
+    let hx = side ? 271 : 48
+    let qx = hx * 16 + 8
+    let qy = 112 * 16 + 8
+    ring(qx, qy, 547, 531, SHELL_HI)
+    ring(qx, qy, 464, 0, HUB)
+    ring(qx, qy, 434, 0, BORE)
+    repeat key from 0 to 3 {
+        let fine = angle + 85 + key * 1024 / 3
+        fine_spoke(hx, 112, fine, 158, 12, 27, SPINDLE_EDGE)
+        fine_spoke(hx, 112, fine, 126, 13, 26, SPINDLE)
+    }
+    ring(qx, qy, 310, 0, SPINDLE_EDGE)
+    ring(qx, qy, 294, 0, SPINDLE)
+    ring(qx, qy, 118, 0, SPINDLE_TOP)
+    repeat tooth from 0 to 6 {
+        fine_spoke(hx, 112, angle + tooth * 1024 / 6, 114, 20, 28, HUB)
+    }
+}
+
+rounded(2, 4, 24, 24, 3, INK)
+text("A", title, 2, 4, 24, 24, center, PAPER)
+line(song, title, 39, 2, 277, 19, left, INK)
+if present(feedback) {
+    text(feedback, body, 39, 25, 277, 19, left, INK)
+} else {
+    line(byline, body, 39, 25, 277, 19, left, INK_SOFT)
+}
+text(place, small, 39, 49, 121, 16, left, INK_SOFT)
+text(time_of, small, 160, 49, 156, 16, right, INK_SOFT)
+
+if badge != none || !playing {
+    rounded(148, 101, 24, 24, 4, SHELL)
+    icon(badge != none ? badge : pause, 151, 104, 18, 18, HUB)
+}

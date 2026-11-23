@@ -25,7 +25,7 @@ A map of the Echo Mini hardware Rippl drives, for reading `platform/device`. Mos
 | `0x03076670`–`0x0307A000` | 14 KB | Free at run time, executable: the second code area (`.code2`) |
 | `0x0307A000`–`0x0308AA00` | 66.5 KB | High RAM scratch: the Cover Flow shuffle mark, the theme's head, wallpaper and fonts; overlays (rescan, USB, EQ fit) load over it |
 | `0x0308AA00`–`0x0308B400` | 2.5 KB | The theme engine: boxes, the wallpaper copy and icon masks |
-| `0x0308B400`–`0x0308F000` | 15 KB | Start-up code while starting, then the Now Playing faces |
+| `0x0308B400`–`0x0308F000` | 15 KB | Start-up code while starting, then the Now Playing faces (the scene interpreter) and the worn theme's scenes |
 | `0x0308F000`–`0x0309EFFF` | 64 KB | Glyph cache, resident tables |
 | `0x01000000`–`0x0105FFFF` | 384 KB | Core 1 RAM; rescan scratch while playback is stopped |
 

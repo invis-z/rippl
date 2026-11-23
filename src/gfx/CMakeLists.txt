@@ -12,6 +12,7 @@ add_library(rippl_gfx STATIC
 target_include_directories(rippl_gfx PUBLIC include)
 if(CMAKE_CROSSCOMPILING)
     set_source_files_properties(font_pack.c PROPERTIES COMPILE_OPTIONS -Os)
+    set_source_files_properties(image.c PROPERTIES COMPILE_DEFINITIONS RIPPL_RESIDENT_TABLES)
 endif()
 target_link_libraries(rippl_gfx
     PUBLIC rippl_core

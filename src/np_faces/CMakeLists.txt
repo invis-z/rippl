@@ -1,10 +1,8 @@
 add_library(rippl_np_faces STATIC
     np_faces.c
-    face_cassette.c
     face_shapes.c
-    face_tape_window.c
     face_text.c
-    face_turntable.c
+    scene.c
 )
 target_include_directories(rippl_np_faces PUBLIC include PRIVATE .)
 if(CMAKE_CROSSCOMPILING)

@@ -36,3 +36,7 @@ const Wallpaper *theme_store_wallpaper(bool portrait);
 void theme_store_watch_assets(void);
 bool theme_store_tend_assets(void);
 const char **theme_store_options(void);
+bool theme_store_scene(int which, SceneCode *code, const ThemeColors **chrome);
+bool theme_store_has_scene(int which);
+bool theme_store_scene_whole_screen(int which);
+bool theme_store_scene_smooth(int which);

@@ -35,7 +35,8 @@ This packs every `.toml` in `my-themes` into `my-themes/packed/<file>.rippltheme
 
 | Sources | Packed by | Goes |
 |---|---|---|
-| `assets/themes/*.toml` | The firmware build | Into the image, as the built-in themes |
+| `assets/themes/*.toml` (built-ins) | `src/themes/packs/` into the firmware image | Built into the player |
+| `assets/themes/*.toml` and `.scene` | The `rippl_themes` target | `themes` in the build folder, for the card |
 
 ## Limits
 
@@ -43,10 +44,15 @@ This packs every `.toml` in `my-themes` into `my-themes/packed/<file>.rippltheme
 |---|---|
 | Theme head: colours, boxes, accents, icons | 3,072 bytes |
 | Wallpapers and fonts together | 28,224 bytes of player memory |
+| One scene, packed | 6,144 bytes |
+| Scenes on the player, Home and Now Playing together | About 3,300 bytes |
+| Scene steps per drawing | 20,000 |
 | Theme files listed on the player | 8 |
 | File name, without `.rippltheme` | 1 to 23 bytes |
 
-Typical sizes: 205 bytes with no icons; about 2,000 with every status and list icon; about 27,000 for a full-screen wallpaper; about 5,000 for a 16 px font.
+Typical sizes: 205 bytes with no icons; about 2,000 with every status and list icon; about 1,800 more for six 24 × 24 Home tile icons; about 27,000 for a full-screen wallpaper; about 5,000 for a 16 px font.
+
+A scene too big for the player doesn't load, and Now Playing or Home shows the standard screen. The packer warns about it.
 
 ## Top level
 
@@ -157,6 +163,118 @@ hide = true
 - `align` is `"left"`, `"center"` or `"right"`. Longer text scrolls.
 - Parts left out stay where the player puts them.
 - Lyrics hide the cover and any text they overlap, except the title.
+- A Now Playing scene replaces this layout.
+
+## Scenes
+
+A scene is a script that draws a whole screen. `[now_playing_scene]` draws Now Playing and `[home_scene]` draws Home:
+
+```toml
+[now_playing_scene]
+file = "turntable.scene"
+whole_screen = true
+smooth = true
+
+[now_playing_scene.chrome]
+header_text = "#eef1fa"
+```
+
+| Key | Meaning |
+|---|---|
+| `file` or `script` | A script beside the source, or the script inline |
+| `chrome` | Header and status bar colours while the scene shows |
+| `whole_screen` | Draw over the whole screen, without header and status bar |
+| `smooth` | Redraw every 50 ms instead of 100 ms while playing |
+
+On Home the player still owns the menu: the buttons move through it in order and Play opens an item. The `.scene` scripts in `assets/themes` are full examples.
+
+### Language
+
+```
+const DEEP = #181418
+let cx = width > height ? 84 : width / 2
+rect(x, y, width, height, DEEP)
+if playing {
+    spoke(cx, y + 80, (tick * 3) & 255, 24, 60, 66, #c8eeff)
+} else if paused {
+    icon(pause, cx - 9, y + 71, 18, 18, #c8eeff)
+}
+repeat mark from 0 to 48 {
+    spoke(cx, y + 80, mark * 16 / 3, 40, 60, 68, mark < progress(48) ? #7fd3ff : #232a42)
+}
+```
+
+- Numbers are 32-bit integers with C arithmetic. `0x` is hex; `#rrggbb` is a colour.
+- `const` is fixed when packed; `let` is worked out while drawing, and `name = ...` changes it. Names end with their `{ }` block.
+- Operators, loosest first: `? :`, `||`, `&&`, `|`, `^`, `&`, `== !=`, `< <= > >=`, `<< >> >>>`, `+ -`, `* / %`, prefix `-` and `!`. Comparisons give 1 or 0.
+- `if`, `else if`, `else`, and `repeat name from a to b { }` for `a` to `b − 1`.
+- `"Quoted"` words are text to show. No separators are needed.
+
+### Inputs
+
+| Name | Meaning |
+|---|---|
+| `x`, `y`, `width`, `height` | The scene's area: below the header, or the whole screen |
+| `playing`, `paused`, `scrubbing`, `volume_shown` | 1 when true |
+| `tick` | Tenths of a second into the track, moving only while playing |
+| `now` | Milliseconds since start |
+| `position` | Milliseconds into the track, smooth while playing |
+| `shown`, `duration` | Where the track is (the seek target while seeking) and its length, in ms |
+| `volume` | 0 to 32 |
+| `badge` | `none`, `play`, `pause`, `next` or `previous` |
+| `shuffle_mode`, `repeat_mode` | 0 when off, then the modes in Settings order |
+| `track` | Place in the queue |
+| `has_cover` | 1 when there is a cover, or album art on Home |
+| `flipped` | 1 when upright the other way round |
+
+### Functions
+
+| Function | Gives |
+|---|---|
+| `min(a, b)`, `max(a, b)`, `abs(a)`, `isqrt(a)` | As named |
+| `sin(angle)`, `cos(angle)` | −255 to 255, for 256 steps per turn |
+| `polar_x(x, fine, r)`, `polar_y(y, fine, r)` | A point `r` px from (`x`, `y`) at 1,024 steps per turn |
+| `progress(w)`, `queue_progress(w)` | How much of `w` the track, or the whole queue, has played |
+| `volume_width(w)` | How much of `w` the volume fills |
+| `present(text)`, `width(text, font)` | 1 when the text is there; its width in px |
+| `segments(digit)` | A digit's seven-segment pattern |
+| `items()`, `selected()`, `item(n)` | On Home: the menu's length, the highlighted item, item `n` as text |
+| `item_icon(n, x, y, w, h, colour)` | On Home: item `n`'s icon from the theme, centred |
+
+### Drawing
+
+Positions and sizes are pixels. `ring` and the width of `spoke` and `fine_spoke` are in sixteenths of a pixel.
+
+| Command | Draws |
+|---|---|
+| `rect`, `rounded`, `outline`, `gradient` | Boxes: filled, rounded, a 1 px frame, a top-to-bottom shade |
+| `ring(x16, y16, outer16, inner16, colour)` | A disc, or a ring when `inner16` > 0 |
+| `spoke(x, y, angle, width16, from, to, colour)` | A bar around (`x`, `y`) at 256 steps per turn |
+| `fine_spoke(x, y, fine, width16, from, to, colour)` | The same at 1,024 steps per turn |
+| `trapezoid(x, y, w, h, inset, colour)` | A box narrowing toward the bottom |
+| `lattice(x, y, w, h, pitch, colour)` | Grid lines |
+| `segment_style`, `digit`, `colon` | Seven-segment digits |
+| `clip(x, y, w, h)`, `unclip()` | Draw only inside a box, up to 4 deep |
+| `cover(x, y, size)`, `round_cover(x, y, radius)` | The cover, square or round |
+| `turned_cover(x, y, radius, angle)` | The cover, round and turned, or the Rippl logo label when there is no cover |
+| `reflect(x, y, size, rows)` | A fading reflection below the cover |
+| `icon(kind, x, y, w, h, colour)` | `play`, `pause`, `next` or `previous` |
+| `bar(x, y, w, h, track, fill, hot)` | The progress bar, showing volume in `hot` |
+| `backdrop(x, y, w, h)` | The wallpaper, or the background colour |
+| `menu(x, y, w, h)` | On Home, the menu as a list |
+| `turn(mode)` | Draw a sideways design turned for upright: 1 clockwise, 2 anticlockwise (`flipped ? 2 : 1`) |
+
+Text commands take what to show (`song`, `artist`, `album`, `lyric`, `codec`, `stream`, `detail`, `modes`, `feedback`, `elapsed`, `remaining`, `byline`, `place`, `time_of`, or quoted words), a font (`title`, `body` or `small`) and, where shown, `left`, `center` or `right`:
+
+| Command | Draws |
+|---|---|
+| `text(what, font, x, y, w, h, align, colour)` | Text cut to fit |
+| `line(what, font, x, y, w, h, align, colour)` | Text that scrolls while playing when too wide |
+| `plain(what, font, x, y, w, h, colour)` | Text from the left edge |
+| `times(font, x, y, w, h, left, right)` | Time played and time left |
+| `format(font, x, y, w, h, align, colour)`, `codec(font, x, y, w, h, colour)` | The codec box, with or without the stream |
+
+On Home, the cover is the album art Home shows, and the text sources are the playing track, empty when nothing plays. A script with a mistake draws nothing more; the player shows the standard screen if it can't read the scene.
 
 ## Fonts
 
@@ -224,6 +342,7 @@ chevron = [
 | `chevron` | 12 × 18 | End of rows that open something |
 | `badge_play`, `badge_pause`, `badge_next`, `badge_previous` | 18 × 18 | Over the cover when a key is pressed |
 | `*_large` status and battery icons | 14 to 30 × 14 | The upright status bar; the small ones are used if missing |
+| `home_music`, `home_audiobooks`, `home_podcasts`, `home_settings`, `home_diagnostics`, `home_now_playing` | 24 × 24 | `item_icon` in a Home scene |
 
 - Smaller icons are centred. Rows must be the same length.
 - `battery` and `battery_level` go together, at the same size.

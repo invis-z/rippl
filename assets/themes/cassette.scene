@@ -1,0 +1,169 @@
+let zero = "0"
+let one = "1"
+let two = "2"
+let three = "3"
+let four = "4"
+let five = "5"
+let six = "6"
+let seven = "7"
+let eight = "8"
+let nine = "9"
+
+const DEEP = #181418
+const SHELL = #484850
+const SHELL_HI = #606068
+const TAPE = #784c30
+const LABEL = #f0e4c8
+const INK = #282020
+const INK_SOFT = #605048
+const RED = #b03020
+const AMBER = #e89828
+const RULE = #b8a888
+const BLACK = #000000
+
+let tall = height > width
+let top = tall ? y + 31 : 0
+
+rect(x, y, width, height, DEEP)
+
+if tall {
+    rounded(8, top, 153, 100, 6, SHELL)
+    rect(14, top + 1, 141, 1, SHELL_HI)
+} else {
+    rounded(11, top + 2, 297, 165, 6, SHELL)
+    rect(17, top + 3, 285, 1, SHELL_HI)
+}
+let screw = tall ? 40 : 56
+let slot = tall ? 3 : 5
+repeat corner from 0 to 4 {
+    let sx = tall ? (corner & 1 ? 154 : 14) : (corner & 1 ? 300 : 18)
+    let sy = top + (tall ? (corner & 2 ? 92 : 6) : (corner & 2 ? 159 : 9))
+    ring(sx * 16 + 8, sy * 16 + 8, screw, 0, RULE)
+    rect(sx - slot / 2, sy, slot, 1, DEEP)
+}
+
+if tall {
+    rect(20, top + 5, 129, 63, LABEL)
+    rect(25, top + 28, 119, 1, RULE)
+    rect(20, top + 31, 129, 3, AMBER)
+    rect(20, top + 34, 129, 27, RED)
+    rect(20, top + 61, 129, 3, AMBER)
+    text("A", title, 25, top + 6, 14, 20, left, RED)
+    if present(codec) {
+        text(codec, small, 100, top + 10, 44, 16, right, INK_SOFT)
+    }
+} else {
+    rect(25, top + 7, 269, 117, LABEL)
+    rect(33, top + 29, 253, 1, RULE)
+    rect(33, top + 52, 253, 1, RULE)
+    rect(25, top + 55, 269, 4, AMBER)
+    rect(25, top + 59, 269, 56, RED)
+    rect(25, top + 115, 269, 4, AMBER)
+    text("A", title, 25, top + 59, 40, 56, center, LABEL)
+    if present(codec) {
+        text(codec, small, 254, top + 59, 40, 56, center, LABEL)
+    }
+}
+
+let fx = tall ? 34 : 65
+let fy = top + (tall ? 30 : 55)
+let fw = tall ? 101 : 189
+let fh = tall ? 35 : 64
+rounded(fx, fy, fw, fh, 5, SHELL)
+rounded(fx + 2, fy + 2, fw - 4, fh - 4, 4, DEEP)
+
+let high = tall ? 312 : 594
+let low = tall ? 152 : 280
+let played = queue_progress(high * high - low * low)
+let hub = tall ? 136 : 235
+let hole = tall ? 88 : 146
+let tooth = tall ? 24 : 45
+let reach = tall ? 72 : 123
+let turn = (0 - tick * 8) & 255
+let reel_y = (top + (tall ? 47 : 87)) * 16 + 8
+clip(fx + 2, fy + 2, fw - 4, fh - 4)
+repeat side from 0 to 2 {
+    let pack = isqrt(side ? low * low + played : high * high - played) & -16
+    let rx = (side ? (tall ? 110 : 219) : (tall ? 58 : 99)) * 16 + 8
+    ring(rx, reel_y, pack, 0, TAPE)
+    ring(rx, reel_y, hub, 0, LABEL)
+    ring(rx, reel_y, hole, 0, DEEP)
+    repeat step from 0 to 3 {
+        let angle = (turn + (step == 0 ? 0 : step == 1 ? 85 : 171)) & 255
+        ring(rx + reach * sin(angle) / 255, reel_y - reach * cos(angle) / 255, tooth, 0, LABEL)
+    }
+}
+unclip()
+let ix = tall ? 76 : 151
+let iy = top + (tall ? 38 : 78)
+if badge != none {
+    icon(badge, ix, iy, 18, 18, LABEL)
+} else if !playing {
+    icon(pause, ix, iy, 18, 18, LABEL)
+}
+
+if tall {
+    trapezoid(34, top + 72, 101, 28, 8, SHELL_HI)
+} else {
+    trapezoid(71, top + 129, 177, 38, 12, SHELL_HI)
+}
+let hole_hub = tall ? 56 : 72
+let hole_y = (top + (tall ? 82 : 143)) * 16 + 8
+ring((tall ? 58 : 103) * 16 + 8, hole_y, hole_hub, 0, DEEP)
+ring((tall ? 110 : 215) * 16 + 8, hole_y, hole_hub, 0, DEEP)
+if tall {
+    rect(46, top + 89, 77, 11, DEEP)
+    bar(46, top + 92, 77, 3, TAPE, AMBER, LABEL)
+} else {
+    rect(87, top + 153, 145, 14, DEEP)
+    bar(87, top + 157, 145, 3, TAPE, AMBER, LABEL)
+}
+
+if tall {
+    let ct = top + 108
+    let counter_x = (width - 52) / 2
+    rounded(counter_x - 10, ct, 72, 32, 6, SHELL)
+    rect(counter_x - 6, ct + 1, 64, 1, SHELL_HI)
+    let start = isqrt(200000 * 256)
+    let radius = isqrt((200000 + shown) * 256)
+    let turns = (radius - start) * 250
+    let count = turns / 8944 % 1000
+    let roll = turns % 8944 * 22 / 8944
+    repeat drum from 0 to 3 {
+        let dx = counter_x + drum * 18
+        let figure = drum == 0 ? count / 100 % 10 : drum == 1 ? count / 10 % 10 : count % 10
+        let rolls = drum == 2 || (drum == 1 && count % 10 == 9) || (drum == 0 && count % 100 == 99)
+        let shift = rolls ? roll : 0
+        clip(dx, ct + 5, 16, 22)
+        rect(dx, ct + 5, 16, 22, DEEP)
+        gradient(dx, ct + 5, 16, 5, BLACK, DEEP)
+        gradient(dx, ct + 22, 16, 5, DEEP, BLACK)
+        text(zero + figure, title, dx, ct + 5 - shift, 16, 22, center, LABEL)
+        text(zero + (figure + 1) % 10, title, dx, ct + 27 - shift, 16, 22, center, LABEL)
+        unclip()
+    }
+
+    let c = top + 148
+    rect(8, c, 153, 109, LABEL)
+    rect(8, c, 153, 2, RED)
+    rect(16, c + 24, 137, 1, RULE)
+    rect(16, c + 47, 137, 1, RULE)
+    rect(16, c + 70, 137, 1, RULE)
+    line(song, title, 16, c + 3, 137, 20, center, INK)
+    line(artist, body, 16, c + 26, 137, 20, center, INK_SOFT)
+    line(album, body, 16, c + 49, 137, 20, center, INK_SOFT)
+    if present(feedback) {
+        text(feedback, small, 16, c + 73, 137, 16, center, INK)
+    } else if present(stream) {
+        text(stream, small, 16, c + 73, 137, 16, center, INK_SOFT)
+    }
+    times(small, 16, c + 90, 137, 16, INK, INK)
+} else {
+    line(song, title, 33, 8, 253, 20, left, INK)
+    if present(feedback) {
+        text(feedback, body, 33, 31, 253, 20, left, INK)
+    } else {
+        line(artist, body, 33, 31, 253, 20, left, INK_SOFT)
+    }
+    times(small, 17, 129, 286, 16, LABEL, LABEL)
+}

@@ -13,8 +13,8 @@ enum {
     FRACTION_MASK = 15,
     PIXEL_SHIFT = 4,
     SQRT_TOP_BIT = 1 << 30,
-    SPOKE_FAR = 1 << 30,
     SPOKE_Q4_UNIT = SHAPE_Q4 * SHAPE_UNIT,
+    BAND_FRINGE = HALF_PIXEL_Q4 * SHAPE_UNIT,
     LATTICE_OFFSET = 2,
     DIGIT_SEGMENTS = 10,
     BAR_COUNT = 3,
@@ -33,11 +33,6 @@ RIPPL_NP_FACES_DATA static const uint8_t DIGIT_MASKS[DIGIT_SEGMENTS] = {
 
 RIPPL_NP_FACES_DATA static const uint8_t BAR_BITS[BAR_COUNT] = {0, 6, 3};
 RIPPL_NP_FACES_DATA static const uint8_t POST_BITS[POST_COUNT] = {5, 1, 4, 2};
-
-typedef struct Bounds {
-    int low;
-    int high;
-} Bounds;
 
 typedef struct DigitPen {
     Canvas *canvas;
@@ -59,6 +54,11 @@ typedef struct Run {
     int right;
     int y;
 } Run;
+
+typedef struct Span {
+    int first;
+    int last;
+} Span;
 
 typedef struct InsetRow {
     int row;
@@ -192,23 +192,108 @@ RIPPL_NP_FACES_CODE static ShapeSpan span_of(int y, int left_q4, int right_q4)
     return (ShapeSpan){(int16_t)y, (int16_t)left_q4, (int16_t)right_q4};
 }
 
+typedef struct PixelRun {
+    Canvas *canvas;
+    int y;
+    int start;
+    Color color;
+} PixelRun;
+
+RIPPL_NP_FACES_CODE static void run_flush(PixelRun *run, int end)
+{
+    if (run->start < end) {
+        canvas_fill_rect(run->canvas, (Rect){run->start, run->y, end - run->start, 1}, run->color);
+    }
+}
+
+RIPPL_NP_FACES_CODE static void run_put(PixelRun *run, int x, uint8_t alpha)
+{
+    if (alpha >= COLOR_ALPHA_OPAQUE) {
+        return;
+    }
+    run_flush(run, x);
+    run->start = x + 1;
+    blend_at(run->canvas, (Point){x, run->y}, run->color, alpha);
+}
+
+RIPPL_NP_FACES_CODE static uint8_t edge_alpha(int distance_squared, int radius_q4)
+{
+    int outside = radius_q4 + HALF_PIXEL_Q4;
+    int inside = radius_q4 - HALF_PIXEL_Q4;
+    if (radius_q4 <= 0 || distance_squared >= outside * outside) {
+        return 0;
+    }
+    if (inside > 0 && distance_squared <= inside * inside) {
+        return COLOR_ALPHA_OPAQUE;
+    }
+    return coverage(outside - (int)shape_isqrt((uint32_t)distance_squared));
+}
+
+RIPPL_NP_FACES_CODE static uint8_t ring_alpha(const ShapeRing *ring, int dx, int dy)
+{
+    int distance_squared = dx * dx + dy * dy;
+    int alpha =
+        edge_alpha(distance_squared, ring->outer_q4) - edge_alpha(distance_squared, ring->inner_q4);
+    return (uint8_t)(alpha < 0 ? 0 : alpha);
+}
+
+RIPPL_NP_FACES_CODE static int floor_div(int numerator, int denominator)
+{
+    int quotient = numerator / denominator;
+    return quotient * denominator > numerator ? quotient - 1 : quotient;
+}
+
+RIPPL_NP_FACES_CODE static Span reach_span(const ShapeRing *ring, int reach)
+{
+    int base = ring->x_q4 - HALF_PIXEL_Q4;
+    return (Span){-floor_div(reach - base, SHAPE_Q4), floor_div(base + reach, SHAPE_Q4)};
+}
+
+RIPPL_NP_FACES_CODE static Span within(const ShapeRing *ring, int radius_q4, int dy)
+{
+    int room = radius_q4 * radius_q4 - dy * dy;
+    return radius_q4 > 0 && room >= 0 ? reach_span(ring, (int)shape_isqrt((uint32_t)room))
+                                      : (Span){1, 0};
+}
+
+RIPPL_NP_FACES_CODE static bool in_span(Span span, int x)
+{
+    return x >= span.first && x <= span.last;
+}
+
 RIPPL_NP_FACES_CODE static void ring_row(Canvas *canvas, const ShapeRing *ring, int y, Color color)
 {
     int dy = y * SHAPE_Q4 + HALF_PIXEL_Q4 - ring->y_q4;
-    int outer = ring->outer_q4;
-    int inner = ring->inner_q4;
-    if (dy * dy >= outer * outer) {
+    int far = ring->outer_q4 + HALF_PIXEL_Q4;
+    if (dy * dy >= far * far) {
         return;
     }
-    int reach = (int)shape_isqrt((uint32_t)(outer * outer - dy * dy));
-    int centre = ring->x_q4;
-    if (dy * dy >= inner * inner) {
-        shape_span(canvas, span_of(y, centre - reach, centre + reach), color);
-        return;
+    int reach = (int)shape_isqrt((uint32_t)(far * far - dy * dy));
+    int first = larger(((ring->x_q4 - reach) >> PIXEL_SHIFT) - 1, canvas->clip.x);
+    int last =
+        smaller(((ring->x_q4 + reach) >> PIXEL_SHIFT) + 1, canvas->clip.x + canvas->clip.width - 1);
+    bool disc = ring->inner_q4 <= 0;
+    Span skip = within(ring, (disc ? ring->outer_q4 : ring->inner_q4) - HALF_PIXEL_Q4, dy);
+    PixelRun run = {canvas, y, first, color};
+    for (int x = first; x <= last; x++) {
+        if (in_span(skip, x)) {
+            if (!disc) {
+                run_flush(&run, x);
+                run.start = skip.last + 1;
+            }
+            x = skip.last;
+            continue;
+        }
+        int dx = x * SHAPE_Q4 + HALF_PIXEL_Q4 - ring->x_q4;
+        uint8_t alpha = ring_alpha(ring, dx, dy);
+        if (alpha == 0) {
+            run_flush(&run, x);
+            run.start = x + 1;
+        } else {
+            run_put(&run, x, alpha);
+        }
     }
-    int hole = (int)shape_isqrt((uint32_t)(inner * inner - dy * dy));
-    shape_span(canvas, span_of(y, centre - reach, centre - hole), color);
-    shape_span(canvas, span_of(y, centre + hole, centre + reach), color);
+    run_flush(&run, last + 1);
 }
 
 RIPPL_NP_FACES_CODE void shape_ring(Canvas *canvas, ShapeRing ring, Color color)
@@ -221,13 +306,6 @@ RIPPL_NP_FACES_CODE void shape_ring(Canvas *canvas, ShapeRing ring, Color color)
     }
 }
 
-RIPPL_NP_FACES_CODE static int corner_inset(int radius, int edge_distance)
-{
-    int offset = (2 * (radius - edge_distance) - 1) * HALF_PIXEL_Q4;
-    int radius_q4 = radius * SHAPE_Q4;
-    return radius_q4 - (int)shape_isqrt((uint32_t)(radius_q4 * radius_q4 - offset * offset));
-}
-
 RIPPL_NP_FACES_CODE static void inset_row(Canvas *canvas, Rect area, InsetRow at, Color color)
 {
     int left = area.x * SHAPE_Q4 + at.inset;
@@ -235,14 +313,44 @@ RIPPL_NP_FACES_CODE static void inset_row(Canvas *canvas, Rect area, InsetRow at
     shape_span(canvas, span_of(area.y + at.row, left, right), color);
 }
 
+RIPPL_NP_FACES_CODE static int corner_distance(int position, int start, int length, int radius)
+{
+    int centre = position * SHAPE_Q4 + HALF_PIXEL_Q4;
+    int near = (start + radius) * SHAPE_Q4;
+    int far = (start + length - radius) * SHAPE_Q4;
+    return centre < near ? near - centre : centre > far ? centre - far : 0;
+}
+
 RIPPL_NP_FACES_CODE void shape_rounded(Canvas *canvas, Rect area, int radius, Color color)
 {
-    int first = larger(0, canvas->clip.y - area.y);
-    int last = smaller(area.height, canvas->clip.y + canvas->clip.height - area.y);
-    for (int row = first; row < last; row++) {
-        int edge = smaller(row, area.height - 1 - row);
-        int inset = edge < radius ? corner_inset(radius, edge) : 0;
-        inset_row(canvas, area, (InsetRow){row, inset}, color);
+    radius = smaller(radius, smaller(area.width, area.height) / 2);
+    Rect shown = rect_intersection(canvas->clip, area);
+    int inside = radius * SHAPE_Q4 - HALF_PIXEL_Q4;
+    int near = (area.x + radius) * SHAPE_Q4 - HALF_PIXEL_Q4;
+    int far = (area.x + area.width - radius) * SHAPE_Q4 - HALF_PIXEL_Q4;
+    for (int y = shown.y; y < shown.y + shown.height; y++) {
+        int dy = corner_distance(y, area.y, area.height, radius);
+        int room = inside * inside - dy * dy;
+        int reach = inside > 0 && room >= 0 ? (int)shape_isqrt((uint32_t)room) : -1;
+        Span solid = {-floor_div(reach - near, SHAPE_Q4), floor_div(far + reach, SHAPE_Q4)};
+        PixelRun run = {canvas, y, shown.x, color};
+        for (int x = shown.x; dy > 0 && x < shown.x + shown.width; x++) {
+            if (reach >= 0 && in_span(solid, x)) {
+                x = solid.last;
+                continue;
+            }
+            int dx = corner_distance(x, area.x, area.width, radius);
+            if (dx > 0) {
+                uint8_t alpha = edge_alpha(dx * dx + dy * dy, radius * SHAPE_Q4);
+                if (alpha == 0) {
+                    run_flush(&run, x);
+                    run.start = x + 1;
+                } else {
+                    run_put(&run, x, alpha);
+                }
+            }
+        }
+        run_flush(&run, shown.x + shown.width);
     }
 }
 
@@ -256,45 +364,78 @@ RIPPL_NP_FACES_CODE void shape_trapezoid(Canvas *canvas, Rect area, int top_inse
     }
 }
 
-RIPPL_NP_FACES_CODE static Bounds axis_bounds(int factor, int low, int high, Bounds within)
+RIPPL_NP_FACES_CODE static int band_coverage(int inside)
 {
-    if (factor == 0) {
-        bool outside = low > 0 || high < 0;
-        return outside ? (Bounds){within.low, within.low} : within;
-    }
-    if (factor < 0) {
-        int negated_low = -high;
-        high = -low;
-        low = negated_low;
-        factor = -factor;
-    }
-    return (Bounds){larger(within.low, round_div(low, factor)),
-                    smaller(within.high, round_div(high, factor))};
+    int level = inside / SHAPE_UNIT + HALF_PIXEL_Q4;
+    return level <= 0 ? 0 : level >= SHAPE_Q4 ? SHAPE_Q4 : level;
 }
 
-RIPPL_NP_FACES_CODE static Bounds spoke_bounds(const ShapeSpoke *spoke, int sine, int cosine, int y)
+RIPPL_NP_FACES_CODE static uint8_t spoke_alpha(const ShapeSpoke *spoke, int sine, int cosine,
+                                               int dx, int dy)
 {
-    int row = (y - spoke->pivot.y) * SHAPE_Q4;
+    int across = dx * cosine + dy * sine;
+    int along = dx * sine - dy * cosine;
     int half = spoke->width_q4 * SHAPE_UNIT / 2;
-    Bounds along =
-        axis_bounds(sine, spoke->from * SPOKE_Q4_UNIT + row * cosine,
-                    spoke->to * SPOKE_Q4_UNIT + row * cosine, (Bounds){-SPOKE_FAR, SPOKE_FAR});
-    return axis_bounds(cosine, -half - row * sine, half - row * sine, along);
+    int from = spoke->from * SPOKE_Q4_UNIT;
+    int to = spoke->to * SPOKE_Q4_UNIT;
+    int wide = band_coverage(half - (across < 0 ? -across : across));
+    int deep = band_coverage(smaller(along - from, to - along));
+    return coverage(smaller(wide, deep));
+}
+
+RIPPL_NP_FACES_CODE static void narrow(Span *span, int base, int step, Span open)
+{
+    if (step == 0) {
+        if (base <= open.first || base >= open.last) {
+            *span = (Span){1, 0};
+        }
+        return;
+    }
+    int low = open.first - base;
+    int high = open.last - base;
+    if (step < 0) {
+        int swap = low;
+        low = -high;
+        high = -swap;
+        step = -step;
+    }
+    span->first = larger(span->first, floor_div(low, step));
+    span->last = smaller(span->last, floor_div(high, step));
 }
 
 RIPPL_NP_FACES_CODE static void spoke_draw(Canvas *canvas, const ShapeSpoke *spoke, int sine,
                                            int cosine, Color color)
 {
-    int reach =
-        larger(magnitude(spoke->from), magnitude(spoke->to)) + spoke->width_q4 / SHAPE_Q4 + 1;
-    int top = larger(spoke->pivot.y - reach, canvas->clip.y);
-    int bottom = smaller(spoke->pivot.y + reach + 1, canvas->clip.y + canvas->clip.height);
-    int origin = spoke->pivot.x * SHAPE_Q4 + HALF_PIXEL_Q4;
+    int near = -spoke->from * cosine / SHAPE_UNIT;
+    int far = -spoke->to * cosine / SHAPE_UNIT;
+    int spread = spoke->width_q4 / SHAPE_Q4 + 2;
+    int top = larger(spoke->pivot.y + smaller(near, far) - spread, canvas->clip.y);
+    int bottom = smaller(spoke->pivot.y + larger(near, far) + spread + 1,
+                         canvas->clip.y + canvas->clip.height);
+    int left_reach = spoke->from * sine / SHAPE_UNIT;
+    int right_reach = spoke->to * sine / SHAPE_UNIT;
+    int left = larger(spoke->pivot.x + smaller(left_reach, right_reach) - spread, canvas->clip.x);
+    int right = smaller(spoke->pivot.x + larger(left_reach, right_reach) + spread + 1,
+                        canvas->clip.x + canvas->clip.width);
+    int reach = spoke->width_q4 * SHAPE_UNIT / 2 + BAND_FRINGE;
+    int from = spoke->from * SPOKE_Q4_UNIT - BAND_FRINGE;
+    int to = spoke->to * SPOKE_Q4_UNIT + BAND_FRINGE;
     for (int y = top; y < bottom; y++) {
-        Bounds row = spoke_bounds(spoke, sine, cosine, y);
-        if (row.high > row.low) {
-            shape_span(canvas, span_of(y, origin + row.low, origin + row.high), color);
+        int dy = (y - spoke->pivot.y) * SHAPE_Q4;
+        Span span = {left - spoke->pivot.x, right - 1 - spoke->pivot.x};
+        narrow(&span, dy * sine, SHAPE_Q4 * cosine, (Span){-reach, reach});
+        narrow(&span, -dy * cosine, SHAPE_Q4 * sine, (Span){from, to});
+        PixelRun run = {canvas, y, spoke->pivot.x + span.first, color};
+        for (int x = spoke->pivot.x + span.first; x <= spoke->pivot.x + span.last; x++) {
+            uint8_t alpha = spoke_alpha(spoke, sine, cosine, (x - spoke->pivot.x) * SHAPE_Q4, dy);
+            if (alpha == 0) {
+                run_flush(&run, x);
+                run.start = x + 1;
+            } else {
+                run_put(&run, x, alpha);
+            }
         }
+        run_flush(&run, spoke->pivot.x + span.last + 1);
     }
 }
 

@@ -124,19 +124,19 @@ static void paint_spans(Canvas *canvas, int variant)
 }
 
 static const Golden GOLDEN[] = {
-    {"ring_disc", paint_ring, 0, 0xCFF0CB41},
-    {"ring_hole", paint_ring, 1, 0x9D58363B},
-    {"ring_subpixel", paint_ring, 2, 0x02390295},
-    {"rounded", paint_rounded, 0, 0x749C5240},
+    {"ring_disc", paint_ring, 0, 0x9AA29CF1},
+    {"ring_hole", paint_ring, 1, 0xAAEEE3A7},
+    {"ring_subpixel", paint_ring, 2, 0x6B5EA970},
+    {"rounded", paint_rounded, 0, 0xB478A940},
     {"rounded_flat", paint_rounded, 1, 0x2968BF00},
     {"trapezoid", paint_trapezoid, 0, 0xE0842E80},
-    {"spoke_0", paint_spoke, 0, 0xC328EAB9},
-    {"spoke_37", paint_spoke, 37, 0x97909601},
-    {"spoke_64", paint_spoke, 64, 0xCFB0C62F},
-    {"spoke_128", paint_spoke, 128, 0xF59E5746},
-    {"spoke_192", paint_spoke, 192, 0xD3D9336E},
-    {"spoke_200", paint_spoke, 200, 0x0C2EBA08},
-    {"spoke_wide", paint_wide_spoke, 0, 0x3BC69440},
+    {"spoke_0", paint_spoke, 0, 0x619ABD88},
+    {"spoke_37", paint_spoke, 37, 0xE73755FB},
+    {"spoke_64", paint_spoke, 64, 0x976EACAF},
+    {"spoke_128", paint_spoke, 128, 0xC3AEA215},
+    {"spoke_192", paint_spoke, 192, 0xB08CEE7A},
+    {"spoke_200", paint_spoke, 200, 0xE6714A92},
+    {"spoke_wide", paint_wide_spoke, 0, 0x443CC6F0},
     {"digit_8", paint_digit, 0x7F, 0x031AE6E0},
     {"digit_2", paint_digit, 0x5B, 0xB154C404},
     {"digit_0", paint_digit, 0x3F, 0x922E0BE0},
@@ -363,7 +363,8 @@ static void a_spoke_at_angle_zero_points_up(void)
     Canvas canvas = fresh(grid);
     shape_spoke(&canvas, &(ShapeSpoke){{24, 24}, 0, 48, 0, 20}, FOREGROUND);
     CHECK_EQUAL(FOREGROUND, at(grid, 24, 10));
-    CHECK_EQUAL(FOREGROUND, at(grid, 24, 4));
+    CHECK_EQUAL(FOREGROUND, at(grid, 24, 5));
+    CHECK(at(grid, 24, 4) != BACKGROUND);
     CHECK_EQUAL(BACKGROUND, at(grid, 24, 3));
     CHECK_EQUAL(BACKGROUND, at(grid, 24, 25));
 }

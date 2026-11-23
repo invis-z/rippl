@@ -204,5 +204,7 @@ A `.rippltheme` file lives in `Themes` at the top of the card, and the built-in 
 | 12–15 | FNV-1a of the checked part from byte 16 |
 | 16– | Colour, box, spacing and icon counts, the selection box, the name in 24 bytes |
 
-Then the colours (RGB565), boxes (11 bytes each), spacings, the asset table, accents and icon masks, and after the checked part the assets: wallpapers (16 colours, 4 bits a pixel) and fonts. Each asset carries its own FNV-1a. Ids are only ever added at the end, so older and newer firmware read each other's files and ignore what they don't know.
+Then the colours (RGB565), boxes (11 bytes each), spacings, the asset table, accents and icon masks, and after the checked part the assets: wallpapers (16 colours, 4 bits a pixel), fonts and compiled scenes. Each asset carries its own FNV-1a. Ids are only ever added at the end, so older and newer firmware read each other's files and ignore what they don't know.
+
+A scene asset's flags say whether it has its own header colours (1), takes the whole screen (2) and redraws every 50 ms (4).
 

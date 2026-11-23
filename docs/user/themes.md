@@ -1,6 +1,6 @@
 # Themes
 
-A theme sets Rippl's colours, the shape of its rows and bars, its spacing, and optionally a wallpaper, fonts and icons. The built-in themes are in Settings → Display → Theme. More come as `.rippltheme` files on the card.
+A theme sets Rippl's colours, the shape of its rows and bars, its spacing, and optionally a wallpaper, fonts, icons and its own Home and Now Playing screens. The built-in themes are in Settings → Display → Theme. More come as `.rippltheme` files on the card.
 
 ## Using a theme file
 
@@ -15,6 +15,10 @@ A theme sets Rippl's colours, the shape of its rows and bars, its spacing, and o
 - Keep the file in `Themes` while it's worn: after USB or a rescan the player reads its wallpaper and fonts from it again.
 
 `tide themes E:` lists the themes on the card, and `tide themes E: remove NAME` removes one.
+
+## Face themes
+
+Cassette, Turntable and Tape Window are theme files that draw their own Now Playing screen, over the whole screen. They aren't in the image: the build packs them into `build/dev/themes`. Copy the ones you want into `Themes`. Any other theme shows the standard Now Playing.
 
 ## Making a theme
 

@@ -22,10 +22,17 @@ static const char *const TOP[SETTINGS_TOP_COUNT] = {
     "Sound",   "Display", "Library",   "Buttons",   "System"};
 
 static const char *const SOUND[] = {"Gain", "Output", "Filter", "Balance", "DRE"};
-static const char *const DISPLAY[] = {
-    "Theme",      "Accent colour",      "Highlight",           "Now Playing",
-    "Lyrics",     "Brightness",         "Screen timeout",      "Orientation",
-    "Animations", "Battery percentage", "Portrait status bar", "Clock"};
+static const char *const DISPLAY[] = {"Theme",
+                                      "Accent colour",
+                                      "Highlight",
+                                      "Lyrics",
+                                      "Brightness",
+                                      "Screen timeout",
+                                      "Orientation",
+                                      "Animations",
+                                      "Battery percentage",
+                                      "Portrait status bar",
+                                      "Clock"};
 static const char *const LIBRARY[] = {"Music folders",    "Rescan library", "Cover Flow",
                                       "Cover Flow order", "Artist albums",  "Folders & playlists"};
 static const char *const BUTTONS[] = {"Volume buttons", "Swap volume buttons", "Menu button",
@@ -346,75 +353,17 @@ static void hidden_rows_leave_the_other_display_rows_in_place(void)
 {
     SettingsStore store;
     start_with_theme(&store, THEME_DARK);
-    CHECK_EQUAL(12, shown_display_rows());
+    CHECK_EQUAL(11, shown_display_rows());
     start_with_theme(&store, THEME_NEON);
-    CHECK_EQUAL(10, shown_display_rows());
+    CHECK_EQUAL(9, shown_display_rows());
     CHECK(shown_display_row_is(0, "Theme"));
-    CHECK(shown_display_row_is(1, "Now Playing"));
+    CHECK(shown_display_row_is(1, "Lyrics"));
+    CHECK(shown_display_row_is(2, "Brightness"));
+    start_with_theme(&store, THEME_FJORD);
+    CHECK_EQUAL(10, shown_display_rows());
+    CHECK(shown_display_row_is(1, "Highlight"));
     CHECK(shown_display_row_is(2, "Lyrics"));
     CHECK(shown_display_row_is(3, "Brightness"));
-    start_with_theme(&store, THEME_FJORD);
-    CHECK_EQUAL(11, shown_display_rows());
-    CHECK(shown_display_row_is(1, "Highlight"));
-    CHECK(shown_display_row_is(2, "Now Playing"));
-    CHECK(shown_display_row_is(3, "Lyrics"));
-    CHECK(shown_display_row_is(4, "Brightness"));
-}
-
-static int now_playing_position(int theme)
-{
-    SettingsStore store;
-    start_with_theme(&store, theme);
-    for (int position = 0; position < shown_display_rows(); position++) {
-        if (shown_display_row_is(position, "Now Playing")) {
-            return position;
-        }
-    }
-    return -1;
-}
-
-static void the_now_playing_row_follows_the_rows_the_theme_hides(void)
-{
-    CHECK_EQUAL(3, now_playing_position(THEME_DARK));
-    CHECK_EQUAL(3, now_playing_position(THEME_LIGHT));
-    CHECK_EQUAL(2, now_playing_position(THEME_FJORD));
-    CHECK_EQUAL(2, now_playing_position(THEME_DUSK));
-    CHECK_EQUAL(2, now_playing_position(THEME_PAPER));
-    CHECK_EQUAL(1, now_playing_position(THEME_NEON));
-    CHECK_EQUAL(1, now_playing_position(THEME_PHOSPHOR));
-    CHECK_EQUAL(1, now_playing_position(THEME_OLIVE));
-    CHECK_EQUAL(1, now_playing_position(THEME_HIGH_CONTRAST));
-}
-
-static void the_now_playing_row_lists_every_face_and_shows_the_chosen_one(void)
-{
-    static const char *const NAMES[NP_FACE_COUNT] = {"Standard", "Cassette", "Turntable",
-                                                     "Tape Window"};
-    SettingsStore store;
-    start_with_theme(&store, THEME_DARK);
-    const MenuItem *row = &screens.rows[3];
-    row->select(row->context);
-    CHECK_EQUAL(NP_FACE_COUNT, screens.choice.config.option_count);
-    for (int face = 0; face < NP_FACE_COUNT; face++) {
-        CHECK_EQUAL(0, strcmp(NAMES[face], i18n_text(screens.choice.config.option_ids[face])));
-        store.settings.options[OPTION_NOW_PLAYING_FACE] = (uint8_t)face;
-        CHECK_EQUAL(0, strcmp(NAMES[face], row->value(row->context)));
-    }
-}
-
-static void every_face_name_fits_the_value_column(void)
-{
-    enum {
-        VALUE_COLUMN_PX = 88
-    };
-    SettingsStore store;
-    start_with_theme(&store, THEME_DARK);
-    const MenuItem *row = &screens.rows[3];
-    row->select(row->context);
-    for (int face = 0; face < NP_FACE_COUNT; face++) {
-        const char *name = i18n_text(screens.choice.config.option_ids[face]);
-        CHECK(text_width(DEFAULT_THEME.fonts.small, name) <= VALUE_COLUMN_PX);
-    }
 }
 
 int main(void)
@@ -436,9 +385,6 @@ int main(void)
         TEST_CASE(a_damaged_theme_file_is_not_worn),
         TEST_CASE(the_accent_choice_lists_the_accents_the_theme_offers),
         TEST_CASE(hidden_rows_leave_the_other_display_rows_in_place),
-        TEST_CASE(the_now_playing_row_follows_the_rows_the_theme_hides),
-        TEST_CASE(the_now_playing_row_lists_every_face_and_shows_the_chosen_one),
-        TEST_CASE(every_face_name_fits_the_value_column),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

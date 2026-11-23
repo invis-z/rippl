@@ -10,6 +10,7 @@ The first Rippl release.
 
 - **Files move from `/.echo` to `/.rippl`.** The first start sets the card up again: settings, the equaliser, resume, Up Next, favourites, bookmarks, Bluetooth devices, music folder choices and the library start fresh. Old `/.echo` files can be deleted.
 - **The firmware is an 8 MiB `RIPPL.IMG`.** It can't be installed from EchoPod, which accepts only 5 MiB images ([install](docs/user/install.md#from-echopod)).
+- **The Now Playing face is part of the theme.** Settings → Display → Now Playing is gone: copy the Cassette, Turntable or Tape Window theme to `Themes` on the card and choose it under Theme ([themes](docs/user/themes.md#face-themes)).
 - **Only English and Simplified Chinese are built in.** Install your language's pack first (`tide languages install <code>`), or the player starts in English.
 
 ### Added
@@ -17,7 +18,7 @@ The first Rippl release.
 - 352.8 and 384 kHz WAV, FLAC and ALAC, and 32-bit FLAC and ALAC up to 96 kHz. 32-bit WAV goes to the DAC with all 32 bits.
 - **Hi-Res DAC** USB mode: a USB Audio Class 2.0 sound card at 44.1–384 kHz and 16, 24 or 32 bits, with clock feedback to the computer.
 - Tape Window, a Now Playing face that turns the screen into the player's window onto a cassette.
-- **Themes**, ported from EchoPod 0.13.0: `.rippltheme` files in `Themes` on the card change colours, boxes, spacing, icons, fonts and the picture behind the lists, and `tide themes` copies theme files to the card ([themes](docs/user/themes.md)).
+- **Themes**, ported from EchoPod 0.13.0: `.rippltheme` files in `Themes` on the card change colours, boxes, spacing, icons, fonts and the picture behind the lists, and a theme can draw Now Playing and Home from a short scene script. `tide themes` copies theme files to the card ([themes](docs/user/themes.md)).
 - The selection slides from row to row; held keys still jump.
 - Daylight saving for the clock: Europe, US & Canada, Australia, New Zealand, or the computer's rule through Tide.
 - **DRE** setting for the DACs' dynamic range enhancement.
@@ -33,7 +34,8 @@ The first Rippl release.
 - **Equaliser:** presets come from `.txt` files in `/EQ` (Equalizer APO, AutoEQ), up to 100. Each is fitted to every rate from 8 to 96 kHz after a scan, so it sounds the same at every rate; hold ▶ on a preset to refit it. All formats are equalised on the second processor, which now decodes WAV and FLAC too.
 - **Upsampling:** 32 kHz plays natively; 8 and 16 kHz are raised to 32 kHz, and 11–24 kHz to 44.1 or 48 kHz, with a 64-tap filter instead of straight lines.
 - **Volume:** 85 steps of exactly 1 dB; Bluetooth gets the 3.5 mm jack's level. Filter names the DAC's five filters.
-- **Faces:** fill the whole screen; Turntable shows the cover as its turning label, and Cassette and Turntable progress across the whole album.
+- **Faces:** Cassette, Turntable and Tape Window are themes with scenes that fill the whole screen; Turntable shows the cover as its turning label, and Cassette and Turntable progress across the whole album. Upright, Tape Window is exactly its landscape face turned.
+- **Drawing:** rings, spokes and rounded boxes are anti-aliased the same way in every direction.
 - **Settings:** Start screen moves to System, Lyrics to Display.
 - **Buttons:** in portrait, taps turn the volume the other way while holds still skip and seek. Swap volume buttons reverses only the volume.
 - **Languages:** extra languages load as packs from the internal drive; the remaining English strings are translated; GBK and JIS X 0213 names draw.

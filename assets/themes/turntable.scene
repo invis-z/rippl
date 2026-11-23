@@ -1,0 +1,87 @@
+const VINYL = #101018
+const ALU = #c8c8c0
+const ALU_DARK = #686860
+const CREAM = #f8ecd0
+const TAN = #d8b888
+const TAN_DIM = #c0a078
+const AMBER = #f8a428
+const SCALE = 298
+
+let tall = height > width
+let cx = tall ? 85 : 82
+let cy = y + (tall ? 103 : 85)
+let qx = cx * 16 + 8
+let qy = cy * 16 + 8
+
+gradient(x, y, width, height, #482c18, #281810)
+ring(qx, qy, (67 * 16 * SCALE + 128) >> 8, (64 * 16 * SCALE + 128) >> 8, ALU)
+ring(qx, qy, (64 * 16 * SCALE + 128) >> 8, 0, VINYL)
+
+let label = (28 * SCALE + 128) >> 8
+let angle = position % 3600 * 256 / 3600
+turned_cover(cx, cy, label, angle)
+ring(qx, qy, label * 16 + 16, label * 16, VINYL)
+repeat groove from 0 to 4 {
+    let radius = ((38 + 7 * groove) * 16 * SCALE + 128) >> 8
+    ring(qx, qy, radius + 16, radius, ALU_DARK)
+}
+ring(qx, qy, (48 * SCALE + 128) >> 8, 0, ALU)
+
+if badge != none {
+    ring(qx, qy, (320 * SCALE + 128) >> 8, 0, VINYL)
+    icon(badge, cx - 9, cy - 9, 18, 18, CREAM)
+}
+
+let arm_dx = (75 * SCALE + 128) >> 8
+let arm_dy = (-47 * SCALE + 128) >> 8
+let px = tall ? cx + arm_dy : cx + arm_dx
+let py = tall ? cy - arm_dx : cy + arm_dy
+let swing = ((tall ? 140 + 192 : 140) & 255) * 4 + queue_progress(48)
+let head = swing + 40
+let reach = (84 * SCALE + 128) >> 8
+let sx = polar_x(px, swing, reach)
+let sy = polar_y(py, swing, reach)
+let weight = (160 * SCALE + 128) >> 8
+let shell = (112 * SCALE + 128) >> 8
+let needle = (48 * SCALE + 128) >> 8
+fine_spoke(px, py, swing + 512, weight, (7 * SCALE + 128) >> 8, (21 * SCALE + 128) >> 8, ALU_DARK)
+ring(px * 16 + 8, py * 16 + 8, weight, 0, ALU_DARK)
+ring(px * 16 + 8, py * 16 + 8, shell, 0, ALU)
+fine_spoke(px, py, swing, (64 * SCALE + 128) >> 8, 0, (72 * SCALE + 128) >> 8, ALU)
+fine_spoke(sx, sy, head, shell, (-14 * SCALE + 128) >> 8, 3, ALU)
+fine_spoke(sx, sy, head, needle, (-11 * SCALE + 128) >> 8, 0, VINYL)
+ring(px * 16 + 8, py * 16 + 8, needle, 0, ALU_DARK)
+
+let lx = cx + (((tall ? 61 : 80) * SCALE + 128) >> 8)
+let ly = cy + (((tall ? 61 : 59) * SCALE + 128) >> 8)
+ring(lx * 16 + 8, ly * 16 + 8, 48, 0, playing ? AMBER : ALU_DARK)
+
+if tall {
+    line(song, title, 10, y + 184, 150, 22, center, CREAM)
+    line(artist, body, 10, y + 206, 150, 22, center, TAN)
+    line(album, body, 10, y + 228, 150, 22, center, TAN_DIM)
+    format(small, 10, y + 252, 150, 16, center, TAN)
+    if present(feedback) {
+        text(feedback, small, 10, y + height - 42, 150, 16, center, CREAM)
+    } else {
+        text(modes, small, 10, y + height - 42, 150, 16, center, TAN_DIM)
+    }
+    bar(10, y + height - 23, 150, 3, ALU_DARK, CREAM, AMBER)
+    times(small, 10, y + height - 18, 150, 16, TAN, TAN)
+} else {
+    line(song, title, 192, y + 6, 120, 22, left, CREAM)
+    line(artist, body, 192, y + 28, 120, 22, left, TAN)
+    line(album, body, 192, y + 48, 120, 22, left, TAN_DIM)
+    if present(codec) {
+        codec(small, 192, y + 78, width(codec, small) + 8, 16, TAN)
+    }
+    text(stream, small, 192, y + 97, 120, 16, left, TAN)
+    text(detail, small, 192, y + 116, 120, 16, left, TAN_DIM)
+    if present(feedback) {
+        text(feedback, small, 192, y + 131, 120, 16, left, CREAM)
+    } else {
+        text(modes, small, 192, y + 131, 120, 16, left, TAN_DIM)
+    }
+    bar(192, y + 148, 120, 3, ALU_DARK, CREAM, AMBER)
+    times(small, 192, y + 153, 120, 16, TAN, TAN)
+}

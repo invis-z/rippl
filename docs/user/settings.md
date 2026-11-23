@@ -21,7 +21,6 @@ Volume has 85 steps of 1 dB.
 | Theme | Dark (default), Light, Fjord, Dusk, Neon, Phosphor, Paper, Olive, High contrast, then up to eight theme files from `Themes` on the card ([themes](themes.md)) |
 | Accent colour | The selection bar's colour, on Dark and Light |
 | Highlight | Gradient or flat, on themes with a gradient bar |
-| Now Playing | Standard, Cassette, Turntable, Tape Window ([playback](playback.md#now-playing)) |
 | Lyrics | On, Off |
 | Brightness, Screen timeout | |
 | Orientation | Landscape, Portrait, Portrait flipped |

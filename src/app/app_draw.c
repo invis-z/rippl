@@ -48,6 +48,19 @@ static void draw_shifted(Screen *screen, Canvas *canvas, int x, Rect area)
     }
 }
 
+__attribute__((noinline)) static Theme dressed_theme(const Screen *screen)
+{
+    Theme theme = *app_current_theme();
+    const ThemeColors *face = screen == &app.screens.now_playing.screen
+                                  ? now_playing_face_colors(&app.screens.now_playing)
+                              : screen == &app.screens.home.screen ? now_playing_home_colors()
+                                                                   : NULL;
+    if (face != NULL) {
+        theme.colors = face;
+    }
+    return theme;
+}
+
 static const Screen *chrome_screen(const Screen *top)
 {
     bool leaving = app_slide_running() && !slide_shows_arriving_title(&app.slide, app.now_ms);
@@ -64,7 +77,9 @@ static void draw_slide(Canvas *canvas, Screen *arriving)
     draw_shifted(leaving, canvas, slide_leaving_x(&app.slide, app.now_ms, width), area);
     draw_shifted(arriving, canvas, slide_arriving_x(&app.slide, app.now_ms, width), area);
     if (!whole) {
-        header_draw(canvas, theme, chrome_screen(arriving)->title);
+        const Screen *titled = chrome_screen(arriving);
+        Theme dressed = dressed_theme(titled);
+        header_draw(canvas, &dressed, titled->title);
     }
 }
 
@@ -81,7 +96,8 @@ static void draw_frame(void *context, Canvas *canvas)
         screen->draw(screen->context, canvas);
     }
     if (!screen->full_screen) {
-        status_bar_draw(canvas, app_current_theme(), state->status_bar);
+        Theme dressed = dressed_theme(chrome_screen(screen));
+        status_bar_draw(canvas, &dressed, state->status_bar);
     }
     if (hal_system_code2_ready()) {
         toast_draw(&state->toast, canvas, app_current_theme());

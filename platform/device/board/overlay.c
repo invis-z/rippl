@@ -224,7 +224,7 @@ void hal_system_release_startup(void)
 
 __attribute__((noinline)) const void *hal_system_load_faces(void)
 {
-    if (startup_running) {
+    if (startup_running || !hal_system_code2_ready()) {
         return NULL;
     }
     if (np_faces_gate.state == NP_FACES_READY) {

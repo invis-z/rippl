@@ -309,6 +309,42 @@ static void a_reflection_stays_inside_the_clip(void)
     CHECK_EQUAL(0x3000, canvas_pixel_at(&canvas, 3, 4));
 }
 
+static void a_turned_row_blends_between_pixels_and_clamps_to_the_edges(void)
+{
+    static const Color CORNERS[4] = {
+        COLOR_RGB(0, 0, 0),
+        COLOR_RGB(255, 255, 255),
+        COLOR_RGB(255, 0, 0),
+        COLOR_RGB(0, 0, 255),
+    };
+    Image source = {.pixels = CORNERS, .width = 2, .height = 2};
+    Color row[4] = {0};
+    ImageRowStep step = {
+        .u = -(1 << IMAGE_TURN_SHIFT),
+        .v = -(1 << IMAGE_TURN_SHIFT),
+        .du = 1 << (IMAGE_TURN_SHIFT - 1),
+        .dv = 1 << (IMAGE_TURN_SHIFT - 1),
+    };
+    image_draw_turned_row(row, &source, &step, 4);
+    CHECK_EQUAL(CORNERS[0], row[0]);
+    CHECK_EQUAL(CORNERS[0], row[1]);
+    CHECK_EQUAL(CORNERS[0], row[2]);
+    Color mid = row[3];
+    CHECK(mid != CORNERS[0]);
+    CHECK(mid != CORNERS[1]);
+    CHECK(mid != CORNERS[2]);
+    CHECK(mid != CORNERS[3]);
+
+    ImageRowStep clamp = {
+        .u = 2 << IMAGE_TURN_SHIFT,
+        .v = 2 << IMAGE_TURN_SHIFT,
+        .du = 0,
+        .dv = 0,
+    };
+    image_draw_turned_row(row, &source, &clamp, 1);
+    CHECK_EQUAL(CORNERS[3], row[0]);
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
@@ -327,6 +363,7 @@ int main(void)
         TEST_CASE(every_scaled_height_samples_the_exact_rows),
         TEST_CASE(reflections_sample_the_exact_mirrored_rows),
         TEST_CASE(a_reflection_of_a_tall_quad_walks_up_the_image),
+        TEST_CASE(a_turned_row_blends_between_pixels_and_clamps_to_the_edges),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

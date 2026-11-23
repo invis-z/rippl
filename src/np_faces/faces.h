@@ -1,7 +1,0 @@
-#pragma once
-
-#include "np_faces/now_playing_face.h"
-
-void face_cassette_draw(const NowPlayingFrame *frame, Canvas *canvas);
-void face_tape_window_draw(const NowPlayingFrame *frame, Canvas *canvas);
-void face_turntable_draw(const NowPlayingFrame *frame, Canvas *canvas);

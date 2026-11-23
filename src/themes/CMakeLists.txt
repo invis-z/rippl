@@ -27,3 +27,20 @@ configure_file(${CMAKE_CURRENT_BINARY_DIR}/builtin_themes.c.new ${CMAKE_CURRENT_
 add_library(rippl_builtin_themes STATIC EXCLUDE_FROM_ALL ${CMAKE_CURRENT_BINARY_DIR}/builtin_themes.c)
 target_include_directories(rippl_builtin_themes PUBLIC include)
 target_link_libraries(rippl_builtin_themes PUBLIC rippl_settings)
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+file(GLOB RIPPL_THEME_SOURCES CONFIGURE_DEPENDS
+    ${PROJECT_SOURCE_DIR}/assets/themes/*.toml ${PROJECT_SOURCE_DIR}/assets/themes/*.scene)
+set(RIPPL_THEMES_STAMP ${CMAKE_BINARY_DIR}/themes/themes.stamp)
+add_custom_command(
+    OUTPUT ${RIPPL_THEMES_STAMP}
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/theme_pack.py
+        --themes ${PROJECT_SOURCE_DIR}/assets/themes
+        --definitions ${PROJECT_SOURCE_DIR}/src/ui/include/ui
+        --output ${CMAKE_BINARY_DIR}/themes
+    COMMAND ${CMAKE_COMMAND} -E touch ${RIPPL_THEMES_STAMP}
+    DEPENDS ${RIPPL_THEME_SOURCES} ${PROJECT_SOURCE_DIR}/tools/theme_pack.py
+        ${PROJECT_SOURCE_DIR}/tools/scene_compile.py
+    COMMENT "Packing the themes"
+)
+add_custom_target(rippl_themes ALL DEPENDS ${RIPPL_THEMES_STAMP})
