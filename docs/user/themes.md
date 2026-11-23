@@ -22,10 +22,18 @@ Cassette, Turntable and Tape Window are theme files that draw their own Now Play
 
 ## Making a theme
 
-A theme is written as TOML and packed with `tools/theme_pack.py`. The format is in the [theme format reference](../reference/theme-format.md).
+The theme editor in `web/editor` runs the player's own interface in a browser, so its screen is what the player draws. It isn't hosted; [building](../development/building.md#theme-editor) explains how to build and open it.
+
+- **Colours:** Background, Text and Accent set the whole theme. Colour sets and Colours from a picture recolour everything at once, and a Fix button appears where text is hard to read.
+- **Look:** rows, the title bar, spacing, a wallpaper and icons.
+- **Screens:** Make it my own turns Home or Now Playing into a drawing of parts you place: text, the cover, boxes, circles, lines, the progress bar, the menu as a list or tiles. Parts can move with the music.
+- **Upright:** a screen drawn sideways is arranged upright for you. Move anything upright and that layout becomes yours.
+- **History:** My themes keeps your themes in the browser, with earlier versions of the open one.
+
+Themes can also be written by hand as TOML and packed with `tools/theme_pack.py`. The format is in the [theme format reference](../reference/theme-format.md).
 
 ## Sharing a theme
 
 The `.rippltheme` file is the whole theme. Send it to anyone; they copy it into `Themes` on their card.
 
-To let others change it, send its `.toml` source too.
+The editor opens a `.rippltheme` file too, so anyone can start from yours. **Save an editable copy** also writes the theme as a `.toml` source, with its wallpaper written out, for changing by hand and packing with `tools/theme_pack.py`.

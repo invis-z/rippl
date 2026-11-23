@@ -52,7 +52,7 @@ This packs every `.toml` in `my-themes` into `my-themes/packed/<file>.rippltheme
 
 Typical sizes: 205 bytes with no icons; about 2,000 with every status and list icon; about 1,800 more for six 24 × 24 Home tile icons; about 27,000 for a full-screen wallpaper.
 
-A scene too big for the player doesn't load, and Now Playing or Home shows the standard screen. The packer warns about it.
+A scene too big for the player doesn't load, and Now Playing or Home shows the standard screen. The packer and the editor warn about it.
 
 ## Top level
 
@@ -329,7 +329,7 @@ chevron = [
 
 ## Readability
 
-The packer warns when a pair's contrast (1 to 21) is under its floor. For a gradient, the worse end counts.
+The packer and the editor warn when a pair's contrast (1 to 21) is under its floor. For a gradient, the worse end counts.
 
 | Pair | Floor |
 |---|---|

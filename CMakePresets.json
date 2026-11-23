@@ -22,6 +22,18 @@
         "RIPPL_BUILD_TESTS": "OFF",
         "RIPPL_BUILD_DEVICE": "ON"
       }
+    },
+    {
+      "name": "web",
+      "displayName": "Theme editor preview (WebAssembly, Release)",
+      "binaryDir": "${sourceDir}/build/web",
+      "toolchainFile": "${sourceDir}/cmake/wasm32.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RIPPL_BUILD_SIM": "OFF",
+        "RIPPL_BUILD_TESTS": "OFF",
+        "RIPPL_BUILD_WEB": "ON"
+      }
     }
   ],
   "buildPresets": [

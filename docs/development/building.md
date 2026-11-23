@@ -33,6 +33,7 @@ Install CMake, Clang or GCC, SDL2's development package, `clang-format`, and Arm
 |---|---|---|
 | `dev` | `build/dev` | Simulator and host tests, Debug with sanitisers |
 | `device` | `build/device` | Firmware |
+| `web` | `build/web` | The theme editor's preview, the player's drawing code for the browser |
 
 ```sh
 cmake --preset dev && cmake --build --preset dev && ctest --preset dev
@@ -42,6 +43,20 @@ cmake --preset device && cmake --build --preset device
 A firmware build writes `RIPPL.IMG` (8 MiB) and prints how full each memory region is. [Device testing](device-testing.md) covers installing it.
 
 The `dev` build also packs the themes from `assets/themes` into `build/dev/themes` (including `cassette.rippltheme`, `turntable.rippltheme`, `tape_window.rippltheme`), ready to copy to a card's `Themes` folder.
+
+## Theme editor
+
+The editor in `web/editor` runs the player's interface compiled to WebAssembly. It needs clang with the `wasm32` target and `wasm-ld` (on Debian and Ubuntu, the `clang` and `lld` packages), Python with `tools/requirements.txt`, and Node 22 for the preview pictures:
+
+```sh
+cmake --preset web
+cmake --build build/web --target rippl_preview
+python tools/web_editor.py --pages web/editor --module build/web/platform/web/rippl_preview.wasm --themes assets/themes --definitions src/ui/include/ui --glyphs assets/fonts/glyph_pack.json --packs src/fonts/packs --output build/web-editor
+node web/editor/render_theme.mjs build/web-editor
+python -m http.server 8770 --bind 127.0.0.1 --directory build/web-editor
+```
+
+Then open `http://127.0.0.1:8770`. The site also carries `guide.html`, made from [Themes](../user/themes.md) as it is in the branch being built; the editor's **Theme guide** link opens it. `tools/demo_library.py` writes the preview's demo library in our segment store format with Tide's own code. [Themes](../user/themes.md) covers using the editor, and the [theme format](../reference/theme-format.md) its sources.
 
 ## Tests
 

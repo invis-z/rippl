@@ -3852,6 +3852,97 @@ static void a_small_wallpaper_serves_the_upright_screen_too(void)
     CHECK(theme_store_wallpaper(true) == NULL);
 }
 
+static ThemeLayout unplaced(void)
+{
+    ThemeLayout layout;
+    for (int id = 0; id < THEME_LAYOUT_COUNT; id++) {
+        layout.boxes[id] = (ThemeLayoutBox){.align = THEME_ALIGN_UNSET};
+    }
+    return layout;
+}
+
+static void start_library_placed(const ThemeLayout *wide)
+{
+    uint32_t size = 0;
+    prepare_library();
+    if (wide != NULL) {
+        theme_fixture_placed("Placed.rippltheme", wide, NULL, &size);
+        remember_theme_file("Placed");
+    }
+    now_ms = START_MS;
+    fake_hal_set_milliseconds(now_ms);
+    app_start();
+}
+
+static bool band_is_plain(Rect band, Color color)
+{
+    for (int y = band.y; y < band.y + band.height; y++) {
+        for (int x = band.x; x < band.x + band.width; x++) {
+            if (fake_hal_pixel(x, y) != color) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static Rect builtin_box(ThemeLayoutId id)
+{
+    ThemeLayout layout;
+    app_now_playing_layout(&layout);
+    ThemeLayoutBox box = layout.boxes[id];
+    return (Rect){box.x, box.y + 2, box.width, box.height - 4};
+}
+
+static void a_theme_layout_moves_the_progress_bar_and_hides_the_title(void)
+{
+    Color background = DEFAULT_THEME_DARK_COLORS.background;
+    start_library_placed(NULL);
+    play_first_album_track();
+    wait_ms(1000);
+    Rect title = builtin_box(THEME_LAYOUT_TITLE);
+    CHECK(!band_is_plain(title, background));
+    ThemeLayout layout = unplaced();
+    layout.boxes[THEME_LAYOUT_PROGRESS] = (ThemeLayoutBox){0, 100, 320, 6, THEME_ALIGN_LEFT};
+    layout.boxes[THEME_LAYOUT_TITLE] = (ThemeLayoutBox){0, 0, 0, 22, THEME_ALIGN_LEFT};
+    start_library_placed(&layout);
+    play_first_album_track();
+    wait_ms(1000);
+    CHECK(title_is("Now Playing"));
+    CHECK(theme_store_package() != NULL);
+    CHECK(band_is_plain(title, background));
+    CHECK_EQUAL(DEFAULT_THEME_DARK_COLORS.divider, fake_hal_pixel(160, 103));
+    CHECK_EQUAL(background, fake_hal_pixel(160, 149));
+    CHECK_EQUAL(title.x, builtin_box(THEME_LAYOUT_TITLE).x);
+}
+
+static void lyrics_hide_only_the_lines_they_overlap(void)
+{
+    Color background = DEFAULT_THEME_DARK_COLORS.background;
+    start_library_placed(NULL);
+    fake_hal_add_file("/AC DC/Back In Black/1-01 - Hells Bells.lrc", HELLS_BELLS_LYRICS,
+                      sizeof HELLS_BELLS_LYRICS - 1);
+    play_first_album_track();
+    wait_ms(1000);
+    fake_hal_audio_set_position(1000);
+    wait_ms(1000);
+    Rect artist = builtin_box(THEME_LAYOUT_ARTIST);
+    Rect detail = builtin_box(THEME_LAYOUT_DETAIL);
+    CHECK(band_is_plain(artist, background));
+    ThemeLayout layout = unplaced();
+    layout.boxes[THEME_LAYOUT_LYRICS] = (ThemeLayoutBox){10, 128, 300, 38, THEME_ALIGN_LEFT};
+    start_library_placed(&layout);
+    fake_hal_add_file("/AC DC/Back In Black/1-01 - Hells Bells.lrc", HELLS_BELLS_LYRICS,
+                      sizeof HELLS_BELLS_LYRICS - 1);
+    play_first_album_track();
+    wait_ms(1000);
+    fake_hal_audio_set_position(1000);
+    wait_ms(1000);
+    CHECK_EQUAL(0, strcmp("I'm a rolling thunder", app_now_playing_lyric()));
+    CHECK(!band_is_plain(artist, background));
+    CHECK(band_is_plain(detail, background));
+}
+
 static void a_remembered_theme_file_that_is_gone_leaves_the_built_in_theme(void)
 {
     start_app_wearing(NULL, "Ember");
@@ -4202,6 +4293,8 @@ int main(void)
         TEST_CASE(a_wiped_wallpaper_is_never_drawn_and_comes_back_on_the_next_step),
         TEST_CASE(a_wallpaper_that_fails_its_check_leaves_the_plain_background),
         TEST_CASE(a_small_wallpaper_serves_the_upright_screen_too),
+        TEST_CASE(a_theme_layout_moves_the_progress_bar_and_hides_the_title),
+        TEST_CASE(lyrics_hide_only_the_lines_they_overlap),
         TEST_CASE(a_remembered_theme_file_that_is_gone_leaves_the_built_in_theme),
         TEST_CASE(the_theme_file_record_is_one_of_the_player_files),
         TEST_CASE(the_app_starts_through_its_loaded_start_up_code),
