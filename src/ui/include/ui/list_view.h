@@ -40,6 +40,8 @@ typedef struct ListView {
     uint32_t section_jumped_ms;
     int section_row;
     int section;
+    int slide_from;
+    uint32_t slide_started_ms;
 } ListView;
 
 void list_view_init(ListView *view, const ListModel *model, const Theme *theme, uint32_t now_ms);

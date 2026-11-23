@@ -9,6 +9,7 @@
 #include "ui/label.h"
 
 enum {
+    SLIDE_ONE = 256,
     MIN_THUMB_HEIGHT = 6,
     SHINE_HEIGHT = 1,
     OUTLINE_SIDE_INSET = 6,
@@ -116,7 +117,31 @@ static void note_section(ListView *view, uint32_t now_ms)
     view->section_row = view->selected;
 }
 
-void list_view_move(ListView *view, int delta, bool wrap, uint32_t now_ms)
+static int selection_offset(const ListView *view)
+{
+    return (view->selected - top_showing_selection(view)) * view->theme->metrics.row_height;
+}
+
+static int shown_offset(const ListView *view, uint32_t now_ms)
+{
+    int target = selection_offset(view);
+    int duration = view->theme->metrics.selection_slide_ms;
+    uint32_t elapsed = now_ms - view->slide_started_ms;
+    if (duration <= 0 || elapsed >= (uint32_t)duration) {
+        return target;
+    }
+    int left = SLIDE_ONE - (int)(elapsed * SLIDE_ONE / (uint32_t)duration);
+    int eased = SLIDE_ONE - left * left / SLIDE_ONE;
+    return view->slide_from + (target - view->slide_from) * eased / SLIDE_ONE;
+}
+
+static void stop_slide(ListView *view, uint32_t now_ms)
+{
+    view->slide_from = selection_offset(view);
+    view->slide_started_ms = now_ms;
+}
+
+static void move(ListView *view, int delta, bool wrap, bool slide, uint32_t now_ms)
 {
     int count = item_count(view);
     if (count == 0) {
@@ -126,16 +151,26 @@ void list_view_move(ListView *view, int delta, bool wrap, uint32_t now_ms)
     if (target == view->selected) {
         return;
     }
+    int from = shown_offset(view, now_ms);
     view->selected = target;
     view->selection_changed_ms = now_ms;
     keep_selection_visible(view);
     note_section(view, now_ms);
+    stop_slide(view, now_ms);
+    if (slide) {
+        view->slide_from = from;
+    }
+}
+
+void list_view_move(ListView *view, int delta, bool wrap, uint32_t now_ms)
+{
+    move(view, delta, wrap, false, now_ms);
 }
 
 void list_view_start_scroll(ListView *view, int direction, uint32_t now_ms)
 {
     view->scroll_started_ms = now_ms;
-    list_view_move(view, direction, true, now_ms);
+    move(view, direction, true, true, now_ms);
 }
 
 static int first_of_section_at_least(const ListView *view, int section, int low, int high)
@@ -221,6 +256,7 @@ void list_view_select(ListView *view, int index, uint32_t now_ms)
     view->selection_changed_ms = now_ms;
     keep_selection_visible(view);
     note_section(view, now_ms);
+    stop_slide(view, now_ms);
 }
 
 void list_view_restart_marquee(ListView *view, uint32_t now_ms)
@@ -301,9 +337,6 @@ static void draw_label(const ListView *view, Canvas *canvas, Row row, uint32_t n
 
 static void draw_row(const ListView *view, Canvas *canvas, Row row, uint32_t now_ms)
 {
-    if (row.selected) {
-        box_draw(canvas, view->theme->colors, theme_selection_box(view->theme), row.area);
-    }
     draw_label(view, canvas, draw_detail(view, canvas, draw_chevron(view, canvas, row)), now_ms);
 }
 
@@ -322,13 +355,23 @@ static void draw_scrollbar(const ListView *view, Canvas *canvas, Rect area, int 
     box_draw(canvas, theme->colors, &theme->boxes->scrollbar_thumb, thumb);
 }
 
-static Row make_row(const ListView *view, Rect rows, int top, int position)
+static Row make_row(const ListView *view, Rect rows, int top, int position, int box_offset)
 {
     const ThemeMetrics *metrics = &view->theme->metrics;
     int index = top + position;
-    Rect area = {rows.x, rows.y + position * metrics->row_height, rows.width, metrics->row_height};
+    int offset = position * metrics->row_height;
+    Rect area = {rows.x, rows.y + offset, rows.width, metrics->row_height};
     Rect text = {area.x + metrics->padding, area.y, area.width - 2 * metrics->padding, area.height};
-    return (Row){.index = index, .area = area, .text = text, .selected = index == view->selected};
+    int apart = offset > box_offset ? offset - box_offset : box_offset - offset;
+    return (Row){
+        .index = index, .area = area, .text = text, .selected = 2 * apart < metrics->row_height};
+}
+
+static void draw_selection(const ListView *view, Canvas *canvas, Rect rows, int box_offset)
+{
+    Rect box = {rows.x, rows.y + box_offset, rows.width, view->theme->metrics.row_height};
+    Canvas inside = canvas_clipped(canvas, rows);
+    box_draw(&inside, view->theme->colors, theme_selection_box(view->theme), box);
 }
 
 static void draw_section(const ListView *view, Canvas *canvas, Rect area, uint32_t now_ms)
@@ -359,8 +402,12 @@ void list_view_draw(const ListView *view, Canvas *canvas, Rect area, uint32_t no
         rows.width -= view->theme->metrics.scrollbar_width + view->theme->metrics.scrollbar_inset;
         draw_scrollbar(view, canvas, area, top);
     }
+    int box_offset = shown_offset(view, now_ms);
+    if (item_count(view) > 0) {
+        draw_selection(view, canvas, rows, box_offset);
+    }
     for (int position = 0; position < visible; position++) {
-        Row row = make_row(view, rows, top, position);
+        Row row = make_row(view, rows, top, position, box_offset);
         if (row.index >= item_count(view)) {
             break;
         }
