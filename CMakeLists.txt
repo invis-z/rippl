@@ -16,6 +16,7 @@ option(RIPPL_ADDRESS_SANITIZER "Build host code with AddressSanitizer" OFF)
 option(RIPPL_BUILD_SIM "Build the SDL2 simulator" ON)
 option(RIPPL_BUILD_TESTS "Build the host tests" ON)
 option(RIPPL_BUILD_DEVICE "Build the device firmware with cmake/arm-none-eabi.cmake" OFF)
+option(RIPPL_BUILD_WEB "Build the theme editor preview with cmake/wasm32.cmake" OFF)
 set(RIPPL_APP_RAM_BUDGET_BYTES 136192 CACHE STRING "Static RAM budget for src/ on the device")
 
 include(cmake/project_options.cmake)
@@ -29,6 +30,10 @@ endif()
 
 if(RIPPL_BUILD_DEVICE)
     add_subdirectory(platform/device)
+endif()
+
+if(RIPPL_BUILD_WEB)
+    add_subdirectory(platform/web)
 endif()
 
 if(RIPPL_BUILD_TESTS)

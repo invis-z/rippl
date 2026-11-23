@@ -651,6 +651,11 @@ PlayerStatus app_player_status(void)
     return player_status(&app.player);
 }
 
+void app_now_playing_layout(ThemeLayout *out)
+{
+    now_playing_builtin_layout(&app.screens.now_playing, out);
+}
+
 const char *app_now_playing_lyric(void)
 {
     return now_playing_lyric(&app.screens.now_playing);
