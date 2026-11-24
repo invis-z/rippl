@@ -908,3 +908,300 @@ export function emptyDrawing(screen) {
     elements: [element("box", box(0, 0, 320, 146), box(0, 0, 170, 280), { name: "Background", fill: screen === "home" ? "wallpaper" : "solid", color: "@background" })],
   };
 }
+
+export const FRAME_BUDGET_MS = 20;
+const INSNS_PER_MS = 125000;
+const STATIC_MARKS = new Set(["play", "pause", "next", "previous"]);
+
+function valueIsDynamic(source) {
+  return Boolean(source) && source !== "copy";
+}
+
+function conditionIsDynamic(when) {
+  if (!when?.on) {
+    return false;
+  }
+  if (when.on === "lit") {
+    return valueIsDynamic(when.source ?? "progress");
+  }
+  if (when.on === "above") {
+    return valueIsDynamic(when.source ?? "left");
+  }
+  return true;
+}
+
+function bindIsDynamic(item) {
+  const bind = item.bind ?? {};
+  for (const [key, rule] of Object.entries(bind)) {
+    if (!rule) {
+      continue;
+    }
+    if (key === "show") {
+      if (conditionIsDynamic(rule.when)) {
+        return true;
+      }
+    } else if (rule.when) {
+      if (conditionIsDynamic(rule.when)) {
+        return true;
+      }
+    } else if (rule.source) {
+      if (valueIsDynamic(rule.source)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function repeatCopies(item, shape) {
+  const repeat = item.repeat;
+  if (!repeat) {
+    return 1;
+  }
+  if (repeat.count === "items") {
+    const at = item.at?.[shape];
+    const columns = Math.max(1, whole(repeat.columns, 1));
+    const dy = whole(repeat.dy);
+    const rows = dy > 0 && at ? Math.max(1, Math.floor((whole(at.h) + 1) / dy)) : 1;
+    return Math.min(12, columns * rows);
+  }
+  return Math.max(1, Math.min(96, whole(repeat.count, 1)));
+}
+
+function itemOwnDynamic(item) {
+  if (bindIsDynamic(item)) {
+    return true;
+  }
+  switch (item.kind) {
+    case "cover":
+    case "number":
+    case "menu":
+      return true;
+    case "symbol":
+      return !STATIC_MARKS.has(item.mark);
+    case "text":
+      return item.source !== "custom" || Boolean(item.scroll);
+    case "group":
+      return Boolean(item.repeat && (item.repeat.count === "items" || whole(item.repeat.spin) !== 0));
+    default:
+      return false;
+  }
+}
+
+function leafCost(item, shape) {
+  const at = item.at?.[shape];
+  if (!at) {
+    return 0;
+  }
+  const w = Math.max(1, whole(at.w));
+  const h = Math.max(1, whole(at.h));
+  const area = w * h;
+  switch (item.kind) {
+    case "box": {
+      let cost = 0;
+      const border = Math.max(0, whole(item.border));
+      const radius = Math.max(0, whole(item.radius));
+      if (border > 0) {
+        cost += radius > 0 ? 6000 + area * 0.85 + radius * 90 : 2500 + area * 0.65;
+      }
+      const fill = item.fill ?? "solid";
+      if (fill === "gradient") {
+        cost += 4000 + area * 1.4;
+      } else if (fill === "wallpaper") {
+        cost += 3000 + area * 0.8;
+      } else if (fill !== "none") {
+        if (whole(item.taper) > 0) {
+          cost += 6000 + area * 2.2;
+        } else if (Math.max(0, radius - border) > 0) {
+          cost += 6000 + area * 0.85 + Math.max(0, radius - border) * 90;
+        } else {
+          cost += 2500 + area * 0.65;
+        }
+      }
+      if (whole(item.grid) > 1) {
+        cost += 3000 + area * 1.8;
+      }
+      return cost;
+    }
+    case "circle": {
+      const r = Math.max(1, Math.min(w, h) / 2);
+      const thick = Math.max(0, whole(item.thickness));
+      const inner = thick > 0 ? Math.max(0, r - thick) : 0;
+      const ringArea = Math.PI * (r * r - inner * inner);
+      const edgePx = 2 * Math.PI * (r + (inner > 0 ? inner : 0));
+      return 5000 + ringArea * 0.85 + edgePx * 110;
+    }
+    case "line": {
+      const len = Math.max(1, whole(at.w));
+      const thick = Math.max(1.5, Number(item.thickness) || 1);
+      return 5000 + len * thick * 18;
+    }
+    case "text":
+      if (item.source === "format") {
+        return 26000;
+      }
+      return item.source === "codecbox" ? 18000 : 18000;
+    case "cover": {
+      const side = Math.max(1, Math.min(w, h));
+      let cost = item.shape === "circle" ? 8000 + side * side * 9 : 6000 + side * side * 7.5;
+      if (item.shape !== "circle" && item.reflection) {
+        cost += side * Math.max(0, h - side) * 8;
+      }
+      if (item.shape !== "circle" && whole(item.corner) > 0) {
+        cost += 4 * (3000 + whole(item.corner) * 140);
+      }
+      return cost;
+    }
+    case "symbol":
+      return 8000 + area * 2.5;
+    case "number": {
+      const digits = item.show === "track" ? 3 : item.show === "volume" ? 2 : 5;
+      return 6000 + digits * 11000;
+    }
+    case "menu":
+      return 120000;
+    default:
+      return 0;
+  }
+}
+
+export function analyseDrawing(drawing, shape = "wide") {
+  const caches = drawing?.screen === "playing";
+  const parts = new Map();
+  const order = [];
+  let sawDynamic = false;
+  let cachedCount = 0;
+  let dynamicCount = 0;
+  let cachedInsns = 0;
+  let dynamicInsns = 0;
+  let blockedInsns = 0;
+
+  const visit = (items, inheritedDynamic, copies) => {
+    let groupDynamic = inheritedDynamic;
+    let groupBlocked = false;
+    let groupHasVisible = false;
+    let groupCost = 0;
+
+    for (const item of items ?? []) {
+      if (item.hidden || !item.at?.[shape]) {
+        continue;
+      }
+      groupHasVisible = true;
+      const ownDynamic = inheritedDynamic || itemOwnDynamic(item);
+      if (item.kind === "group") {
+        const groupCopies = copies * repeatCopies(item, shape);
+        const before = sawDynamic;
+        const inner = visit(item.children ?? [], ownDynamic, groupCopies);
+        const isDynamic = ownDynamic || inner.isDynamic;
+        if (isDynamic) {
+          sawDynamic = true;
+          dynamicCount++;
+        }
+        const status = isDynamic
+          ? "dynamic"
+          : !caches
+            ? "static"
+            : before || sawDynamic
+              ? "blocked"
+              : "cached";
+        if (status === "cached") {
+          cachedCount++;
+        }
+        const entry = {
+          id: item.id,
+          item,
+          isDynamic,
+          status,
+          blocksCache: false,
+          insns: inner.cost,
+        };
+        parts.set(item.id, entry);
+        order.push(entry);
+        groupDynamic ||= isDynamic;
+        groupBlocked ||= status === "blocked" || inner.hasBlocked;
+        groupCost += inner.cost;
+        continue;
+      }
+
+      const cost = Math.round(leafCost(item, shape) * copies);
+      const isDynamic = ownDynamic;
+      let status;
+      if (isDynamic) {
+        sawDynamic = true;
+        status = "dynamic";
+        dynamicCount++;
+        dynamicInsns += cost;
+      } else if (!caches) {
+        status = "static";
+        dynamicInsns += cost;
+      } else if (sawDynamic) {
+        status = "blocked";
+        blockedInsns += cost;
+      } else {
+        status = "cached";
+        cachedCount++;
+        cachedInsns += cost;
+      }
+      const entry = { id: item.id, item, isDynamic, status, blocksCache: false, insns: cost };
+      parts.set(item.id, entry);
+      order.push(entry);
+      groupDynamic ||= isDynamic;
+      groupBlocked ||= status === "blocked";
+      groupCost += cost;
+    }
+    return { isDynamic: groupDynamic, hasBlocked: groupBlocked, hasVisible: groupHasVisible, cost: groupCost };
+  };
+
+  visit(drawing?.elements ?? [], false, 1);
+
+  const blockedStatic = [];
+  const blockingDynamic = [];
+  if (caches) {
+    let staticAfter = false;
+    for (let index = order.length - 1; index >= 0; index--) {
+      const entry = order[index];
+      if (entry.status === "blocked") {
+        staticAfter = true;
+        if (entry.item.kind !== "group") {
+          blockedStatic.push(entry.item);
+        }
+      } else if (entry.status === "dynamic" && staticAfter) {
+        entry.blocksCache = true;
+        if (entry.item.kind !== "group") {
+          blockingDynamic.push(entry.item);
+        }
+      }
+    }
+    blockedStatic.reverse();
+    blockingDynamic.reverse();
+  }
+
+  const baseInsns = shape === "tall" ? 90000 : 60000;
+  const blitInsns = caches && cachedCount > 0 ? (shape === "tall" ? 115000 : 85000) : 0;
+  const totalInsns = baseInsns + blitInsns + dynamicInsns + blockedInsns;
+  const estimatedMs = Math.round((totalInsns / INSNS_PER_MS) * 10) / 10;
+  const blitMs = Math.round(((baseInsns + blitInsns) / INSNS_PER_MS) * 10) / 10;
+  const dynamicMs = Math.round((dynamicInsns / INSNS_PER_MS) * 10) / 10;
+  const blockedMs = Math.round((blockedInsns / INSNS_PER_MS) * 10) / 10;
+  const budgetMs = FRAME_BUDGET_MS;
+
+  return {
+    caches,
+    parts,
+    cachedCount,
+    dynamicCount,
+    blockedStatic,
+    blockingDynamic,
+    cachedInsns,
+    blitInsns: baseInsns + blitInsns,
+    dynamicInsns,
+    blockedInsns,
+    totalInsns,
+    blitMs,
+    dynamicMs,
+    blockedMs,
+    estimatedMs,
+    budgetMs,
+    overBudget: estimatedMs > budgetMs,
+  };
+}

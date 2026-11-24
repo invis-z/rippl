@@ -6,6 +6,7 @@ import {
   NUMBERS,
   TEXT_SOURCES,
   VALUES,
+  analyseDrawing,
   colorOf,
   element,
   findElement,
@@ -934,25 +935,57 @@ export function drawingEditor(ctx) {
     input.select();
   }
 
-  function tree(items, depth) {
+  function layerBadge(info) {
+    if (!info) {
+      return null;
+    }
+    if (info.status === "cached") {
+      return el("span", { class: "layer-tag cached", title: "Drawn once and cached in High RAM" }, "Cached");
+    }
+    if (info.status === "static") {
+      return el("span", { class: "layer-tag cached", title: "Stays still between frames" }, "Static");
+    }
+    if (info.status === "blocked") {
+      return el("span", {
+        class: "layer-tag blocked",
+        title: "Static part sitting in front of a moving part, so it redraws every frame. Move it behind moving parts to cache it.",
+      }, "Not cached");
+    }
+    if (info.blocksCache) {
+      return el("span", {
+        class: "layer-tag blocks",
+        title: "Redrawn every frame and sits under static parts. Move it forward so static parts behind it can be cached.",
+      }, "Under static");
+    }
+    return el("span", { class: "layer-tag dynamic", title: "Redrawn every frame" }, "Every frame");
+  }
+
+  function tree(items, depth, report) {
     const picks = new Set(chosen().map((item) => item.id));
     return items.flatMap((item) => {
+      const info = report?.parts.get(item.id);
       const label = el("span", { class: "layer-name", title: "Double-click to rename" }, nameOf(item));
       label.addEventListener("dblclick", (event) => {
         event.stopPropagation();
         renameInPlace(item, label);
       });
+      const badge = layerBadge(info);
       const row = el("li", {
         role: "option",
         "aria-selected": String(picks.has(item.id)),
-        class: [item.hidden ? "hidden-layer" : "", item.at?.[shape()] ? "" : "elsewhere", item.locked ? "locked-layer" : ""].join(" ").trim(),
+        class: [
+          item.hidden ? "hidden-layer" : "",
+          item.at?.[shape()] ? "" : "elsewhere",
+          item.locked ? "locked-layer" : "",
+          info?.blocksCache || info?.status === "blocked" ? "warn-layer" : "",
+        ].join(" ").trim(),
         style: `padding-left: ${10 + depth * 16}px`,
         onclick: (event) => {
           choose(item.id, event.shiftKey || event.ctrlKey || event.metaKey);
           ctx.render();
         },
       },
-      label,
+      el("span", { class: "layer-head" }, label, badge),
       el("span", { class: "tools" },
         tool(item.locked ? "Unlock" : "Lock so it can't be moved on the screen", item.locked ? LOCK : UNLOCK, () => {
           item.locked = !item.locked;
@@ -981,7 +1014,7 @@ export function drawingEditor(ctx) {
         }
         ctx.render();
       } }, icon(open ? "m6 8 4 4 4-4" : "m8 6 4 4-4 4")));
-      return open ? [row, ...tree(item.children ?? [], depth + 1)] : [row];
+      return open ? [row, ...tree(item.children ?? [], depth + 1, report)] : [row];
     });
   }
 
@@ -1560,10 +1593,54 @@ export function drawingEditor(ctx) {
     return sections;
   }
 
-  function partList() {
+  function msText(ms) {
+    return `${ms < 10 ? ms.toFixed(1).replace(/\.0$/, "") : Math.round(ms)} ms`;
+  }
+
+  function frameCostBar(report) {
+    const scale = Math.max(report.budgetMs, report.estimatedMs, 1);
+    const pieces = [
+      [report.caches && report.cachedCount > 0 ? "Cached blit" : "Base", report.blitMs, "memory-part-1"],
+      ["Every frame", report.dynamicMs, "memory-part-0"],
+      ["Uncached static", report.blockedMs, "memory-part-2"],
+    ].filter(([, ms]) => ms > 0);
+    const bar = el("div", {
+      class: "memory-track",
+      role: "img",
+      "aria-label": `Estimated frame cost ${msText(report.estimatedMs)} of ${report.budgetMs} ms budget`,
+      title: `~${msText(report.estimatedMs)} of ${report.budgetMs} ms budget`,
+    }, pieces.map(([label, ms, tone]) => el("span", {
+      class: `memory-part ${tone}`,
+      style: `width: ${(ms * 100) / scale}%`,
+      title: `${label}: ~${msText(ms)}`,
+    })));
+    const legend = el("ul", { class: "memory-legend" }, pieces.map(([label, ms, tone]) =>
+      el("li", {}, el("span", { class: `memory-dot ${tone}` }), `${label} ~${msText(ms)}`)));
+    return el("div", { class: report.overBudget ? "memory frame-cost over" : "memory frame-cost" },
+      el("p", { class: "memory-total" }, report.overBudget
+        ? `Over frame budget: ~${msText(report.estimatedMs)} of ${report.budgetMs} ms`
+        : `Estimated frame cost: ~${msText(report.estimatedMs)} of ${report.budgetMs} ms`),
+      bar,
+      legend,
+      report.overBudget
+        ? el("p", { class: "hint" }, "This screen may drop frames while playing. Simplify moving parts or move static parts behind them so they can be cached.")
+        : null);
+  }
+
+  function cacheOrderNotice(report) {
+    if (!report.caches || report.blockedStatic.length === 0) {
+      return null;
+    }
+    const moving = report.blockingDynamic.length;
+    const still = report.blockedStatic.length;
+    return el("p", { class: "notice cache-notice" },
+      `${moving} moving ${moving === 1 ? "part sits" : "parts sit"} under ${still} static ${still === 1 ? "one" : "ones"}, so ${still === 1 ? "it redraws" : "they redraw"} every frame (~${msText(report.blockedMs)} extra). Move moving parts forward or static ones back to cache them.`);
+  }
+
+  function partList(report) {
     const list = el("ul", { class: "layers group scroller", role: "listbox", "aria-label": "Parts, back to front", onscroll: () => {
       listScroll = list.scrollTop;
-    } }, tree(drawing().elements, 0));
+    } }, tree(drawing().elements, 0, report));
     requestAnimationFrame(() => {
       list.scrollTop = listScroll;
       const row = list.querySelector('[aria-selected="true"]');
@@ -1588,9 +1665,12 @@ export function drawingEditor(ctx) {
   }
 
   function parts() {
+    const report = analyseDrawing(drawing(), shape());
     return [
+      frameCostBar(report),
+      cacheOrderNotice(report),
       el("p", { class: "hint" }, ctx.sideNote?.() ?? "Back to front."),
-      partList(),
+      partList(report),
       heldParts() ? el("div", { class: "actions" }, el("button", { type: "button", onclick: () => paste() }, "Paste")) : null,
     ];
   }
@@ -1599,5 +1679,9 @@ export function drawingEditor(ctx) {
     return addMenu(screen);
   }
 
-  return { settings, parts, adding, add, frame, picks: chosen, dragging: () => Boolean(drag), removeChosen, duplicateChosen, groupChosen, overlay, down, deeper, move, up, nudge, key, lineUp, spread, nameOf, colorOf, walk };
+  function analyse() {
+    return analyseDrawing(drawing(), shape());
+  }
+
+  return { settings, parts, adding, add, analyse, frame, picks: chosen, dragging: () => Boolean(drag), removeChosen, duplicateChosen, groupChosen, overlay, down, deeper, move, up, nudge, key, lineUp, spread, nameOf, colorOf, walk };
 }
