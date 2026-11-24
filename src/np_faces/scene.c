@@ -10,6 +10,7 @@
 #include "ui/backdrop.h"
 #include "ui/icons.h"
 #include "ui/label.h"
+#include "ui/rippl_logo.h"
 #include "ui/theme_engine.h"
 
 #define LABEL_RED COLOR_RGB(176, 36, 32)
@@ -68,27 +69,92 @@ _Static_assert((int)SCENE_SOURCE_COUNT <= (int)SCENE_ITEM_BASE,
 _Static_assert((int)SCENE_ITEM_BASE < (int)SCENE_STRING_BASE,
                "the menu items come before the strings");
 
-#define SCENE_OP(id, name, kind, count, raw) _Static_assert(count <= SCENE_MOST_OPERANDS, #name);
+enum {
+    OP_COUNT_MASK = 0x0Fu,
+    OP_KIND_SHIFT = 4,
+    OP_KIND_MASK = 0x03u,
+    OP_CLASS_SHIFT = 6
+};
+
+typedef enum OpClass {
+    OP_CLASS_STATIC,
+    OP_CLASS_STATE,
+    OP_CLASS_DYNAMIC,
+    OP_CLASS_SOURCE
+} OpClass;
+
+#define OP_RAW_MASK(id)                                                                            \
+    ((id) == SCENE_OP_CONST ? 6 : (id) == SCENE_OP_JUMP_ZERO ? 2 : (id) == SCENE_OP_JUMP ? 1 : 0)
+
+#define OP_IS_STATE(id)                                                                            \
+    ((id) == SCENE_OP_TURN || (id) == SCENE_OP_CLIP || (id) == SCENE_OP_UNCLIP ||                  \
+     (id) == SCENE_OP_SEGMENT_STYLE)
+
+#define OP_IS_DYNAMIC(id)                                                                          \
+    ((id) == SCENE_OP_PROGRESS || (id) == SCENE_OP_VOLUME_WIDTH ||                                 \
+     (id) == SCENE_OP_QUEUE_PROGRESS || (id) == SCENE_OP_ITEM || (id) == SCENE_OP_ITEMS ||         \
+     (id) == SCENE_OP_SELECTED || (id) == SCENE_OP_COVER || (id) == SCENE_OP_ROUND_COVER ||        \
+     (id) == SCENE_OP_REFLECT || (id) == SCENE_OP_TURNED_COVER || (id) == SCENE_OP_BAR ||          \
+     (id) == SCENE_OP_TIMES || (id) == SCENE_OP_FORMAT || (id) == SCENE_OP_CODEC ||                \
+     (id) == SCENE_OP_LINE || (id) == SCENE_OP_MENU || (id) == SCENE_OP_ITEM_ICON)
+
+#define OP_IS_SOURCE(id)                                                                           \
+    ((id) == SCENE_OP_PRESENT || (id) == SCENE_OP_WIDTH || (id) == SCENE_OP_TEXT ||                \
+     (id) == SCENE_OP_PLAIN)
+
+#define OP_CLASS(id)                                                                               \
+    (OP_IS_STATE(id)     ? OP_CLASS_STATE                                                          \
+     : OP_IS_DYNAMIC(id) ? OP_CLASS_DYNAMIC                                                        \
+     : OP_IS_SOURCE(id)  ? OP_CLASS_SOURCE                                                         \
+                         : OP_CLASS_STATIC)
+
+#define SCENE_OP(id, name, kind, count, raw)                                                       \
+    _Static_assert((count) <= SCENE_MOST_OPERANDS && (raw) == OP_RAW_MASK(SCENE_OP_##id), #name);
 #include "np_faces/scene_ops.def"
 #undef SCENE_OP
 
-#define SCENE_OP(id, name, kind, count, raw) count,
-RIPPL_NP_FACES_DATA static const uint8_t COUNTS[SCENE_OP_COUNT] = {
+#define SCENE_OP(id, name, kind, count, raw)                                                       \
+    (uint8_t)((count) | ((SCENE_KIND_##kind) << OP_KIND_SHIFT) |                                   \
+              (OP_CLASS(SCENE_OP_##id) << OP_CLASS_SHIFT)),
+RIPPL_NP_FACES_DATA static const uint8_t OP_META[SCENE_OP_COUNT] = {
 #include "np_faces/scene_ops.def"
 };
 #undef SCENE_OP
+#undef OP_CLASS
+#undef OP_IS_SOURCE
+#undef OP_IS_DYNAMIC
+#undef OP_IS_STATE
 
-#define SCENE_OP(id, name, kind, count, raw) SCENE_KIND_##kind,
-RIPPL_NP_FACES_DATA static const uint8_t KINDS[SCENE_OP_COUNT] = {
-#include "np_faces/scene_ops.def"
-};
-#undef SCENE_OP
+RIPPL_NP_FACES_CODE static uint32_t op_count(SceneOp op)
+{
+    return OP_META[op] & OP_COUNT_MASK;
+}
 
-#define SCENE_OP(id, name, kind, count, raw) raw,
-RIPPL_NP_FACES_DATA static const uint8_t RAW[SCENE_OP_COUNT] = {
-#include "np_faces/scene_ops.def"
-};
-#undef SCENE_OP
+RIPPL_NP_FACES_CODE static SceneKind op_kind(SceneOp op)
+{
+    return (SceneKind)((OP_META[op] >> OP_KIND_SHIFT) & OP_KIND_MASK);
+}
+
+RIPPL_NP_FACES_CODE static OpClass op_class(SceneOp op)
+{
+    return (OpClass)(OP_META[op] >> OP_CLASS_SHIFT);
+}
+
+RIPPL_NP_FACES_CODE static uint32_t op_raw(SceneOp op)
+{
+    return (uint32_t)OP_RAW_MASK(op);
+}
+
+#undef OP_RAW_MASK
+
+typedef struct SceneText {
+    FaceTimes times;
+    char feedback[FACE_FEEDBACK_CAPACITY];
+    const char *feedback_text;
+    char byline[BYLINE_CAPACITY];
+    char place[PLACE_CAPACITY];
+    char time_of[TIME_OF_CAPACITY];
+} SceneText;
 
 typedef struct Machine {
     int32_t registers[SCENE_REGISTERS];
@@ -100,12 +166,8 @@ typedef struct Machine {
     Canvas canvases[MOST_CLIPS + 1];
     int depth;
     SegmentStyle style;
-    FaceTimes times;
-    char feedback[FACE_FEEDBACK_CAPACITY];
-    const char *feedback_text;
-    char byline[BYLINE_CAPACITY];
-    char place[PLACE_CAPACITY];
-    char time_of[TIME_OF_CAPACITY];
+    SceneText *text;
+    SceneText inline_text;
     uint8_t turn;
     uint8_t cache_mode;
     uint16_t static_draws;
@@ -247,17 +309,17 @@ RIPPL_NP_FACES_CODE static const char *source_text(Machine *machine, int32_t sou
     case SCENE_SOURCE_MODES:
         return frame->modes;
     case SCENE_SOURCE_FEEDBACK:
-        return machine->feedback_text;
+        return machine->text->feedback_text;
     case SCENE_SOURCE_ELAPSED:
-        return machine->times.elapsed;
+        return machine->text->times.elapsed;
     case SCENE_SOURCE_REMAINING:
-        return machine->times.remaining;
+        return machine->text->times.remaining;
     case SCENE_SOURCE_BYLINE:
-        return machine->byline;
+        return machine->text->byline;
     case SCENE_SOURCE_PLACE:
-        return machine->place;
+        return machine->text->place;
     case SCENE_SOURCE_TIME_OF:
-        return machine->time_of;
+        return machine->text->time_of;
     default:
         if (source >= SCENE_ITEM_BASE && source < SCENE_STRING_BASE) {
             return item_label(frame, source - SCENE_ITEM_BASE);
@@ -405,8 +467,16 @@ RIPPL_NP_FACES_CODE static void draw_text_op(Machine *machine, SceneOp op, Canva
                        (Label){rect_from(v + 2), text});
         }
     } else if (op == SCENE_OP_TIMES) {
-        FaceLine line = line_of(machine, v[0], v + 1, (Color)v[5], (Color)v[6], FACE_ALIGN_LEFT);
-        face_times_draw(canvas, frame, &line);
+        const Font *font = font_of(machine, v[0]);
+        Rect area = rect_from(v + 1);
+        if (face_text_visible(canvas, font, area)) {
+            label_draw(canvas, (TextStyle){font, (Color)v[5]},
+                       (Label){area, machine->text->times.elapsed});
+            Rect right =
+                face_fitted_area(font, area, machine->text->times.remaining, FACE_ALIGN_RIGHT);
+            label_draw(canvas, (TextStyle){font, (Color)v[6]},
+                       (Label){right, machine->text->times.remaining});
+        }
     } else if (op == SCENE_OP_FORMAT) {
         FaceLine line = line_of(machine, v[0], v + 1, (Color)v[6], (Color)v[6], v[5]);
         face_format_row(canvas, frame, &line);
@@ -590,8 +660,8 @@ RIPPL_NP_FACES_CODE static void draw_flat(Machine *machine, SceneOp op)
     case SCENE_OP_TURNED_COVER: {
         Image cover = machine->frame->cover;
         if (cover.pixels == NULL) {
-            cover = face_logo_cover(machine->frame->scratch, machine->frame->scratch_size,
-                                    LABEL_RED, LABEL_CREAM);
+            cover = rippl_logo_cover(machine->frame->scratch, machine->frame->scratch_size,
+                                     LABEL_RED, LABEL_CREAM);
         }
         turned_cover(canvas, cover, (Point){v[0], v[1]}, v[2], (uint8_t)v[3]);
         break;
@@ -614,14 +684,17 @@ RIPPL_NP_FACES_DATA static const char OF[] = " / ";
 RIPPL_NP_FACES_CODE static void write_byline(Machine *machine)
 {
     const NowPlayingFrame *frame = machine->frame;
-    StringBuilder builder = string_builder_make(machine->byline, sizeof machine->byline);
-    if (present(frame->artist)) {
+    StringBuilder builder =
+        string_builder_make(machine->text->byline, sizeof machine->text->byline);
+    bool has_artist = present(frame->artist);
+    bool has_album = present(frame->album);
+    if (has_artist) {
         string_builder_append(&builder, frame->artist);
     }
-    if (present(frame->artist) && present(frame->album)) {
+    if (has_artist && has_album) {
         string_builder_append(&builder, SEPARATOR);
     }
-    if (present(frame->album)) {
+    if (has_album) {
         string_builder_append(&builder, frame->album);
     }
 }
@@ -629,7 +702,7 @@ RIPPL_NP_FACES_CODE static void write_byline(Machine *machine)
 RIPPL_NP_FACES_CODE static void write_place(Machine *machine)
 {
     PlayQueuePlace place = machine->frame->status->place;
-    StringBuilder builder = string_builder_make(machine->place, sizeof machine->place);
+    StringBuilder builder = string_builder_make(machine->text->place, sizeof machine->text->place);
     if (place.total != 0 && place.number != 0 && place.number <= place.total) {
         string_builder_append_unsigned(&builder, place.number);
         string_builder_append_char(&builder, '/');
@@ -641,7 +714,8 @@ RIPPL_NP_FACES_CODE static void write_time_of(Machine *machine)
 {
     const NowPlayingFrame *frame = machine->frame;
     char part[FACE_TIME_CAPACITY];
-    StringBuilder builder = string_builder_make(machine->time_of, sizeof machine->time_of);
+    StringBuilder builder =
+        string_builder_make(machine->text->time_of, sizeof machine->text->time_of);
     format_duration(frame->shown_ms, part, sizeof part);
     string_builder_append(&builder, part);
     if (frame->status->duration_ms != 0) {
@@ -869,47 +943,12 @@ RIPPL_NP_FACES_CODE static void load_inputs(Machine *machine)
     r[SCENE_INPUT_HAS_COVER] = frame->cover.pixels != NULL;
     r[SCENE_INPUT_POSITION] = wrapped(frame->status->position_ms);
     r[SCENE_INPUT_FLIPPED] = frame->flipped;
-    machine->feedback_text = face_feedback_text(frame, machine->feedback, sizeof machine->feedback);
-    face_times_text(frame, &machine->times);
+    machine->text->feedback_text =
+        face_feedback_text(frame, machine->text->feedback, sizeof machine->text->feedback);
+    face_times_text(frame, &machine->text->times);
     write_byline(machine);
     write_place(machine);
     write_time_of(machine);
-}
-
-#define OP_BIT(op, w)                                                                              \
-    (((uint32_t)(op) / WORD_BITS == (w)) ? (1u << ((uint32_t)(op) % WORD_BITS)) : 0u)
-
-#define STATE_WORD(w)                                                                              \
-    (OP_BIT(SCENE_OP_TURN, w) | OP_BIT(SCENE_OP_CLIP, w) | OP_BIT(SCENE_OP_UNCLIP, w) |            \
-     OP_BIT(SCENE_OP_SEGMENT_STYLE, w))
-
-#define DYNAMIC_WORD(w)                                                                            \
-    (OP_BIT(SCENE_OP_PROGRESS, w) | OP_BIT(SCENE_OP_VOLUME_WIDTH, w) |                             \
-     OP_BIT(SCENE_OP_QUEUE_PROGRESS, w) | OP_BIT(SCENE_OP_ITEM, w) | OP_BIT(SCENE_OP_ITEMS, w) |   \
-     OP_BIT(SCENE_OP_SELECTED, w) | OP_BIT(SCENE_OP_COVER, w) | OP_BIT(SCENE_OP_ROUND_COVER, w) |  \
-     OP_BIT(SCENE_OP_REFLECT, w) | OP_BIT(SCENE_OP_TURNED_COVER, w) | OP_BIT(SCENE_OP_BAR, w) |    \
-     OP_BIT(SCENE_OP_TIMES, w) | OP_BIT(SCENE_OP_FORMAT, w) | OP_BIT(SCENE_OP_CODEC, w) |          \
-     OP_BIT(SCENE_OP_LINE, w) | OP_BIT(SCENE_OP_MENU, w) | OP_BIT(SCENE_OP_ITEM_ICON, w))
-
-#define SOURCE_WORD(w)                                                                             \
-    (OP_BIT(SCENE_OP_PRESENT, w) | OP_BIT(SCENE_OP_WIDTH, w) | OP_BIT(SCENE_OP_TEXT, w) |          \
-     OP_BIT(SCENE_OP_PLAIN, w))
-
-RIPPL_NP_FACES_DATA static const uint32_t STATE_OPS[3] = {STATE_WORD(0), STATE_WORD(1),
-                                                          STATE_WORD(2)};
-RIPPL_NP_FACES_DATA static const uint32_t DYNAMIC_OPS[3] = {DYNAMIC_WORD(0), DYNAMIC_WORD(1),
-                                                            DYNAMIC_WORD(2)};
-RIPPL_NP_FACES_DATA static const uint32_t SOURCE_OPS[3] = {SOURCE_WORD(0), SOURCE_WORD(1),
-                                                           SOURCE_WORD(2)};
-
-#undef SOURCE_WORD
-#undef DYNAMIC_WORD
-#undef STATE_WORD
-#undef OP_BIT
-
-RIPPL_NP_FACES_CODE static bool op_in(const uint32_t *mask, SceneOp op)
-{
-    return (mask[(uint32_t)op / WORD_BITS] >> ((uint32_t)op % WORD_BITS) & 1u) != 0;
 }
 
 RIPPL_NP_FACES_CODE static uint16_t read_u16(const uint8_t *bytes)
@@ -943,20 +982,22 @@ RIPPL_NP_FACES_CODE static void set_tainted(Machine *machine, uint16_t reg, bool
 RIPPL_NP_FACES_CODE __attribute__((noinline)) static bool op_is_dynamic(const Machine *machine,
                                                                         SceneOp op, uint32_t first)
 {
-    if (op_in(DYNAMIC_OPS, op) ||
-        (op_in(SOURCE_OPS, op) && machine->values[first] < SCENE_STRING_BASE)) {
+    OpClass kind = op_class(op);
+    if (kind == OP_CLASS_DYNAMIC ||
+        (kind == OP_CLASS_SOURCE && machine->values[first] < SCENE_STRING_BASE)) {
         return true;
     }
-    for (uint32_t index = first; index < COUNTS[op]; index++) {
-        if ((RAW[op] >> index & 1u) == 0 && is_tainted(machine, machine->raw[index])) {
+    uint32_t raw_mask = op_raw(op);
+    uint32_t count = op_count(op);
+    for (uint32_t index = first; index < count; index++) {
+        if ((raw_mask >> index & 1u) == 0 && is_tainted(machine, machine->raw[index])) {
             return true;
         }
     }
     return false;
 }
 
-RIPPL_NP_FACES_CODE __attribute__((noinline)) static bool
-scan_tainted_branch(Machine *machine, uint32_t at, uint32_t target)
+RIPPL_NP_FACES_CODE static bool scan_tainted_branch(Machine *machine, uint32_t at, uint32_t target)
 {
     const SceneCode *scene = &machine->frame->scene;
     if (target < at || target > scene->code_size) {
@@ -966,11 +1007,13 @@ scan_tainted_branch(Machine *machine, uint32_t at, uint32_t target)
     uint32_t end = target;
     while (p < end) {
         SceneOp op = (SceneOp)scene->code[p];
-        if (op >= SCENE_OP_COUNT || op == SCENE_OP_END ||
-            p + 1 + 2u * COUNTS[op] > scene->code_size || KINDS[op] == SCENE_KIND_DRAW) {
+        if (op >= SCENE_OP_COUNT || op == SCENE_OP_END) {
             return false;
         }
-        uint32_t next = p + 1 + 2u * COUNTS[op];
+        uint32_t next = p + 1 + 2u * op_count(op);
+        if (next > scene->code_size || op_kind(op) == SCENE_KIND_DRAW) {
+            return false;
+        }
         if (op == SCENE_OP_JUMP || op == SCENE_OP_JUMP_ZERO) {
             uint32_t dest = read_u16(scene->code + p + (op == SCENE_OP_JUMP ? 1 : 3));
             if (dest < next || dest > scene->code_size) {
@@ -979,7 +1022,7 @@ scan_tainted_branch(Machine *machine, uint32_t at, uint32_t target)
             if (dest > end) {
                 end = dest;
             }
-        } else if (KINDS[op] == SCENE_KIND_VALUE) {
+        } else if (op_kind(op) == SCENE_KIND_VALUE) {
             set_tainted(machine, read_u16(scene->code + p + 1), true);
         }
         p = next;
@@ -1001,27 +1044,18 @@ RIPPL_NP_FACES_CODE __attribute__((noinline)) static void capture_static(Machine
     strip_cache_capture(scene->cache, scene->cache_size, &machine->canvases[0], draws);
 }
 
-RIPPL_NP_FACES_CODE __attribute__((noinline)) static void open_cache(Machine *machine)
+RIPPL_NP_FACES_CODE static void open_cache(Machine *machine, const StripCacheKey *key)
 {
-    const NowPlayingFrame *frame = machine->frame;
-    const SceneCode *scene = &frame->scene;
-    if (scene->code == NULL || scene->code_size == 0 || scene->cache == NULL) {
+    const SceneCode *scene = &machine->frame->scene;
+    if (scene->cache == NULL) {
         return;
     }
-    uint32_t paper =
-        frame->theme->wallpaper != NULL && frame->theme->wallpaper->ready && theme_engine() != NULL;
-    StripCacheKey key = {
-        .owner = scene->code,
-        .stamp = scene->cache_stamp,
-        .owner_size = scene->code_size,
-        .meta = (uint32_t)frame->theme->colors->background | (uint32_t)frame->flipped << 16 |
-                paper << 17,
-        .area = frame->area,
-    };
     StripCacheAction action = strip_cache_open(scene->cache, scene->cache_size,
-                                               &machine->canvases[0], &key, &machine->static_draws);
+                                               &machine->canvases[0], key, &machine->static_draws);
     machine->cache_mode = (uint8_t)action;
     if (action == STRIP_CACHE_START) {
+        __builtin_memset(machine->tainted, 0, sizeof machine->tainted);
+        machine->tainted_until = 0;
         uint32_t clean = (1u << SCENE_INPUT_X) | (1u << SCENE_INPUT_Y) | (1u << SCENE_INPUT_WIDTH) |
                          (1u << SCENE_INPUT_HEIGHT) | (1u << SCENE_INPUT_FLIPPED);
         machine->tainted[0] = ((1u << SCENE_INPUT_COUNT) - 1u) & ~clean;
@@ -1035,32 +1069,93 @@ RIPPL_NP_FACES_CODE __attribute__((noinline)) static void open_cache(Machine *ma
 RIPPL_NP_FACES_CODE void scene_draw(const NowPlayingFrame *frame, Canvas *canvas)
 {
     const SceneCode *scene = &frame->scene;
-    if (scene->work == NULL || scene->work_size < sizeof(Machine)) {
+    if (scene->work == NULL || scene->work_size < sizeof(Machine) || scene->code == NULL ||
+        scene->code_size == 0) {
         return;
     }
     Machine *machine = scene->work;
-    *machine = (Machine){.frame = frame};
+    machine->frame = frame;
     machine->canvases[0] = *canvas;
+    machine->depth = 0;
+    machine->turn = 0;
+    machine->style = (SegmentStyle){0};
+    machine->cache_mode = STRIP_CACHE_NONE;
+    machine->static_draws = 0;
+    uint32_t paper =
+        frame->theme->wallpaper != NULL && frame->theme->wallpaper->ready && theme_engine() != NULL;
+    const PlayerStatus *status = frame->status;
+    StripListKey list_key = {
+        .cache =
+            {
+                .owner = scene->code,
+                .stamp = scene->cache_stamp,
+                .owner_size = scene->code_size,
+                .meta = (uint32_t)frame->theme->colors->background |
+                        (uint32_t)frame->flipped << 16 | paper << 17,
+                .area = frame->area,
+            },
+        .cover = frame->cover.pixels,
+        .theme = frame->theme,
+        .menu = frame->menu,
+        .now_ms = frame->now_ms,
+        .shown_ms = frame->shown_ms,
+        .position_ms = status->position_ms,
+        .duration_ms = status->duration_ms,
+        .tick = frame->tick,
+        .extra = status->place.number ^ (status->place.total << 16) ^
+                 (uint32_t)(frame->menu != NULL ? frame->menu->selected : 0),
+    };
+    open_cache(machine, &list_key.cache);
+    list_key.flags = (uint32_t)frame->playing | (uint32_t)status->state << 1 |
+                     (uint32_t)frame->scrubbing << 3 | (uint32_t)frame->volume_shown << 4 |
+                     (uint32_t)status->shuffle << 5 | (uint32_t)status->repeat << 7 |
+                     (uint32_t)frame->feedback << 9 | (uint32_t)machine->cache_mode << 12 |
+                     (uint32_t)status->volume << 16;
+    Rect shown = rect_intersection(canvas->clip, frame->area);
+    StripList *active_list = NULL;
+    void *payload = NULL;
+    const int32_t *cmds = NULL;
+    uint32_t words = 0;
+    StripListAction list_action =
+        strip_list_open(scene->cache, scene->cache_size, shown, &list_key,
+                        (uint32_t)sizeof(SceneText), &active_list, &payload, &cmds, &words);
+    if (list_action == STRIP_LIST_REPLAY) {
+        machine->text = payload;
+        uint32_t pos = 0;
+        while (pos < words) {
+            SceneOp op = (SceneOp)cmds[pos++];
+            uint32_t count = op_count(op);
+            for (uint32_t i = 0; i < count; i++) {
+                machine->values[i] = cmds[pos++];
+            }
+            timed_draw(machine, op);
+        }
+        return;
+    }
+    __builtin_memset(machine->registers, 0, sizeof machine->registers);
+    machine->text = list_action == STRIP_LIST_RECORD ? payload : &machine->inline_text;
     load_inputs(machine);
-    open_cache(machine);
     uint16_t draws = 0;
     uint32_t at = 0;
-    for (uint32_t step = 0; step < SCENE_MOST_STEPS && scene->code != NULL && at < scene->code_size;
-         step++) {
+    for (uint32_t step = 0; step < SCENE_MOST_STEPS && at < scene->code_size; step++) {
         uint32_t prev_at = at;
         SceneOp op = (SceneOp)scene->code[at];
-        if (op >= SCENE_OP_COUNT || op == SCENE_OP_END ||
-            at + 1 + 2u * COUNTS[op] > scene->code_size) {
+        if (op >= SCENE_OP_COUNT || op == SCENE_OP_END) {
             break;
         }
-        for (uint32_t index = 0; index < COUNTS[op]; index++) {
+        uint32_t count = op_count(op);
+        if (at + 1 + 2u * count > scene->code_size) {
+            break;
+        }
+        uint32_t raw_mask = op_raw(op);
+        for (uint32_t index = 0; index < count; index++) {
             const uint8_t *field = scene->code + at + 1 + 2 * index;
             machine->raw[index] = read_u16(field);
-            bool raw = (RAW[op] >> index & 1u) != 0;
+            bool raw = (raw_mask >> index & 1u) != 0;
             machine->values[index] =
                 raw ? machine->raw[index] : operand(machine, machine->raw[index]);
         }
-        at += 1 + 2u * COUNTS[op];
+        at += 1 + 2u * count;
         if (op == SCENE_OP_JUMP || op == SCENE_OP_JUMP_ZERO) {
             if (machine->cache_mode == STRIP_CACHE_START && op == SCENE_OP_JUMP_ZERO &&
                 prev_at >= machine->tainted_until && is_tainted(machine, machine->raw[0]) &&
@@ -1069,8 +1164,8 @@ RIPPL_NP_FACES_CODE void scene_draw(const NowPlayingFrame *frame, Canvas *canvas
             }
             bool taken = op == SCENE_OP_JUMP || machine->values[0] == 0;
             at = taken ? jump_target(machine, op) : at;
-        } else if (KINDS[op] == SCENE_KIND_DRAW) {
-            bool state_op = op_in(STATE_OPS, op);
+        } else if (op_kind(op) == SCENE_KIND_DRAW) {
+            bool state_op = op_class(op) == OP_CLASS_STATE;
             if (machine->cache_mode == STRIP_CACHE_REPLAY && !state_op &&
                 draws < machine->static_draws) {
                 draws++;
@@ -1082,6 +1177,9 @@ RIPPL_NP_FACES_CODE void scene_draw(const NowPlayingFrame *frame, Canvas *canvas
                 } else if (!state_op) {
                     draws++;
                 }
+            }
+            if (active_list != NULL) {
+                strip_list_push(active_list, (uint32_t)op, machine->values, count);
             }
             timed_draw(machine, op);
             if (machine->cache_mode == STRIP_CACHE_CONTINUE && !state_op &&

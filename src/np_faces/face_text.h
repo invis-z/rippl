@@ -74,4 +74,3 @@ void face_outline(Canvas *canvas, Rect box, Color color);
 int face_codec_width(const Font *font, const char *codec);
 void face_codec_draw(Canvas *canvas, const FaceLine *line, const char *codec);
 void face_format_row(Canvas *canvas, const NowPlayingFrame *frame, const FaceLine *line);
-Image face_logo_cover(void *scratch, uint32_t scratch_size, Color background, Color foreground);
