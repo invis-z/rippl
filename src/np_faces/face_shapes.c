@@ -320,6 +320,9 @@ RIPPL_NP_FACES_CODE void shape_ring(Canvas *canvas, ShapeRing ring, Color color)
     int top = larger((ring.y_q4 - ring.outer_q4) >> PIXEL_SHIFT, canvas->clip.y);
     int bottom = smaller(((ring.y_q4 + ring.outer_q4) >> PIXEL_SHIFT) + 1,
                          canvas->clip.y + canvas->clip.height);
+    if (top >= bottom) {
+        return;
+    }
     Edge edges[2] = {edge_of(ring.outer_q4), edge_of(ring.inner_q4)};
     for (int y = top; y < bottom; y++) {
         ring_row(canvas, &ring, edges, y, color);
@@ -343,8 +346,11 @@ RIPPL_NP_FACES_CODE static int corner_distance(int position, int start, int leng
 
 RIPPL_NP_FACES_CODE void shape_rounded(Canvas *canvas, Rect area, int radius, Color color)
 {
-    radius = smaller(radius, smaller(area.width, area.height) / 2);
     Rect shown = rect_intersection(canvas->clip, area);
+    if (rect_is_empty(shown)) {
+        return;
+    }
+    radius = smaller(radius, smaller(area.width, area.height) / 2);
     int inside = radius * SHAPE_Q4 - HALF_PIXEL_Q4;
     int near = (area.x + radius) * SHAPE_Q4 - HALF_PIXEL_Q4;
     int far = (area.x + area.width - radius) * SHAPE_Q4 - HALF_PIXEL_Q4;
@@ -391,19 +397,6 @@ RIPPL_NP_FACES_CODE static int band_coverage(int inside)
     return level <= 0 ? 0 : level >= SHAPE_Q4 ? SHAPE_Q4 : level;
 }
 
-RIPPL_NP_FACES_CODE static uint8_t spoke_alpha(const ShapeSpoke *spoke, int sine, int cosine,
-                                               int dx, int dy)
-{
-    int across = dx * cosine + dy * sine;
-    int along = dx * sine - dy * cosine;
-    int half = spoke->width_q4 * SHAPE_UNIT / 2;
-    int from = spoke->from * SPOKE_Q4_UNIT;
-    int to = spoke->to * SPOKE_Q4_UNIT;
-    int wide = band_coverage(half - (across < 0 ? -across : across));
-    int deep = band_coverage(smaller(along - from, to - along));
-    return coverage(smaller(wide, deep));
-}
-
 RIPPL_NP_FACES_CODE static void narrow(Span *span, int base, int step, Span open)
 {
     if (step == 0) {
@@ -433,30 +426,47 @@ RIPPL_NP_FACES_CODE static void spoke_draw(Canvas *canvas, const ShapeSpoke *spo
     int top = larger(spoke->pivot.y + smaller(near, far) - spread, canvas->clip.y);
     int bottom = smaller(spoke->pivot.y + larger(near, far) + spread + 1,
                          canvas->clip.y + canvas->clip.height);
+    if (top >= bottom) {
+        return;
+    }
     int left_reach = spoke->from * sine / SHAPE_UNIT;
     int right_reach = spoke->to * sine / SHAPE_UNIT;
     int left = larger(spoke->pivot.x + smaller(left_reach, right_reach) - spread, canvas->clip.x);
     int right = smaller(spoke->pivot.x + larger(left_reach, right_reach) + spread + 1,
                         canvas->clip.x + canvas->clip.width);
-    int reach = spoke->width_q4 * SHAPE_UNIT / 2 + BAND_FRINGE;
-    int from = spoke->from * SPOKE_Q4_UNIT - BAND_FRINGE;
-    int to = spoke->to * SPOKE_Q4_UNIT + BAND_FRINGE;
-    for (int y = top; y < bottom; y++) {
+    if (left >= right) {
+        return;
+    }
+    int half = spoke->width_q4 * SHAPE_UNIT / 2;
+    int from = spoke->from * SPOKE_Q4_UNIT;
+    int to = spoke->to * SPOKE_Q4_UNIT;
+    int reach = half + BAND_FRINGE;
+    int step_across = SHAPE_Q4 * cosine;
+    int step_along = SHAPE_Q4 * sine;
+    int stride = canvas->bounds.width;
+    Color *row_base = &canvas->pixels[(top - canvas->bounds.y) * stride];
+    for (int y = top; y < bottom; y++, row_base += stride) {
         int dy = (y - spoke->pivot.y) * SHAPE_Q4;
         Span span = {left - spoke->pivot.x, right - 1 - spoke->pivot.x};
-        narrow(&span, dy * sine, SHAPE_Q4 * cosine, (Span){-reach, reach});
-        narrow(&span, -dy * cosine, SHAPE_Q4 * sine, (Span){from, to});
-        PixelRun run = {canvas, y, spoke->pivot.x + span.first, color};
-        for (int x = spoke->pivot.x + span.first; x <= spoke->pivot.x + span.last; x++) {
-            uint8_t alpha = spoke_alpha(spoke, sine, cosine, (x - spoke->pivot.x) * SHAPE_Q4, dy);
-            if (alpha == 0) {
-                run_flush(&run, x);
-                run.start = x + 1;
-            } else {
-                run_put(&run, x, alpha);
+        narrow(&span, dy * sine, step_across, (Span){-reach, reach});
+        narrow(&span, -dy * cosine, step_along, (Span){from - BAND_FRINGE, to + BAND_FRINGE});
+        if (span.first > span.last) {
+            continue;
+        }
+        int across = span.first * step_across + dy * sine;
+        int along = span.first * step_along - dy * cosine;
+        Color *dst = row_base + (spoke->pivot.x + span.first - canvas->bounds.x);
+        int count = span.last - span.first + 1;
+        for (int i = 0; i < count; i++, dst++, across += step_across, along += step_along) {
+            int wide = band_coverage(half - (across < 0 ? -across : across));
+            int deep = band_coverage(smaller(along - from, to - along));
+            uint8_t alpha = coverage(smaller(wide, deep));
+            if (alpha >= COLOR_ALPHA_OPAQUE) {
+                *dst = color;
+            } else if (alpha > 0) {
+                *dst = color_blend(*dst, color, alpha);
             }
         }
-        run_flush(&run, spoke->pivot.x + span.last + 1);
     }
 }
 
