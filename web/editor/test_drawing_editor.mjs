@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { drawingEditor } from "./drawing_editor.js";
-import { element } from "./drawing.js";
+import { FRAME_BUDGET_MS, analyseDrawing, element } from "./drawing.js";
 
 const box = (x, y, w, h) => ({ x, y, w, h });
 const stub = () => ({});
@@ -170,5 +170,65 @@ shelf.editor.add("title", "home");
 shelf.editor.add("title", "home");
 const titles = shelfHome.current.elements.filter((item) => item.source === "song");
 assert.deepEqual(titles.map((item) => item.at.wide.x), [70, 76], "a second part of the same kind lands beside the first, not on it");
+
+const bg = element("box", box(0, 0, 320, 146), box(0, 0, 170, 280), { name: "Backdrop" });
+const customStatic = element("text", box(10, 10, 80, 18), box(10, 10, 80, 18), { source: "custom", custom: "HI-FI", scroll: false });
+const playMark = element("symbol", box(10, 30, 18, 18), box(10, 30, 18, 18), { mark: "play" });
+const songTitle = element("text", box(10, 50, 180, 20), box(10, 50, 150, 20), { source: "song", scroll: true });
+const ringAfter = element("circle", box(200, 20, 90, 90), box(40, 120, 90, 90), { thickness: 4 });
+const badOrder = { version: 2, screen: "playing", elements: [bg, customStatic, playMark, songTitle, ringAfter] };
+const badReport = analyseDrawing(badOrder, "wide");
+assert.equal(badReport.caches, true);
+assert.equal(badReport.parts.get(bg.id).status, "cached");
+assert.equal(badReport.parts.get(customStatic.id).status, "cached");
+assert.equal(badReport.parts.get(playMark.id).status, "cached");
+assert.equal(badReport.parts.get(songTitle.id).status, "dynamic");
+assert.equal(badReport.parts.get(songTitle.id).blocksCache, true, "dynamic part under static part is flagged");
+assert.equal(badReport.parts.get(ringAfter.id).status, "blocked", "static part after dynamic part is not cached");
+assert.deepEqual(badReport.blockedStatic.map((item) => item.id), [ringAfter.id]);
+assert.deepEqual(badReport.blockingDynamic.map((item) => item.id), [songTitle.id]);
+
+const goodOrder = { version: 2, screen: "playing", elements: [bg, customStatic, playMark, ringAfter, songTitle] };
+const goodReport = analyseDrawing(goodOrder, "wide");
+assert.equal(goodReport.parts.get(ringAfter.id).status, "cached", "moving static part behind moving part caches it");
+assert.equal(goodReport.parts.get(songTitle.id).blocksCache, false);
+assert.equal(goodReport.blockedStatic.length, 0);
+assert.ok(goodReport.estimatedMs < badReport.estimatedMs, "caching the static ring lowers estimated frame cost");
+assert.equal(goodReport.overBudget, false);
+
+const scrollingCustom = element("text", box(10, 10, 80, 18), null, { source: "custom", custom: "Scrolling", scroll: true });
+const stateMark = element("symbol", box(10, 30, 18, 18), null, { mark: "state" });
+const spinningGroup = element("group", box(0, 0, 80, 80), null, {
+  repeat: { count: 8, spin: 2 },
+  children: [element("line", box(40, 40, 20, 0), null, { thickness: 2 })],
+});
+const staticGroup = element("group", box(0, 0, 80, 80), null, {
+  repeat: { count: 8, spin: 0 },
+  children: [element("line", box(40, 40, 20, 0), null, { thickness: 2 })],
+});
+const groupReport = analyseDrawing({ version: 2, screen: "playing", elements: [staticGroup, scrollingCustom, stateMark, spinningGroup] }, "wide");
+assert.equal(groupReport.parts.get(staticGroup.id).status, "cached");
+assert.equal(groupReport.parts.get(scrollingCustom.id).status, "dynamic");
+assert.equal(groupReport.parts.get(stateMark.id).status, "dynamic");
+assert.equal(groupReport.parts.get(spinningGroup.id).status, "dynamic");
+
+const heavySpokes = element("group", box(0, 0, 140, 140), null, {
+  repeat: { count: 96, spin: 3 },
+  children: [
+    element("line", box(70, 70, 60, 0), null, { thickness: 4 }),
+    element("circle", box(0, 0, 120, 120), null, { thickness: 6 }),
+  ],
+});
+const heavyReport = analyseDrawing({ version: 2, screen: "playing", elements: [bg, heavySpokes] }, "wide");
+assert.ok(heavyReport.estimatedMs > FRAME_BUDGET_MS);
+assert.equal(heavyReport.overBudget, true, "heavy dynamic screen triggers over-budget warning");
+
+const homeReport = analyseDrawing({ version: 2, screen: "home", elements: [songTitle, bg] }, "wide");
+assert.equal(homeReport.caches, false);
+assert.equal(homeReport.parts.get(bg.id).status, "static");
+assert.equal(homeReport.blockedStatic.length, 0);
+
+const checkedEditor = editorFor({ current: badOrder });
+assert.equal(checkedEditor.editor.analyse().blockedStatic.length, 1);
 
 console.log("ok: drawing tools");
