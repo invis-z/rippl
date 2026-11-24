@@ -552,6 +552,11 @@ void hal_display_set_rotation(HalDisplayRotation turned)
     panel_set_rotation(&BUS, rotation);
 }
 
+void hal_display_set_write_rotation(HalDisplayRotation turned)
+{
+    hal_display_set_rotation(turned);
+}
+
 static bool vop_dma_write(int width, int height, const uint16_t *pixels);
 
 void hal_display_write(int x, int y, int width, int height, const uint16_t *pixels)

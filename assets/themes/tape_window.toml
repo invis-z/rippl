@@ -25,3 +25,4 @@ chevron = "#78787c"
 file = "tape_window.scene"
 whole_screen = true
 smooth = true
+landscape = true

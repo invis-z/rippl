@@ -3390,6 +3390,71 @@ static void the_turntable_and_tape_window_redraw_twenty_times_a_second_and_the_c
     }
 }
 
+static void tape_window_writes_landscape_in_steady_portrait_and_restores_on_slide(void)
+{
+    static uint16_t landscape[HAL_DISPLAY_SHORT_SIDE][HAL_DISPLAY_LONG_SIDE];
+    reach_shot((ShotSetup){SHOT_LANDSCAPE, SHOT_PLAYING, NP_FACE_TAPE_WINDOW, true});
+    for (int y = 0; y < HAL_DISPLAY_SHORT_SIDE; y++) {
+        for (int x = 0; x < HAL_DISPLAY_LONG_SIDE; x++) {
+            landscape[y][x] = fake_hal_pixel(x, y);
+        }
+    }
+    static const Orientation ORIENTATIONS[2] = {ORIENTATION_PORTRAIT, ORIENTATION_PORTRAIT_FLIPPED};
+    static const HalDisplayRotation ROTATIONS[2] = {HAL_DISPLAY_PORTRAIT,
+                                                    HAL_DISPLAY_PORTRAIT_FLIPPED};
+    for (int i = 0; i < 2; i++) {
+        Settings settings = settings_defaults();
+        settings.orientation = ORIENTATIONS[i];
+        start_app_wearing_face(&settings, NP_FACE_TAPE_WINDOW);
+        fake_hal_set_np_faces(true);
+        CHECK_EQUAL(ROTATIONS[i], fake_hal_display_rotation());
+        CHECK_EQUAL(ROTATIONS[i], fake_hal_display_write_rotation());
+        tap(KEY_PLAY);
+        if (rocker_swapped_in(ORIENTATIONS[i])) {
+            move_up(MUSIC_ALBUMS_INDEX);
+        } else {
+            move_down(MUSIC_ALBUMS_INDEX);
+        }
+        tap(KEY_PLAY);
+        tap(KEY_PLAY);
+        tap(KEY_PLAY);
+        fake_hal_audio_set_position(SHOT_POSITION_MS);
+        wait_ms(SLIDE_DURATION_MS);
+        step();
+        step();
+        CHECK_EQUAL(ROTATIONS[i], fake_hal_display_rotation());
+        CHECK_EQUAL(HAL_DISPLAY_LANDSCAPE, fake_hal_display_write_rotation());
+        for (int y = 0; y < HAL_DISPLAY_SHORT_SIDE; y++) {
+            int px = i == 0 ? y : HAL_DISPLAY_SHORT_SIDE - 1 - y;
+            for (int x = 0; x < HAL_DISPLAY_LONG_SIDE; x++) {
+                int py = i == 0 ? HAL_DISPLAY_LONG_SIDE - 1 - x : x;
+                CHECK_EQUAL(landscape[y][x], fake_hal_pixel(px, py));
+            }
+        }
+        fake_hal_set_np_faces(false);
+        fake_hal_audio_set_position(SHOT_POSITION_MS + NP_FACE_SMOOTH_TICK_MS);
+        wait_ms(NP_FACE_SMOOTH_TICK_MS);
+        step();
+        CHECK_EQUAL(ROTATIONS[i], fake_hal_display_write_rotation());
+        fake_hal_set_np_faces(true);
+        fake_hal_audio_set_position(SHOT_POSITION_MS + 1000);
+        wait_ms(1000);
+        step();
+        CHECK_EQUAL(HAL_DISPLAY_LANDSCAPE, fake_hal_display_write_rotation());
+        tap(KEY_BACK);
+        CHECK_EQUAL(ROTATIONS[i], fake_hal_display_write_rotation());
+        wait_ms(SLIDE_DURATION_MS);
+        step();
+        CHECK_EQUAL(ROTATIONS[i], fake_hal_display_write_rotation());
+    }
+    Settings settings = settings_defaults();
+    settings.orientation = ORIENTATION_PORTRAIT;
+    start_app_wearing_face(&settings, NP_FACE_CASSETTE);
+    fake_hal_set_np_faces(true);
+    play_for_shot(SHOT_PLAYING);
+    CHECK_EQUAL(HAL_DISPLAY_PORTRAIT, fake_hal_display_write_rotation());
+}
+
 static const uint8_t TIMED_LYRICS[] = "[00:00.00]first line\n[00:30.00]second line\n";
 static const uint8_t UNTIMED_LYRICS[] = "first line\nsecond line\n";
 
@@ -4259,6 +4324,7 @@ int main(void)
         TEST_CASE(the_standard_now_playing_keeps_its_pixels),
         TEST_CASE(a_playing_face_changes_pixels_a_tick_later_and_a_paused_one_does_not),
         TEST_CASE(the_turntable_and_tape_window_redraw_twenty_times_a_second_and_the_cassette_ten),
+        TEST_CASE(tape_window_writes_landscape_in_steady_portrait_and_restores_on_slide),
         TEST_CASE(lyrics_never_show_on_a_face),
         TEST_CASE(the_standard_face_is_drawn_when_the_face_code_is_missing),
         TEST_CASE(a_face_fills_the_screen_without_the_header_and_status_bar_until_home),
