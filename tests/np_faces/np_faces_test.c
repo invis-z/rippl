@@ -121,7 +121,10 @@ bool np_test_scene_code(uint8_t face, SceneCode *code, const ThemeColors **chrom
                         (const char *)section + package.scene.code_bytes,
                         package.scene.string_bytes,
                         work,
-                        sizeof work};
+                        sizeof work,
+                        NULL,
+                        0,
+                        0};
     return package.scene.code_bytes > 0;
 }
 

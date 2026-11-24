@@ -119,6 +119,30 @@ static void load_wallpaper(ThemeAssets *assets, const ThemePackage *package,
     assets->wallpaper_state = loaded ? ASSET_READY : ASSET_FAILED;
 }
 
+static uint32_t wallpaper_bytes(ThemePackageWallpaper entry)
+{
+    if (entry.width == 0) {
+        return 0;
+    }
+    uint32_t bytes = WALLPAPER_PAIR_BYTES + entry.width / 2u * entry.height;
+    return (bytes + 3u) & ~3u;
+}
+
+void *theme_assets_spare(const ThemePackage *package, uint32_t *size)
+{
+    uint32_t total = 0;
+    uint8_t *memory = hal_system_theme_assets(&total);
+    uint32_t landscape = wallpaper_bytes(package->wallpapers[THEME_WALLPAPER_LANDSCAPE]);
+    uint32_t portrait = wallpaper_bytes(package->wallpapers[THEME_WALLPAPER_PORTRAIT]);
+    uint32_t used = landscape > portrait ? landscape : portrait;
+    if (memory == NULL || used >= total) {
+        *size = 0;
+        return NULL;
+    }
+    *size = total - used;
+    return memory + used;
+}
+
 RIPPL_STARTUP_CODE bool theme_assets_tend(ThemeAssets *assets, const ThemePackage *package,
                                           const ThemeSource *file)
 {

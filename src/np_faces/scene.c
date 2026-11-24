@@ -5,10 +5,12 @@
 #include "core/resident.h"
 #include "core/string_builder.h"
 #include "face_text.h"
+#include "gfx/strip_cache.h"
 #include "np_faces/face_shapes.h"
 #include "ui/backdrop.h"
 #include "ui/icons.h"
 #include "ui/label.h"
+#include "ui/theme_engine.h"
 
 #define LABEL_RED COLOR_RGB(176, 36, 32)
 #define LABEL_CREAM COLOR_RGB(248, 236, 208)
@@ -60,6 +62,7 @@ typedef enum SceneSource {
 
 _Static_assert((int)SCENE_INPUT_COUNT < (int)SCENE_REGISTERS,
                "the inputs leave registers for the scene");
+_Static_assert((int)SCENE_INPUT_COUNT <= WORD_BITS, "the inputs fit in one taint word");
 _Static_assert((int)SCENE_SOURCE_COUNT <= (int)SCENE_ITEM_BASE,
                "the sources come before the menu items");
 _Static_assert((int)SCENE_ITEM_BASE < (int)SCENE_STRING_BASE,
@@ -89,6 +92,8 @@ RIPPL_NP_FACES_DATA static const uint8_t RAW[SCENE_OP_COUNT] = {
 
 typedef struct Machine {
     int32_t registers[SCENE_REGISTERS];
+    uint32_t tainted[SCENE_REGISTERS / WORD_BITS];
+    uint32_t tainted_until;
     uint16_t raw[SCENE_MOST_OPERANDS];
     int32_t values[SCENE_MOST_OPERANDS];
     const NowPlayingFrame *frame;
@@ -102,6 +107,8 @@ typedef struct Machine {
     char place[PLACE_CAPACITY];
     char time_of[TIME_OF_CAPACITY];
     uint8_t turn;
+    uint8_t cache_mode;
+    uint16_t static_draws;
 } Machine;
 
 _Static_assert(sizeof(Machine) <= SCENE_WORK_BYTES, "the scene's working memory holds the machine");
@@ -869,9 +876,160 @@ RIPPL_NP_FACES_CODE static void load_inputs(Machine *machine)
     write_time_of(machine);
 }
 
+#define OP_BIT(op, w)                                                                              \
+    (((uint32_t)(op) / WORD_BITS == (w)) ? (1u << ((uint32_t)(op) % WORD_BITS)) : 0u)
+
+#define STATE_WORD(w)                                                                              \
+    (OP_BIT(SCENE_OP_TURN, w) | OP_BIT(SCENE_OP_CLIP, w) | OP_BIT(SCENE_OP_UNCLIP, w) |            \
+     OP_BIT(SCENE_OP_SEGMENT_STYLE, w))
+
+#define DYNAMIC_WORD(w)                                                                            \
+    (OP_BIT(SCENE_OP_PROGRESS, w) | OP_BIT(SCENE_OP_VOLUME_WIDTH, w) |                             \
+     OP_BIT(SCENE_OP_QUEUE_PROGRESS, w) | OP_BIT(SCENE_OP_ITEM, w) | OP_BIT(SCENE_OP_ITEMS, w) |   \
+     OP_BIT(SCENE_OP_SELECTED, w) | OP_BIT(SCENE_OP_COVER, w) | OP_BIT(SCENE_OP_ROUND_COVER, w) |  \
+     OP_BIT(SCENE_OP_REFLECT, w) | OP_BIT(SCENE_OP_TURNED_COVER, w) | OP_BIT(SCENE_OP_BAR, w) |    \
+     OP_BIT(SCENE_OP_TIMES, w) | OP_BIT(SCENE_OP_FORMAT, w) | OP_BIT(SCENE_OP_CODEC, w) |          \
+     OP_BIT(SCENE_OP_LINE, w) | OP_BIT(SCENE_OP_MENU, w) | OP_BIT(SCENE_OP_ITEM_ICON, w))
+
+#define SOURCE_WORD(w)                                                                             \
+    (OP_BIT(SCENE_OP_PRESENT, w) | OP_BIT(SCENE_OP_WIDTH, w) | OP_BIT(SCENE_OP_TEXT, w) |          \
+     OP_BIT(SCENE_OP_PLAIN, w))
+
+RIPPL_NP_FACES_DATA static const uint32_t STATE_OPS[3] = {STATE_WORD(0), STATE_WORD(1),
+                                                          STATE_WORD(2)};
+RIPPL_NP_FACES_DATA static const uint32_t DYNAMIC_OPS[3] = {DYNAMIC_WORD(0), DYNAMIC_WORD(1),
+                                                            DYNAMIC_WORD(2)};
+RIPPL_NP_FACES_DATA static const uint32_t SOURCE_OPS[3] = {SOURCE_WORD(0), SOURCE_WORD(1),
+                                                           SOURCE_WORD(2)};
+
+#undef SOURCE_WORD
+#undef DYNAMIC_WORD
+#undef STATE_WORD
+#undef OP_BIT
+
+RIPPL_NP_FACES_CODE static bool op_in(const uint32_t *mask, SceneOp op)
+{
+    return (mask[(uint32_t)op / WORD_BITS] >> ((uint32_t)op % WORD_BITS) & 1u) != 0;
+}
+
+RIPPL_NP_FACES_CODE static uint16_t read_u16(const uint8_t *bytes)
+{
+    return (uint16_t)(bytes[0] | bytes[1] << 8);
+}
+
 RIPPL_NP_FACES_CODE static uint32_t jump_target(const Machine *machine, SceneOp op)
 {
     return machine->raw[op == SCENE_OP_JUMP ? 0 : 1];
+}
+
+RIPPL_NP_FACES_CODE static bool is_tainted(const Machine *machine, uint16_t reg)
+{
+    return (reg & IMMEDIATE_BIT) == 0 && reg < SCENE_REGISTERS &&
+           (machine->tainted[reg / WORD_BITS] >> (reg % WORD_BITS) & 1u) != 0;
+}
+
+RIPPL_NP_FACES_CODE static void set_tainted(Machine *machine, uint16_t reg, bool tainted)
+{
+    if (reg < SCENE_REGISTERS && reg >= SCENE_INPUT_COUNT) {
+        uint32_t bit = 1u << (reg % WORD_BITS);
+        if (tainted) {
+            machine->tainted[reg / WORD_BITS] |= bit;
+        } else {
+            machine->tainted[reg / WORD_BITS] &= ~bit;
+        }
+    }
+}
+
+RIPPL_NP_FACES_CODE __attribute__((noinline)) static bool op_is_dynamic(const Machine *machine,
+                                                                        SceneOp op, uint32_t first)
+{
+    if (op_in(DYNAMIC_OPS, op) ||
+        (op_in(SOURCE_OPS, op) && machine->values[first] < SCENE_STRING_BASE)) {
+        return true;
+    }
+    for (uint32_t index = first; index < COUNTS[op]; index++) {
+        if ((RAW[op] >> index & 1u) == 0 && is_tainted(machine, machine->raw[index])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+RIPPL_NP_FACES_CODE __attribute__((noinline)) static bool
+scan_tainted_branch(Machine *machine, uint32_t at, uint32_t target)
+{
+    const SceneCode *scene = &machine->frame->scene;
+    if (target < at || target > scene->code_size) {
+        return false;
+    }
+    uint32_t p = at;
+    uint32_t end = target;
+    while (p < end) {
+        SceneOp op = (SceneOp)scene->code[p];
+        if (op >= SCENE_OP_COUNT || op == SCENE_OP_END ||
+            p + 1 + 2u * COUNTS[op] > scene->code_size || KINDS[op] == SCENE_KIND_DRAW) {
+            return false;
+        }
+        uint32_t next = p + 1 + 2u * COUNTS[op];
+        if (op == SCENE_OP_JUMP || op == SCENE_OP_JUMP_ZERO) {
+            uint32_t dest = read_u16(scene->code + p + (op == SCENE_OP_JUMP ? 1 : 3));
+            if (dest < next || dest > scene->code_size) {
+                return false;
+            }
+            if (dest > end) {
+                end = dest;
+            }
+        } else if (KINDS[op] == SCENE_KIND_VALUE) {
+            set_tainted(machine, read_u16(scene->code + p + 1), true);
+        }
+        p = next;
+    }
+    if (p != end) {
+        return false;
+    }
+    if (end > machine->tainted_until) {
+        machine->tainted_until = end;
+    }
+    return true;
+}
+
+RIPPL_NP_FACES_CODE __attribute__((noinline)) static void capture_static(Machine *machine,
+                                                                         uint16_t draws)
+{
+    const SceneCode *scene = &machine->frame->scene;
+    machine->cache_mode = STRIP_CACHE_NONE;
+    strip_cache_capture(scene->cache, scene->cache_size, &machine->canvases[0], draws);
+}
+
+RIPPL_NP_FACES_CODE __attribute__((noinline)) static void open_cache(Machine *machine)
+{
+    const NowPlayingFrame *frame = machine->frame;
+    const SceneCode *scene = &frame->scene;
+    if (scene->code == NULL || scene->code_size == 0 || scene->cache == NULL) {
+        return;
+    }
+    uint32_t paper =
+        frame->theme->wallpaper != NULL && frame->theme->wallpaper->ready && theme_engine() != NULL;
+    StripCacheKey key = {
+        .owner = scene->code,
+        .stamp = scene->cache_stamp,
+        .owner_size = scene->code_size,
+        .meta = (uint32_t)frame->theme->colors->background | (uint32_t)frame->flipped << 16 |
+                paper << 17,
+        .area = frame->area,
+    };
+    StripCacheAction action = strip_cache_open(scene->cache, scene->cache_size,
+                                               &machine->canvases[0], &key, &machine->static_draws);
+    machine->cache_mode = (uint8_t)action;
+    if (action == STRIP_CACHE_START) {
+        uint32_t clean = (1u << SCENE_INPUT_X) | (1u << SCENE_INPUT_Y) | (1u << SCENE_INPUT_WIDTH) |
+                         (1u << SCENE_INPUT_HEIGHT) | (1u << SCENE_INPUT_FLIPPED);
+        machine->tainted[0] = ((1u << SCENE_INPUT_COUNT) - 1u) & ~clean;
+    } else if (action == STRIP_CACHE_REPLAY) {
+        uint32_t started_us = draw_profile_now();
+        strip_cache_blit(scene->cache, &machine->canvases[0]);
+        draw_profile_since(DRAW_PART_SHAPES, started_us);
+    }
 }
 
 RIPPL_NP_FACES_CODE void scene_draw(const NowPlayingFrame *frame, Canvas *canvas)
@@ -884,29 +1042,63 @@ RIPPL_NP_FACES_CODE void scene_draw(const NowPlayingFrame *frame, Canvas *canvas
     *machine = (Machine){.frame = frame};
     machine->canvases[0] = *canvas;
     load_inputs(machine);
+    open_cache(machine);
+    uint16_t draws = 0;
     uint32_t at = 0;
     for (uint32_t step = 0; step < SCENE_MOST_STEPS && scene->code != NULL && at < scene->code_size;
          step++) {
+        uint32_t prev_at = at;
         SceneOp op = (SceneOp)scene->code[at];
         if (op >= SCENE_OP_COUNT || op == SCENE_OP_END ||
             at + 1 + 2u * COUNTS[op] > scene->code_size) {
-            return;
+            break;
         }
         for (uint32_t index = 0; index < COUNTS[op]; index++) {
             const uint8_t *field = scene->code + at + 1 + 2 * index;
-            machine->raw[index] = (uint16_t)(field[0] | field[1] << 8);
+            machine->raw[index] = read_u16(field);
             bool raw = (RAW[op] >> index & 1u) != 0;
             machine->values[index] =
                 raw ? machine->raw[index] : operand(machine, machine->raw[index]);
         }
         at += 1 + 2u * COUNTS[op];
         if (op == SCENE_OP_JUMP || op == SCENE_OP_JUMP_ZERO) {
+            if (machine->cache_mode == STRIP_CACHE_START && op == SCENE_OP_JUMP_ZERO &&
+                prev_at >= machine->tainted_until && is_tainted(machine, machine->raw[0]) &&
+                !scan_tainted_branch(machine, at, jump_target(machine, op))) {
+                capture_static(machine, draws);
+            }
             bool taken = op == SCENE_OP_JUMP || machine->values[0] == 0;
             at = taken ? jump_target(machine, op) : at;
         } else if (KINDS[op] == SCENE_KIND_DRAW) {
+            bool state_op = op_in(STATE_OPS, op);
+            if (machine->cache_mode == STRIP_CACHE_REPLAY && !state_op &&
+                draws < machine->static_draws) {
+                draws++;
+                continue;
+            }
+            if (machine->cache_mode == STRIP_CACHE_START) {
+                if (op_is_dynamic(machine, op, 0)) {
+                    capture_static(machine, draws);
+                } else if (!state_op) {
+                    draws++;
+                }
+            }
             timed_draw(machine, op);
+            if (machine->cache_mode == STRIP_CACHE_CONTINUE && !state_op &&
+                ++draws == machine->static_draws) {
+                capture_static(machine, draws);
+            }
         } else {
+            if (machine->cache_mode == STRIP_CACHE_START) {
+                bool tainted = prev_at < machine->tainted_until || op_is_dynamic(machine, op, 1);
+                set_tainted(machine, machine->raw[0], tainted);
+            }
             store(machine, compute(machine, op));
         }
+    }
+    if (machine->cache_mode == STRIP_CACHE_START) {
+        capture_static(machine, draws);
+    } else if (machine->cache_mode == STRIP_CACHE_CONTINUE) {
+        strip_cache_abort(scene->cache);
     }
 }
