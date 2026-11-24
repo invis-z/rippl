@@ -39,17 +39,41 @@ void canvas_clear(Canvas *canvas, Color color)
     canvas_fill_rect(canvas, canvas->clip, color);
 }
 
+__attribute__((noinline)) void canvas_fill_colors(Color *dst, Color color, int count)
+{
+    if (count > 0 && ((uintptr_t)dst & 2u) != 0) {
+        *dst++ = color;
+        count--;
+    }
+    uint32_t pair = (uint32_t)color | (uint32_t)color << 16;
+    uint32_t *words = (uint32_t *)(void *)dst;
+    while (count >= 8) {
+        words[0] = pair;
+        words[1] = pair;
+        words[2] = pair;
+        words[3] = pair;
+        words += 4;
+        count -= 8;
+    }
+    while (count >= 2) {
+        *words++ = pair;
+        count -= 2;
+    }
+    if (count > 0) {
+        *(Color *)(void *)words = color;
+    }
+}
+
 void canvas_fill_rect(Canvas *canvas, Rect area, Color color)
 {
     Rect visible = rect_intersection(canvas->clip, area);
     if (rect_is_empty(visible)) {
         return;
     }
-    for (int y = visible.y; y < visible.y + visible.height; y++) {
-        Color *row = pixel_address(canvas, visible.x, y);
-        for (int column = 0; column < visible.width; column++) {
-            row[column] = color;
-        }
+    int stride = canvas->bounds.width;
+    Color *row = pixel_address(canvas, visible.x, visible.y);
+    for (int y = 0; y < visible.height; y++, row += stride) {
+        canvas_fill_colors(row, color, visible.width);
     }
 }
 

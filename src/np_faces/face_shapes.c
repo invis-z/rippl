@@ -120,11 +120,11 @@ RIPPL_NP_FACES_CODE int shape_cosine_fine(uint16_t fine)
 
 RIPPL_NP_FACES_CODE uint32_t shape_isqrt(uint32_t value)
 {
-    uint32_t root = 0;
-    uint32_t bit = SQRT_TOP_BIT;
-    while (bit > value) {
-        bit >>= 2;
+    if (value == 0) {
+        return 0;
     }
+    uint32_t root = 0;
+    uint32_t bit = 1u << ((31u - (uint32_t)__builtin_clz(value)) & ~1u);
     for (; bit != 0; bit >>= 2) {
         if (value >= root + bit) {
             value -= root + bit;

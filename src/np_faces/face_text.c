@@ -54,41 +54,54 @@ RIPPL_NP_FACES_CODE int face_scroll_offset(MarqueeTiming timing, int text_width,
     return (int)((phase - timing.pause_ms) * timing.speed_px_per_s / MILLISECONDS_PER_SECOND);
 }
 
-RIPPL_NP_FACES_CODE Rect face_fitted_area(const Font *font, Rect area, const char *text,
-                                          FaceAlign align)
+RIPPL_NP_FACES_CODE bool face_text_visible(const Canvas *canvas, const Font *font, Rect area)
 {
-    int width = smaller(text_width(font, text), area.width);
+    int line = font_line_height(font);
+    if (line > area.height) {
+        area.y -= (line - area.height) / HALF;
+        area.height = line;
+    }
+    return !rect_is_empty(rect_intersection(canvas->clip, area));
+}
+
+RIPPL_NP_FACES_CODE static Rect fitted_with_width(Rect area, int width, FaceAlign align)
+{
+    int used = smaller(width, area.width);
     if (align == FACE_ALIGN_CENTRE) {
-        return (Rect){area.x + (area.width - width) / HALF, area.y, width, area.height};
+        return (Rect){area.x + (area.width - used) / HALF, area.y, used, area.height};
     }
     if (align == FACE_ALIGN_RIGHT) {
-        return (Rect){area.x + area.width - width, area.y, width, area.height};
+        return (Rect){area.x + area.width - used, area.y, used, area.height};
     }
     return area;
 }
 
-RIPPL_NP_FACES_CODE static void scroll_draw(Canvas *canvas, const NowPlayingFrame *frame,
-                                            TextStyle style, Label label)
+RIPPL_NP_FACES_CODE Rect face_fitted_area(const Font *font, Rect area, const char *text,
+                                          FaceAlign align)
 {
-    MarqueeTiming timing = frame->theme->marquee;
-    int width = text_width(style.font, label.text);
-    int offset =
-        face_scroll_offset(timing, width, label.area.width, frame->now_ms - frame->text_ms);
-    label_draw_scrolling(canvas, style, label, (Marquee){offset, timing.gap_px});
+    if (align == FACE_ALIGN_LEFT) {
+        return area;
+    }
+    return fitted_with_width(area, text_width(font, text), align);
 }
 
 RIPPL_NP_FACES_CODE void face_line(Canvas *canvas, const NowPlayingFrame *frame,
                                    const FaceLine *line, const char *text)
 {
-    if (text == NULL) {
+    if (text == NULL || !face_text_visible(canvas, line->font, line->area)) {
         return;
     }
     TextStyle style = {line->font, line->color};
-    if (text_width(line->font, text) <= line->area.width) {
-        Rect fitted = face_fitted_area(line->font, line->area, text, line->align);
+    int width = text_width(line->font, text);
+    if (width <= line->area.width) {
+        Rect fitted = fitted_with_width(line->area, width, line->align);
         label_draw(canvas, style, (Label){fitted, text});
     } else if (frame->playing && !frame->scrubbing) {
-        scroll_draw(canvas, frame, style, (Label){line->area, text});
+        MarqueeTiming timing = frame->theme->marquee;
+        int offset =
+            face_scroll_offset(timing, width, line->area.width, frame->now_ms - frame->text_ms);
+        label_draw_scrolling(canvas, style, (Label){line->area, text},
+                             (Marquee){offset, timing.gap_px});
     } else {
         label_draw(canvas, style, (Label){line->area, text});
     }
@@ -113,6 +126,9 @@ RIPPL_NP_FACES_CODE const char *face_feedback_text(const NowPlayingFrame *frame,
 RIPPL_NP_FACES_CODE void face_feedback_line(Canvas *canvas, const NowPlayingFrame *frame,
                                             const FaceLine *line, const char *text)
 {
+    if (!face_text_visible(canvas, line->font, line->area)) {
+        return;
+    }
     char buffer[FACE_FEEDBACK_CAPACITY];
     const char *feedback = face_feedback_text(frame, buffer, sizeof buffer);
     if (feedback != NULL) {
@@ -136,6 +152,9 @@ RIPPL_NP_FACES_CODE void face_times_text(const NowPlayingFrame *frame, FaceTimes
 RIPPL_NP_FACES_CODE void face_times_draw(Canvas *canvas, const NowPlayingFrame *frame,
                                          const FaceLine *line)
 {
+    if (!face_text_visible(canvas, line->font, line->area)) {
+        return;
+    }
     FaceTimes times;
     face_times_text(frame, &times);
     label_draw(canvas, (TextStyle){line->font, line->emphasis}, (Label){line->area, times.elapsed});
@@ -275,7 +294,7 @@ RIPPL_NP_FACES_CODE int face_codec_width(const Font *font, const char *codec)
 
 RIPPL_NP_FACES_CODE void face_codec_draw(Canvas *canvas, const FaceLine *line, const char *codec)
 {
-    if (!has_text(codec)) {
+    if (!has_text(codec) || !face_text_visible(canvas, line->font, line->area)) {
         return;
     }
     face_outline(canvas, line->area, line->color);
@@ -295,6 +314,9 @@ RIPPL_NP_FACES_CODE static int format_origin(const FaceLine *line, int box_width
 RIPPL_NP_FACES_CODE void face_format_row(Canvas *canvas, const NowPlayingFrame *frame,
                                          const FaceLine *line)
 {
+    if (!face_text_visible(canvas, line->font, line->area)) {
+        return;
+    }
     const char *stream = frame->stream;
     int box_width = face_codec_width(line->font, frame->codec);
     int stream_width = has_text(stream) ? text_width(line->font, stream) : 0;

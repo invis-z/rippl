@@ -52,6 +52,7 @@ typedef struct FaceBar {
     Color hot;
 } FaceBar;
 
+bool face_text_visible(const Canvas *canvas, const Font *font, Rect area);
 int face_scroll_offset(MarqueeTiming timing, int text_width, int view_width, uint32_t elapsed_ms);
 Rect face_fitted_area(const Font *font, Rect area, const char *text, FaceAlign align);
 void face_line(Canvas *canvas, const NowPlayingFrame *frame, const FaceLine *line,

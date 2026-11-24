@@ -20,17 +20,27 @@ static void draw_glyph(Canvas *canvas, TextStyle style, const Glyph *glyph, Poin
     const uint8_t *bitmap = font_glyph_bitmap(style.font, glyph);
     bool two_bit = style.font->level_bits == FONT_TWO_BIT_LEVELS;
     int stride = canvas->bounds.width;
+    int glyph_width = glyph->width;
+    int start_x = visible.x - area.x;
     Color *row =
         &canvas->pixels[(visible.y - canvas->bounds.y) * stride + (visible.x - canvas->bounds.x)];
     for (int y = visible.y; y < visible.y + visible.height; y++) {
         Color *pixel = row;
-        for (int x = visible.x; x < visible.x + visible.width; x++) {
-            uint8_t level = two_bit ? font_glyph_level(style.font, glyph, x - area.x, y - area.y)
-                                    : font_bitmap_level(bitmap, glyph, x - area.x, y - area.y);
-            if (level > 0) {
+        int index = (y - area.y) * glyph_width + start_x;
+        for (int count = 0; count < visible.width; count++, index++, pixel++) {
+            uint8_t level;
+            if (two_bit) {
+                int shift = 6 - 2 * (index & 3);
+                level = (uint8_t)(((bitmap[index >> 2] >> shift) & 3) * 5);
+            } else {
+                uint8_t packed = bitmap[index >> 1];
+                level = (uint8_t)((index & 1) == 0 ? packed >> 4 : packed & 0x0F);
+            }
+            if (level == COLOR_ALPHA_OPAQUE) {
+                *pixel = style.color;
+            } else if (level > 0) {
                 *pixel = color_blend(*pixel, style.color, level);
             }
-            pixel++;
         }
         row += stride;
     }

@@ -15,8 +15,18 @@ enum {
     TWO_BIT_TO_FULL = 5
 };
 
+enum {
+    ASCII_FIRST = 32
+};
+
 static const Glyph *search(const Font *font, uint32_t codepoint)
 {
+    if (codepoint >= ASCII_FIRST) {
+        uint32_t quick = codepoint - ASCII_FIRST;
+        if (quick < font->glyph_count && font->glyphs[quick].codepoint == codepoint) {
+            return &font->glyphs[quick];
+        }
+    }
     int low = 0;
     int high = (int)font->glyph_count - 1;
     while (low <= high) {
