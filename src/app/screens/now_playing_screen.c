@@ -519,8 +519,7 @@ static const NowPlayingFaces *face_code(const NowPlayingScreen *now_playing)
 static void refresh_face(NowPlayingScreen *now_playing, uint32_t now_ms)
 {
     refresh(now_playing, now_ms);
-    now_playing->screen.full_screen =
-        face_code(now_playing) != NULL && theme_store_scene_whole_screen(THEME_SCENE_NOW_PLAYING);
+    now_playing_sync_face(now_playing);
 }
 
 static void enter(void *context, uint32_t now_ms)
@@ -985,6 +984,14 @@ const ThemeColors *now_playing_face_colors(const NowPlayingScreen *now_playing)
     SceneCode scene;
     const ThemeColors *chrome = NULL;
     return scene_of(now_playing, &scene, &chrome) != NULL ? chrome : NULL;
+}
+
+void now_playing_sync_face(NowPlayingScreen *now_playing)
+{
+    SceneCode scene;
+    const ThemeColors *chrome = NULL;
+    now_playing->screen.full_screen = theme_store_scene_whole_screen(THEME_SCENE_NOW_PLAYING) &&
+                                      scene_of(now_playing, &scene, &chrome) != NULL;
 }
 
 static NowPlayingFeedback badge_of(const NowPlayingScreen *now_playing)

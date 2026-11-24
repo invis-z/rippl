@@ -22,6 +22,9 @@ const SCENE_KIND = 5;
 const SCENE_SOURCE_KIND = 6;
 const SCENE_DESIGN_KIND = 7;
 const SCENE_CHROME = 1;
+const SCENE_WHOLE_SCREEN = 2;
+const SCENE_SMOOTH = 4;
+const SCENE_LANDSCAPE = 8;
 const SCENE_MOST_BYTES = 6144;
 export const SCENES = [
   { key: "now_playing_scene", title: "Now Playing scene", kinds: [SCENE_KIND, SCENE_SOURCE_KIND, SCENE_DESIGN_KIND] },
@@ -368,7 +371,9 @@ function oneScene(theme, schema, { key, title, kinds }) {
   bytes.set(compiled.code, 2 * shades.length);
   bytes.set(compiled.strings, 2 * shades.length + compiled.code.length);
   const [code, strings] = [compiled.code.length, compiled.strings.length];
-  const head = [codeKind, chrome ? SCENE_CHROME : 0, code & 0xff, code >> 8, strings & 0xff, strings >> 8, 0, 0];
+  const flags = (chrome ? SCENE_CHROME : 0) | (scene.whole_screen ? SCENE_WHOLE_SCREEN : 0) |
+    (scene.smooth ? SCENE_SMOOTH : 0) | (scene.landscape && scene.whole_screen ? SCENE_LANDSCAPE : 0);
+  const head = [codeKind, flags, code & 0xff, code >> 8, strings & 0xff, strings >> 8, 0, 0];
   const source = new TextEncoder().encode(scene.script);
   const found = [
     { head, bytes, memory: 0 },
@@ -698,10 +703,22 @@ function unpackScene(bytes, view, field, theme, schema, end) {
     scene.script = new TextDecoder().decode(bytes.subarray(at, end));
   } else if (bytes[field] === kinds[2]) {
     scene.design = new TextDecoder().decode(bytes.subarray(at, end));
-  } else if (bytes[field + 1] & SCENE_CHROME) {
-    scene.chrome = Object.fromEntries(
-      schema.colors.map((name, index) => [name, hexColor(view.getUint16(at + 2 * index, true))]),
-    );
+  } else {
+    const flags = bytes[field + 1];
+    if (flags & SCENE_CHROME) {
+      scene.chrome = Object.fromEntries(
+        schema.colors.map((name, index) => [name, hexColor(view.getUint16(at + 2 * index, true))]),
+      );
+    }
+    if (flags & SCENE_WHOLE_SCREEN) {
+      scene.whole_screen = true;
+    }
+    if (flags & SCENE_SMOOTH) {
+      scene.smooth = true;
+    }
+    if (flags & SCENE_LANDSCAPE) {
+      scene.landscape = true;
+    }
   }
   theme[key] = scene;
 }

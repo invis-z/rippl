@@ -392,6 +392,14 @@ bool theme_store_scene_smooth(int which)
            (scene_slot(&block->package, which).flags & THEME_SCENE_SMOOTH) != 0;
 }
 
+bool theme_store_scene_landscape(int which)
+{
+    const ThemeMemory *block = memory();
+    uint8_t needed = THEME_SCENE_WHOLE_SCREEN | THEME_SCENE_LANDSCAPE;
+    return theme_store_has_scene(which) &&
+           (scene_slot(&block->package, which).flags & needed) == needed;
+}
+
 bool theme_store_scene(int which, SceneCode *code, const ThemeColors **chrome)
 {
     ThemeMemory *block = memory();

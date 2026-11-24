@@ -185,6 +185,7 @@ header_text = "#eef1fa"
 | `chrome` | Header and status bar colours while the scene shows |
 | `whole_screen` | Draw over the whole screen, without header and status bar |
 | `smooth` | Redraw every 50 ms instead of 100 ms while playing |
+| `landscape` | Drive the panel in landscape when Portrait holds a steady whole-screen scene |
 
 On Home the player still owns the menu: the buttons move through it in order and Play opens an item. The `.scene` scripts in `assets/themes` are full examples.
 

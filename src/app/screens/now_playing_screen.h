@@ -119,6 +119,7 @@ bool now_playing_feedback_visible(NowPlayingFeedback feedback, uint32_t started_
 int now_playing_volume_width(uint8_t volume, int width);
 const char *now_playing_lyric(const NowPlayingScreen *now_playing);
 const ThemeColors *now_playing_face_colors(const NowPlayingScreen *now_playing);
+void now_playing_sync_face(NowPlayingScreen *now_playing);
 void now_playing_follow(NowPlayingScreen *now_playing, uint32_t now_ms);
 bool now_playing_draw_home(const NowPlayingScreen *now_playing, const NowPlayingHome *home,
                            Canvas *canvas);

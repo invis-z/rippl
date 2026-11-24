@@ -38,3 +38,4 @@ bool theme_store_scene(int which, SceneCode *code, const ThemeColors **chrome);
 bool theme_store_has_scene(int which);
 bool theme_store_scene_whole_screen(int which);
 bool theme_store_scene_smooth(int which);
+bool theme_store_scene_landscape(int which);

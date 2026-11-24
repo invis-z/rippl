@@ -68,11 +68,16 @@ static HalDisplayRotation rotation_for(Orientation orientation)
     return HAL_DISPLAY_LANDSCAPE;
 }
 
+HalDisplayRotation app_display_rotation(void)
+{
+    return rotation_for(app.settings.settings.orientation);
+}
+
 static void apply_orientation(void)
 {
-    Orientation orientation = app.settings.settings.orientation;
     app_dress_theme();
-    hal_display_set_rotation(rotation_for(orientation));
+    app.landscape_write = false;
+    hal_display_set_rotation(app_display_rotation());
     frame_diff_init(&app.frame_diff, app_row_hashes, app.theme.metrics.screen_height);
 }
 

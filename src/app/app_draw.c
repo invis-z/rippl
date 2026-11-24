@@ -190,7 +190,27 @@ static void paint_backdrop(void *context, Canvas *canvas)
     backdrop_paint(canvas, app_current_theme(), canvas->clip);
 }
 
-void app_render(FrameDrawer drawer, bool drawer_paints_everything, int strip_height)
+static void set_landscape_write(bool want)
+{
+    if (want == app.landscape_write) {
+        return;
+    }
+    hal_display_wait();
+    app.landscape_write = want;
+    hal_display_set_write_rotation(want ? HAL_DISPLAY_LANDSCAPE : app_display_rotation());
+    int height = want ? HAL_DISPLAY_SHORT_SIDE : app.theme.metrics.screen_height;
+    frame_diff_init(&app.frame_diff, app_row_hashes, height);
+}
+
+static bool want_landscape_write(void)
+{
+    const Screen *top = app_top_screen();
+    return app.settings.settings.orientation != ORIENTATION_LANDSCAPE && !app_fade_running() &&
+           !app_slide_running() && !app.toast.visible && top == &app.screens.now_playing.screen &&
+           top->full_screen && theme_store_scene_landscape(THEME_SCENE_NOW_PLAYING);
+}
+
+static void render_strips(FrameDrawer drawer, bool drawer_paints_everything, int strip_height)
 {
     theme_store_watch_assets();
     const Wallpaper *wallpaper = app_current_theme()->wallpaper;
@@ -212,6 +232,12 @@ void app_render(FrameDrawer drawer, bool drawer_paints_everything, int strip_hei
     hal_display_present();
 }
 
+void app_render(FrameDrawer drawer, bool drawer_paints_everything, int strip_height)
+{
+    set_landscape_write(false);
+    render_strips(drawer, drawer_paints_everything, strip_height);
+}
+
 void app_render_frame(void)
 {
     uint32_t started_us = hal_clock_microseconds();
@@ -220,8 +246,23 @@ void app_render_frame(void)
     app.status_bar = app_current_status_bar();
     bool screen_paints =
         app_top_screen()->paints_every_pixel && !app_fade_running() && !app_slide_running();
+    if (app_top_screen() == &app.screens.now_playing.screen) {
+        now_playing_sync_face(&app.screens.now_playing);
+    }
+    bool landscape = want_landscape_write();
+    set_landscape_write(landscape);
+    int saved_width = app.theme.metrics.screen_width;
+    int saved_height = app.theme.metrics.screen_height;
+    if (landscape) {
+        app.theme.metrics.screen_width = HAL_DISPLAY_LONG_SIDE;
+        app.theme.metrics.screen_height = HAL_DISPLAY_SHORT_SIDE;
+    }
     marquee_frame_start();
-    app_render((FrameDrawer){.draw = draw_frame, .context = &app}, screen_paints, STRIP_HEIGHT);
+    render_strips((FrameDrawer){.draw = draw_frame, .context = &app}, screen_paints, STRIP_HEIGHT);
+    if (landscape) {
+        app.theme.metrics.screen_width = saved_width;
+        app.theme.metrics.screen_height = saved_height;
+    }
     uint32_t render_us = hal_clock_microseconds() - started_us;
     frame_stats_record(&app.send_stats, app.send_us);
     frame_stats_record(&app.draw_stats, render_us - app.send_us);

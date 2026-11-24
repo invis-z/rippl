@@ -73,6 +73,7 @@ int fake_hal_bluetooth_disconnect_count(void);
 void fake_hal_queue_transition(Key key, bool pressed, uint32_t time_ms);
 uint16_t fake_hal_pixel(int x, int y);
 HalDisplayRotation fake_hal_display_rotation(void);
+HalDisplayRotation fake_hal_display_write_rotation(void);
 const char *fake_hal_audio_playing_path(void);
 uint32_t fake_hal_audio_play_start(void);
 int fake_hal_audio_play_count(void);

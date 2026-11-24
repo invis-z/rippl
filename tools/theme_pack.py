@@ -50,11 +50,12 @@ SCENE_SOURCE_KIND = 6
 SCENE_DESIGN_KIND = 7
 SCENES = (("now_playing_scene", SCENE_KIND, SCENE_SOURCE_KIND, SCENE_DESIGN_KIND),
           ("home_scene", 8, 9, 10))
-SCENE_KEYS = {"script", "file", "chrome", "design", "whole_screen", "smooth"}
+SCENE_KEYS = {"script", "file", "chrome", "design", "whole_screen", "smooth", "landscape"}
 SCENE_MOST_BYTES = 6144
 SCENE_CHROME = 1
 SCENE_WHOLE_SCREEN = 2
 SCENE_SMOOTH = 4
+SCENE_LANDSCAPE = 8
 FLAG_DARK_COVER_FLOW = 1
 FLAG_NO_HOME_ART = 2
 ASSET_ENTRY_SIZE = 16
@@ -346,8 +347,13 @@ def one_scene(theme, key, kinds, colors, color_table, names, where):
     smooth = table.get("smooth", False)
     if not isinstance(smooth, bool):
         raise ThemeError(f"{where}: {key}.smooth must be true or false")
+    landscape = table.get("landscape", False)
+    if not isinstance(landscape, bool):
+        raise ThemeError(f"{where}: {key}.landscape must be true or false")
+    if landscape and not whole_screen:
+        raise ThemeError(f"{where}: {key}.landscape requires whole_screen = true")
     flags = ((SCENE_CHROME if chrome else 0) | (SCENE_WHOLE_SCREEN if whole_screen else 0)
-             | (SCENE_SMOOTH if smooth else 0))
+             | (SCENE_SMOOTH if smooth else 0) | (SCENE_LANDSCAPE if landscape else 0))
     shades = {**color_table, **chrome}
     section = b"".join(struct.pack("<H", rgb565(shades[name], f"{where}: chrome {name}"))
                        for name in colors) if chrome else b""

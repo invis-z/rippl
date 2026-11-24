@@ -13,6 +13,8 @@ enum {
 
 typedef struct SimDisplay {
     uint16_t panel[HAL_DISPLAY_LONG_SIDE][HAL_DISPLAY_LONG_SIDE];
+    HalDisplayRotation rotation;
+    HalDisplayRotation write_rotation;
     int width;
     int height;
     int scale;
@@ -23,7 +25,9 @@ typedef struct SimDisplay {
     uint8_t brightness;
 } SimDisplay;
 
-static SimDisplay display = {.width = HAL_DISPLAY_WIDTH,
+static SimDisplay display = {.rotation = HAL_DISPLAY_LANDSCAPE,
+                             .write_rotation = HAL_DISPLAY_LANDSCAPE,
+                             .width = HAL_DISPLAY_WIDTH,
                              .height = HAL_DISPLAY_HEIGHT,
                              .scale = 1,
                              .powered = true,
@@ -116,6 +120,8 @@ void hal_display_wait(void)
 
 void hal_display_set_rotation(HalDisplayRotation rotation)
 {
+    display.rotation = rotation;
+    display.write_rotation = rotation;
     bool landscape = rotation == HAL_DISPLAY_LANDSCAPE;
     int width = landscape ? HAL_DISPLAY_LONG_SIDE : HAL_DISPLAY_SHORT_SIDE;
     int height = landscape ? HAL_DISPLAY_SHORT_SIDE : HAL_DISPLAY_LONG_SIDE;
@@ -131,8 +137,32 @@ void hal_display_set_rotation(HalDisplayRotation rotation)
     }
 }
 
+void hal_display_set_write_rotation(HalDisplayRotation rotation)
+{
+    display.write_rotation = rotation;
+}
+
 void hal_display_write(int x, int y, int width, int height, const uint16_t *pixels)
 {
+    if (display.write_rotation == HAL_DISPLAY_LANDSCAPE &&
+        display.rotation != HAL_DISPLAY_LANDSCAPE) {
+        if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > HAL_DISPLAY_LONG_SIDE ||
+            y + height > HAL_DISPLAY_SHORT_SIDE) {
+            SDL_Log("display write outside the panel: %d,%d %dx%d", x, y, width, height);
+            return;
+        }
+        bool flipped = display.rotation == HAL_DISPLAY_PORTRAIT_FLIPPED;
+        for (int row = 0; row < height; row++) {
+            int ly = y + row;
+            int px = flipped ? HAL_DISPLAY_SHORT_SIDE - 1 - ly : ly;
+            for (int column = 0; column < width; column++) {
+                int lx = x + column;
+                int py = flipped ? lx : HAL_DISPLAY_LONG_SIDE - 1 - lx;
+                display.panel[py][px] = pixels[row * width + column];
+            }
+        }
+        return;
+    }
     if (!area_fits_panel(x, y, width, height)) {
         SDL_Log("display write outside the panel: %d,%d %dx%d", x, y, width, height);
         return;

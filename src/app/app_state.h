@@ -124,6 +124,7 @@ typedef struct AppState {
     uint32_t now_ms;
     AppOptions options;
     bool display_on;
+    bool landscape_write;
     bool powered_off;
     bool start_refused;
     uint32_t refused_ms;
@@ -136,6 +137,7 @@ extern AppState app;
 extern const KeyConfig APP_KEY_CONFIG;
 
 const Theme *app_current_theme(void);
+HalDisplayRotation app_display_rotation(void);
 void app_light_after_first_frame(void);
 void app_read_input(void);
 void app_render(FrameDrawer drawer, bool drawer_paints_everything, int strip_height);

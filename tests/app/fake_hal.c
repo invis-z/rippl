@@ -88,6 +88,7 @@ typedef struct FakeHal {
     uint32_t build_day;
     uint16_t panel[HAL_DISPLAY_LONG_SIDE][HAL_DISPLAY_LONG_SIDE];
     HalDisplayRotation rotation;
+    HalDisplayRotation write_rotation;
     long pixels_written;
     int present_count;
     bool display_on;
@@ -352,6 +353,12 @@ void hal_display_wait(void)
 void hal_display_set_rotation(HalDisplayRotation rotation)
 {
     fake.rotation = rotation;
+    fake.write_rotation = rotation;
+}
+
+void hal_display_set_write_rotation(HalDisplayRotation rotation)
+{
+    fake.write_rotation = rotation;
 }
 
 HalDisplayRotation fake_hal_display_rotation(void)
@@ -359,8 +366,27 @@ HalDisplayRotation fake_hal_display_rotation(void)
     return fake.rotation;
 }
 
+HalDisplayRotation fake_hal_display_write_rotation(void)
+{
+    return fake.write_rotation;
+}
+
 void hal_display_write(int x, int y, int width, int height, const uint16_t *pixels)
 {
+    if (fake.write_rotation == HAL_DISPLAY_LANDSCAPE && fake.rotation != HAL_DISPLAY_LANDSCAPE) {
+        bool flipped = fake.rotation == HAL_DISPLAY_PORTRAIT_FLIPPED;
+        for (int row = 0; row < height; row++) {
+            int ly = y + row;
+            int px = flipped ? HAL_DISPLAY_SHORT_SIDE - 1 - ly : ly;
+            for (int column = 0; column < width; column++) {
+                int lx = x + column;
+                int py = flipped ? lx : HAL_DISPLAY_LONG_SIDE - 1 - lx;
+                fake.panel[py][px] = pixels[row * width + column];
+            }
+        }
+        fake.pixels_written += (long)width * height;
+        return;
+    }
     for (int row = 0; row < height; row++) {
         for (int column = 0; column < width; column++) {
             fake.panel[y + row][x + column] = pixels[row * width + column];
