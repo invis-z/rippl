@@ -17,6 +17,10 @@ enum {
 
 static const uint32_t SPREAD_MASK = 0x07E0F81Fu;
 
+static const uint32_t SPREAD_ROUND = 0x00E03807u;
+static const uint32_t SPREAD_ONE = 0x00200801u;
+static const uint32_t SPREAD_CARRY = 0x00600801u;
+
 typedef struct Channels {
     unsigned red;
     unsigned green;
@@ -37,12 +41,6 @@ static Color join(Channels channels)
     return (Color)((channels.red << RED_SHIFT) | (channels.green << GREEN_SHIFT) | channels.blue);
 }
 
-static unsigned mix(unsigned background, unsigned foreground, unsigned alpha)
-{
-    unsigned weighted = background * (COLOR_ALPHA_OPAQUE - alpha) + foreground * alpha;
-    return (weighted + COLOR_ALPHA_OPAQUE / 2) / COLOR_ALPHA_OPAQUE;
-}
-
 Color color_from_rgb(uint8_t red, uint8_t green, uint8_t blue)
 {
     unsigned red_bits = (unsigned)(red & RED_MASK) << RGB_RED_SHIFT;
@@ -51,16 +49,20 @@ Color color_from_rgb(uint8_t red, uint8_t green, uint8_t blue)
     return (Color)(red_bits | green_bits | blue_bits);
 }
 
-Color color_blend(Color background, Color foreground, uint8_t alpha)
+__attribute__((noinline)) Color color_blend(Color background, Color foreground, uint8_t alpha)
 {
-    unsigned weight = alpha < COLOR_ALPHA_OPAQUE ? alpha : COLOR_ALPHA_OPAQUE;
-    Channels back = split(background);
-    Channels fore = split(foreground);
-    return join((Channels){
-        .red = mix(back.red, fore.red, weight),
-        .green = mix(back.green, fore.green, weight),
-        .blue = mix(back.blue, fore.blue, weight),
-    });
+    if (alpha == 0) {
+        return background;
+    }
+    if (alpha >= COLOR_ALPHA_OPAQUE) {
+        return foreground;
+    }
+    uint32_t back = ((uint32_t)background | (uint32_t)background << SPREAD_SHIFT) & SPREAD_MASK;
+    uint32_t fore = ((uint32_t)foreground | (uint32_t)foreground << SPREAD_SHIFT) & SPREAD_MASK;
+    uint32_t weighted = back * (COLOR_ALPHA_OPAQUE - alpha) + fore * alpha + SPREAD_ROUND;
+    uint32_t raised = weighted + SPREAD_ONE + ((weighted >> 8) & SPREAD_CARRY);
+    uint32_t mixed = ((raised + ((raised >> 4) & SPREAD_MASK)) >> 4) & SPREAD_MASK;
+    return (Color)(mixed | mixed >> SPREAD_SHIFT);
 }
 
 Color color_scale(Color color, unsigned light)

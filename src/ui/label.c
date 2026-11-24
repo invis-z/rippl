@@ -16,16 +16,22 @@ static int advance_of(const Font *font, uint32_t codepoint)
 
 LabelFit label_fit(const Font *font, const char *text, int max_width)
 {
-    int ellipsis_width = advance_of(font, ELLIPSIS_CODEPOINT);
     int used = 0;
     const char *cursor = text;
-    const char *cut = text;
     for (uint32_t codepoint = utf8_next(&cursor); codepoint != 0; codepoint = utf8_next(&cursor)) {
         used += advance_of(font, codepoint);
-        if (used + ellipsis_width <= max_width) {
-            cut = cursor;
-        }
         if (used > max_width) {
+            int limit = max_width - advance_of(font, ELLIPSIS_CODEPOINT);
+            int kept = 0;
+            const char *scan = text;
+            const char *cut = text;
+            for (uint32_t ch = utf8_next(&scan); ch != 0; ch = utf8_next(&scan)) {
+                kept += advance_of(font, ch);
+                if (kept > limit) {
+                    break;
+                }
+                cut = scan;
+            }
             return (LabelFit){.byte_count = (size_t)(cut - text), .ellipsis = true};
         }
     }

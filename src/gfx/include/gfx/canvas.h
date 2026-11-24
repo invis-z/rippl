@@ -15,6 +15,7 @@ Canvas canvas_make(Color *pixels, Rect bounds);
 Canvas canvas_clipped(const Canvas *canvas, Rect area);
 Canvas canvas_shifted(const Canvas *canvas, int dx, Rect area);
 void canvas_clear(Canvas *canvas, Color color);
+void canvas_fill_colors(Color *dst, Color color, int count);
 void canvas_fill_rect(Canvas *canvas, Rect area, Color color);
 void canvas_dim_rect(Canvas *canvas, Rect area);
 void canvas_fill_gradient(Canvas *canvas, Rect area, Color top, Color bottom);
