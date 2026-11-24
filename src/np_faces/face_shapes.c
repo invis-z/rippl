@@ -15,6 +15,7 @@ enum {
     SQRT_TOP_BIT = 1 << 30,
     SPOKE_Q4_UNIT = SHAPE_Q4 * SHAPE_UNIT,
     BAND_FRINGE = HALF_PIXEL_Q4 * SHAPE_UNIT,
+    INVERSE_SHIFT = 16,
     LATTICE_OFFSET = 2,
     DIGIT_SEGMENTS = 10,
     BAR_COUNT = 3,
@@ -54,6 +55,13 @@ typedef struct Run {
     int right;
     int y;
 } Run;
+
+typedef struct Edge {
+    int outside_squared;
+    int inside_squared;
+    int square;
+    int inverse;
+} Edge;
 
 typedef struct Span {
     int first;
@@ -216,24 +224,34 @@ RIPPL_NP_FACES_CODE static void run_put(PixelRun *run, int x, uint8_t alpha)
     blend_at(run->canvas, (Point){x, run->y}, run->color, alpha);
 }
 
-RIPPL_NP_FACES_CODE static uint8_t edge_alpha(int distance_squared, int radius_q4)
+RIPPL_NP_FACES_CODE static Edge edge_of(int radius_q4)
 {
     int outside = radius_q4 + HALF_PIXEL_Q4;
     int inside = radius_q4 - HALF_PIXEL_Q4;
-    if (radius_q4 <= 0 || distance_squared >= outside * outside) {
-        return 0;
+    if (radius_q4 <= 0) {
+        return (Edge){-1, -1, 0, 0};
     }
-    if (inside > 0 && distance_squared <= inside * inside) {
-        return COLOR_ALPHA_OPAQUE;
-    }
-    return coverage(outside - (int)shape_isqrt((uint32_t)distance_squared));
+    return (Edge){outside * outside, inside > 0 ? inside * inside : -1, radius_q4 * radius_q4,
+                  (1 << INVERSE_SHIFT) / (2 * radius_q4)};
 }
 
-RIPPL_NP_FACES_CODE static uint8_t ring_alpha(const ShapeRing *ring, int dx, int dy)
+RIPPL_NP_FACES_CODE static uint8_t edge_alpha(const Edge *edge, int distance_squared)
+{
+    if (distance_squared >= edge->outside_squared) {
+        return 0;
+    }
+    if (distance_squared <= edge->inside_squared) {
+        return COLOR_ALPHA_OPAQUE;
+    }
+    int part =
+        HALF_PIXEL_Q4 - (((distance_squared - edge->square) * edge->inverse) >> INVERSE_SHIFT);
+    return coverage(part < 1 ? 1 : part > SHAPE_Q4 ? SHAPE_Q4 : part);
+}
+
+RIPPL_NP_FACES_CODE static uint8_t ring_alpha(const Edge *outer, const Edge *inner, int dx, int dy)
 {
     int distance_squared = dx * dx + dy * dy;
-    int alpha =
-        edge_alpha(distance_squared, ring->outer_q4) - edge_alpha(distance_squared, ring->inner_q4);
+    int alpha = edge_alpha(outer, distance_squared) - edge_alpha(inner, distance_squared);
     return (uint8_t)(alpha < 0 ? 0 : alpha);
 }
 
@@ -261,7 +279,8 @@ RIPPL_NP_FACES_CODE static bool in_span(Span span, int x)
     return x >= span.first && x <= span.last;
 }
 
-RIPPL_NP_FACES_CODE static void ring_row(Canvas *canvas, const ShapeRing *ring, int y, Color color)
+RIPPL_NP_FACES_CODE static void ring_row(Canvas *canvas, const ShapeRing *ring, const Edge *edges,
+                                         int y, Color color)
 {
     int dy = y * SHAPE_Q4 + HALF_PIXEL_Q4 - ring->y_q4;
     int far = ring->outer_q4 + HALF_PIXEL_Q4;
@@ -285,7 +304,7 @@ RIPPL_NP_FACES_CODE static void ring_row(Canvas *canvas, const ShapeRing *ring, 
             continue;
         }
         int dx = x * SHAPE_Q4 + HALF_PIXEL_Q4 - ring->x_q4;
-        uint8_t alpha = ring_alpha(ring, dx, dy);
+        uint8_t alpha = ring_alpha(&edges[0], &edges[1], dx, dy);
         if (alpha == 0) {
             run_flush(&run, x);
             run.start = x + 1;
@@ -301,8 +320,9 @@ RIPPL_NP_FACES_CODE void shape_ring(Canvas *canvas, ShapeRing ring, Color color)
     int top = larger((ring.y_q4 - ring.outer_q4) >> PIXEL_SHIFT, canvas->clip.y);
     int bottom = smaller(((ring.y_q4 + ring.outer_q4) >> PIXEL_SHIFT) + 1,
                          canvas->clip.y + canvas->clip.height);
+    Edge edges[2] = {edge_of(ring.outer_q4), edge_of(ring.inner_q4)};
     for (int y = top; y < bottom; y++) {
-        ring_row(canvas, &ring, y, color);
+        ring_row(canvas, &ring, edges, y, color);
     }
 }
 
@@ -328,6 +348,7 @@ RIPPL_NP_FACES_CODE void shape_rounded(Canvas *canvas, Rect area, int radius, Co
     int inside = radius * SHAPE_Q4 - HALF_PIXEL_Q4;
     int near = (area.x + radius) * SHAPE_Q4 - HALF_PIXEL_Q4;
     int far = (area.x + area.width - radius) * SHAPE_Q4 - HALF_PIXEL_Q4;
+    Edge corner = edge_of(radius * SHAPE_Q4);
     for (int y = shown.y; y < shown.y + shown.height; y++) {
         int dy = corner_distance(y, area.y, area.height, radius);
         int room = inside * inside - dy * dy;
@@ -341,7 +362,7 @@ RIPPL_NP_FACES_CODE void shape_rounded(Canvas *canvas, Rect area, int radius, Co
             }
             int dx = corner_distance(x, area.x, area.width, radius);
             if (dx > 0) {
-                uint8_t alpha = edge_alpha(dx * dx + dy * dy, radius * SHAPE_Q4);
+                uint8_t alpha = edge_alpha(&corner, dx * dx + dy * dy);
                 if (alpha == 0) {
                     run_flush(&run, x);
                     run.start = x + 1;

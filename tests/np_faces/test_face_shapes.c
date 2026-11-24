@@ -124,9 +124,9 @@ static void paint_spans(Canvas *canvas, int variant)
 }
 
 static const Golden GOLDEN[] = {
-    {"ring_disc", paint_ring, 0, 0x9AA29CF1},
-    {"ring_hole", paint_ring, 1, 0xAAEEE3A7},
-    {"ring_subpixel", paint_ring, 2, 0x6B5EA970},
+    {"ring_disc", paint_ring, 0, 0xDAA4E5F9},
+    {"ring_hole", paint_ring, 1, 0x3753AF23},
+    {"ring_subpixel", paint_ring, 2, 0x4C9FCE30},
     {"rounded", paint_rounded, 0, 0xB478A940},
     {"rounded_flat", paint_rounded, 1, 0x2968BF00},
     {"trapezoid", paint_trapezoid, 0, 0xE0842E80},
