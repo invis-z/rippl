@@ -21,12 +21,6 @@ static const uint8_t SPACING_RANGES[THEME_SPACING_COUNT][2] = {
 #undef THEME_SPACING
 };
 
-static const uint8_t FONT_LIMITS[THEME_FONT_COUNT] = {
-#define THEME_FONT(id, name, height) height,
-#include "ui/theme_fonts.def"
-#undef THEME_FONT
-};
-
 static const uint8_t ICON_LIMITS[THEME_ICON_COUNT][2] = {
 #define THEME_ICON(id, name, width, height) {width, height},
 #include "ui/theme_icons.def"
@@ -64,15 +58,6 @@ RIPPL_STARTUP_HELPER static bool wallpaper_fits(const uint8_t *entry, uint32_t h
            height >= 1 && height <= tallest && bytes_get32_at(entry, 8) >= held;
 }
 
-RIPPL_STARTUP_HELPER static bool font_fits(const uint8_t *entry, uint32_t held)
-{
-    uint32_t font = (uint32_t)entry[0] - THEME_ASSET_FIRST_FONT;
-    uint32_t glyphs = bytes_get16_at(entry, 2);
-    return entry[0] >= THEME_ASSET_FIRST_FONT && entry[0] < THEME_ASSET_SCENE && glyphs >= 1 &&
-           glyphs <= THEME_FONT_MAX_GLYPHS && entry[1] >= 1 &&
-           (uint32_t)entry[1] + entry[6] <= FONT_LIMITS[font] && bytes_get32_at(entry, 8) >= held;
-}
-
 RIPPL_STARTUP_HELPER static bool scene_fits(const uint8_t *entry, uint32_t held)
 {
     uint32_t chrome = (entry[1] & THEME_SCENE_CHROME) != 0 ? THEME_SCENE_CHROME_BYTES : 0;
@@ -97,14 +82,6 @@ RIPPL_STARTUP_HELPER static void take_asset(const uint8_t *entry, uint32_t held,
         package->wallpapers[entry[0]] = (ThemePackageWallpaper){
             bytes_get32_at(entry, 8), bytes_get32_at(entry, 12), (uint16_t)bytes_get16_at(entry, 2),
             (uint16_t)bytes_get16_at(entry, 4)};
-    } else if (font_fits(entry, held)) {
-        package->fonts[entry[0] - THEME_ASSET_FIRST_FONT] =
-            (ThemePackageFont){bytes_get32_at(entry, 8),
-                               bytes_get32_at(entry, 12),
-                               (uint16_t)bytes_get16_at(entry, 2),
-                               (uint16_t)bytes_get16_at(entry, 4),
-                               entry[1],
-                               entry[6]};
     }
 }
 
@@ -113,9 +90,6 @@ RIPPL_STARTUP_HELPER static void take_assets(const uint8_t *table, uint32_t coun
 {
     for (uint32_t kind = 0; kind < THEME_WALLPAPER_COUNT; kind++) {
         package->wallpapers[kind] = (ThemePackageWallpaper){0};
-    }
-    for (uint32_t font = 0; font < THEME_FONT_COUNT; font++) {
-        package->fonts[font] = (ThemePackageFont){0};
     }
     package->scene = (ThemePackageScene){0};
     package->home_scene = (ThemePackageScene){0};

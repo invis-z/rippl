@@ -13,8 +13,8 @@ BOX_FIELDS = ("fill_top", "fill_bottom", "border", "shine", "ink", "border_width
               "shine_height", "inset_across", "inset_down", "radius", "see_through")
 COLOR_FIELDS = 5
 PAGE_FILES = ("index.html", "style.css", "editor.js", "theme_format.js", "preview_host.js",
-              "icon_editor.js", "tile_icons.js", "wallpaper_editor.js", "font_editor.js",
-              "accent_editor.js", "arrange.js", "drawing.js", "drawings.js", "drawing_editor.js", "pixel_letters.js", "colour_tools.js", "library.js", "scene_compile.js",
+              "icon_editor.js", "tile_icons.js", "wallpaper_editor.js",
+              "accent_editor.js", "arrange.js", "drawing.js", "drawings.js", "drawing_editor.js", "colour_tools.js", "library.js", "scene_compile.js",
               "gallery.html",
               "gallery.js")
 MODULE = "rippl_preview.wasm"
@@ -56,9 +56,7 @@ def schema(themes, definitions):
     boxes = theme_pack.names_in(definitions / "theme_boxes.def")
     spacing = theme_pack.spacing_in(definitions / "theme_spacing.def")
     icons = theme_pack.icons_in(definitions / "theme_icons.def")
-    fonts = theme_pack.fonts_in(definitions / "theme_fonts.def")
     layout = theme_pack.layout_in(definitions / "theme_layout.def")
-    ranges = json.loads(theme_pack.FONT_RANGES.read_text(encoding="utf-8"))["character_ranges"]
     dark = theme_pack.read_source(themes / (theme_pack.BASE_THEME + theme_pack.SOURCE_SUFFIX))
     return {
         "colors": colors,
@@ -69,10 +67,8 @@ def schema(themes, definitions):
         "icon_pairs": [list(pair) for pair in theme_pack.ICON_PAIRS],
         "wallpapers": [{"name": name, "width": width, "height": height}
                        for name, width, height in theme_pack.WALLPAPERS],
-        "fonts": [{"name": name, "height": height} for name, height in fonts],
         "layout": [{"name": name, "height": height} for name, height in layout],
         "layouts": list(theme_pack.LAYOUTS),
-        "font_ranges": ranges,
         "asset_memory": theme_pack.ASSET_MEMORY,
         "dark": {
             "selection": dark.get("selection", boxes[0]),
@@ -116,9 +112,7 @@ def gallery_entry(path, shared):
 
 def images_of(path):
     theme = theme_pack.read_source(path)
-    fonts = theme.get("fonts") if isinstance(theme.get("fonts"), dict) else {}
     tables = [(theme.get(key), "image") for key, _, _ in theme_pack.WALLPAPERS]
-    tables += [(table, "file") for table in fonts.values()]
     tables.append((theme.get("now_playing_scene"), "file"))
     return [path.parent / table[key] for table, key in tables
             if isinstance(table, dict) and isinstance(table.get(key), str)]

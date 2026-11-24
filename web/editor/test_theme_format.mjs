@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { batteryRows, blankRows, paintedRows, resizedRows, rowsFromPixels } from "./icon_editor.js";
-import { coveredCodes } from "./font_editor.js";
 import { KINDS, drawingScript, element, newElement, readDrawing } from "./drawing.js";
 import { arrangeUpright, arrangedBoxes, uprightMatches } from "./arrange.js";
-import { LETTERS, LETTER_STYLES, letterFont, letterHeight, sheetFont, sheetLayout, sheetOrder, sheetTemplate } from "./pixel_letters.js";
 import { ACCENT_FAMILY, COLOUR_SETS, mix, paletteOf, readableShade, schemeFrom, schemeOf } from "./colour_tools.js";
 import { LIBRARY, VERSION_EVERY_MS, VERSION_LIMIT, addVersion, copyTheme, keep, readLibrary, removeTheme, versionDue, writeLibrary } from "./library.js";
 import { READY, SHELF, SHELF_ART, SHELF_MORE, STARTS, drawingFrom, fitTiles, fromDesign, isTiles, plainPicture, startDrawing, tileRows, tilesFor } from "./drawings.js";
@@ -259,51 +257,6 @@ assert.ok(JSON.stringify(converted).includes("#112233"), "an old part keeps its 
 assert.ok(sceneSize(converted) < SCENE_ROOM);
 assert.deepEqual(fromDesign(older, "playing").elements.length, converted.elements.length);
 
-for (const [name, style] of Object.entries(LETTER_STYLES)) {
-  for (const entry of schema.fonts) {
-    if (letterHeight(style) > entry.height) {
-      assert.throws(() => letterFont(style, entry.height), RangeError, `${name} is refused where it doesn't fit`);
-      continue;
-    }
-    const font = letterFont(style, entry.height);
-    assert.ok(font.ascent + font.descent <= entry.height, `${name} fits ${entry.name}`);
-    assert.equal(font.glyphs.length, Object.keys(LETTERS).length + 26, `${name} has capitals for lowercase`);
-    const lettered = { ...defaultTheme(schema), fonts: { ...defaultTheme(schema).fonts, [entry.name]: font }, font_sources: { [entry.name]: { kind: "drawn" } }, font_edits: {} };
-    const back = unpack(pack(lettered, schema), schema);
-    assert.equal(back.fonts[entry.name].glyphs.length, font.glyphs.length, `${name} packs as the ${entry.name} font`);
-  }
-}
-const everyChar = schema.font_ranges.flatMap(([first, last]) => Array.from({ length: last - first + 1 }, (_, index) => String.fromCharCode(first + index)));
-const dotted = letterFont(LETTER_STYLES.dots, 20);
-assert.deepEqual(everyChar.filter((char) => !dotted.glyphs.some((glyph) => glyph.char === char)), [], "the letter set covers every character a theme font may have");
-const order = sheetOrder(schema.font_ranges);
-assert.equal(Array.from(order).length, everyChar.length, "the template has a box for every character a theme font may have");
-for (const entry of schema.fonts) {
-  const layout = sheetLayout(entry.height);
-  const sheet = sheetTemplate(layout, order);
-  assert.equal(sheet.width, layout.cell[0] * 16);
-  assert.throws(() => sheetFont(sheet, { ...layout, order, gap: 1, limit: entry.height }), RangeError, "guides and hints alone are no letters");
-  const ink = (image, colour) => {
-    const at = Array.from(order).indexOf("I");
-    const [left, top] = [(at % 16) * layout.cell[0], Math.floor(at / 16) * layout.cell[1]];
-    for (let y = 2; y < layout.baseline + 1; y++) {
-      for (let x = 2; x < 4; x++) {
-        image.data.set(colour, ((top + y) * image.width + left + x) * 4);
-      }
-    }
-  };
-  ink(sheet, [0, 0, 0, 255]);
-  const font = sheetFont(sheet, { ...layout, order, gap: 1, limit: entry.height });
-  const letter = font.glyphs.find((glyph) => glyph.char === "I");
-  assert.deepEqual([letter.left, letter.top, letter.advance, letter.rows.length, letter.rows[0]], [2, layout.baseline - 2, 5, layout.baseline - 1, "ff"], `an I drawn on the ${entry.name} template`);
-  assert.equal(font.ascent + font.descent, layout.baseline - 1, "the guide line under the letter is not ink");
-  const clear = { width: sheet.width, height: sheet.height, data: new Uint8ClampedArray(sheet.data.length) };
-  ink(clear, [255, 255, 255, 255]);
-  assert.deepEqual(sheetFont(clear, { ...layout, order, gap: 1, limit: entry.height }).glyphs.find((glyph) => glyph.char === "I").rows, letter.rows, "white on see-through reads the same");
-}
-const memoryTheme = { ...defaultTheme(schema), fonts: { ...defaultTheme(schema).fonts, title: dotted } };
-const memory = memoryParts(memoryTheme, schema);
-assert.ok(memory.fonts.title > 0 && memory.wallpaper === 0 && memory.used === memory.fonts.title && memory.limit === schema.asset_memory);
 assert.equal(memoryParts(defaultTheme(schema), schema).used, 0);
 
 assert.equal(checksum(new Uint8Array([])), 0x811c9dc5);
@@ -428,54 +381,6 @@ const many = quantise(ramp, 64, 64);
 assert.equal(many.palette.length, 16);
 assert.ok(many.palette.every((color) => rgb565(color) === rgb565(hexColor(rgb565(color)))));
 assert.equal(pack({ ...fresh, wallpapers: { ...fresh.wallpapers, wallpaper: many } }, schema).length, dark.length + 16 + 32 + 32 * 64);
-
-const letters = {
-  ascent: 3,
-  descent: 1,
-  glyphs: [
-    { char: "B", left: 1, top: 3, advance: 4, rows: ["f8", "1.", "ff"] },
-    { char: "A", left: -1, top: 2, advance: 5, rows: ["fff"] },
-    { char: " ", left: 0, top: 0, advance: 2, rows: [] },
-  ],
-};
-assert.equal(fresh.fonts.body, null);
-const fonted = pack({ ...fresh, fonts: { ...fresh.fonts, body: letters } }, schema);
-const fontedView = new DataView(fonted.buffer);
-const fontCore = fontedView.getUint32(8, true);
-assert.equal(fonted[48], 1);
-assert.deepEqual(Array.from(fonted.subarray(fontCore - 16, fontCore - 8)), [3, 3, 3, 0, 5, 0, 1, 0]);
-assert.equal(fontedView.getUint32(fontCore - 8, true), fontCore);
-assert.equal(fontedView.getUint32(fontCore - 4, true), checksum(fonted.subarray(fontCore)));
-assert.deepEqual(Array.from(fonted.subarray(fontCore, fontCore + 10)), [32, 0, 0, 0, 0, 0, 0, 0, 2, 0]);
-assert.deepEqual(Array.from(fonted.subarray(fontCore + 10, fontCore + 20)), [65, 0, 0, 0, 3, 1, 255, 2, 5, 0]);
-assert.deepEqual(Array.from(fonted.subarray(-5)), [0xff, 0xf0, 0xf8, 0x10, 0xff]);
-const unpacked = unpack(fonted, schema).fonts.body;
-assert.deepEqual(unpacked, { ...letters, glyphs: [letters.glyphs[2], letters.glyphs[1], letters.glyphs[0]] });
-assert.equal(assetMemory({ ...fresh, fonts: { ...fresh.fonts, body: letters } }, schema), 32 + 8);
-const tooTall = { ...letters, ascent: 17, descent: 4 };
-assert.throws(() => pack({ ...fresh, fonts: { ...fresh.fonts, body: tooTall } }, schema), ThemeError);
-assert.throws(() => pack({ ...fresh, fonts: { ...fresh.fonts, small: { ...letters, ascent: 12, descent: 4 } } }, schema), ThemeError);
-const twice = { ...letters, glyphs: [...letters.glyphs, letters.glyphs[0]] };
-assert.throws(() => pack({ ...fresh, fonts: { ...fresh.fonts, body: twice } }, schema), ThemeError);
-const heavy = { ...letters, glyphs: Array.from({ length: 9 }, (_, index) => ({ char: String.fromCharCode(33 + index), left: 0, top: 0, advance: 1, rows: Array(40).fill("f".repeat(40)) })) };
-const screen = { palette: ["#000000"], rows: Array(170).fill("0".repeat(320)) };
-pack({ ...fresh, fonts: { ...fresh.fonts, body: heavy } }, schema);
-assert.throws(
-  () => pack({ ...fresh, fonts: { ...fresh.fonts, body: heavy }, wallpapers: { ...fresh.wallpapers, wallpaper: screen } }, schema),
-  /more than the player has room for/,
-);
-const fontLines = toToml({ ...fresh, fonts: { ...fresh.fonts, small: letters } }, schema).split(String.fromCharCode(10));
-const fontAt = fontLines.indexOf("[fonts.small]");
-assert.deepEqual(fontLines.slice(fontAt + 1, fontAt + 5), [
-  "ascent = 3",
-  "descent = 1",
-  "glyphs = [",
-  '    { char = "B", left = 1, top = 3, advance = 4, rows = ["f8", "1.", "ff"] },',
-]);
-const inter = readFileSync(new URL("../../assets/fonts/inter/Inter-SemiBold.ttf", import.meta.url));
-const covered = coveredCodes(inter.buffer.slice(inter.byteOffset, inter.byteOffset + inter.byteLength), schema.font_ranges);
-assert.equal(covered.length, 108);
-assert.ok(covered.includes(65) && covered.includes(0x2026) && !covered.includes(0x4e00));
 
 assert.equal(fresh.layouts.now_playing.cover, null);
 const arranged = {

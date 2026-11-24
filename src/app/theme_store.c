@@ -188,7 +188,7 @@ RIPPL_STARTUP_HELPER static void apply(ThemeMemory *block, const char *card)
 {
     block->card = read_card(block, card);
     block->active = block->card || read_builtin(block);
-    theme_assets_reset(&block->assets, &block->package);
+    theme_assets_reset(&block->assets);
     block->revision++;
 }
 
@@ -272,13 +272,6 @@ const ThemeIcons *theme_store_icons(void)
 {
     const ThemeMemory *block = memory();
     return block != NULL && block->active ? &block->icons : NULL;
-}
-
-const Font *theme_store_font(ThemeFontId id)
-{
-    ThemeMemory *block = memory();
-    return block != NULL && block->active ? theme_assets_font(&block->assets, &block->package, id)
-                                          : NULL;
 }
 
 const Wallpaper *theme_store_wallpaper(bool portrait)

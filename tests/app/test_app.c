@@ -3884,87 +3884,6 @@ static void a_small_wallpaper_serves_the_upright_screen_too(void)
     CHECK(theme_store_wallpaper(true) == NULL);
 }
 
-static void start_app_lettered(LetteredSpoil spoil)
-{
-    uint32_t size = 0;
-    fake_hal_reset();
-    theme_fixture_lettered("Lettered.rippltheme", spoil, &size);
-    remember_theme_file("Lettered");
-    now_ms = START_MS;
-    fake_hal_set_milliseconds(now_ms);
-    app_start();
-    step();
-}
-
-static bool solid_square_in_first_row(Color color)
-{
-    int top = DEFAULT_THEME.metrics.header_height;
-    for (int y = top; y + 4 <= top + DEFAULT_THEME.metrics.row_height; y++) {
-        for (int x = 0; x < 80; x++) {
-            bool solid = true;
-            for (int cell = 0; cell < 16 && solid; cell++) {
-                solid = fake_hal_pixel(x + cell % 4, y + cell / 4) == color;
-            }
-            if (solid) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-static void a_theme_font_draws_the_letters_it_has_and_borrows_the_rest(void)
-{
-    start_app_lettered(LETTERED_SOUND);
-    const Font *body = theme_store_font(THEME_FONT_BODY);
-    CHECK(body != NULL);
-    CHECK_EQUAL(2, body->glyph_count);
-    CHECK_EQUAL(4, font_find_glyph(body, 'M')->width);
-    CHECK(font_find_glyph(body, 'u') == font_find_glyph(DEFAULT_THEME.fonts.body, 'u'));
-    CHECK(theme_store_font(THEME_FONT_TITLE) == NULL);
-    CHECK(solid_square_in_first_row(DEFAULT_THEME_DARK_COLORS.selection_text));
-    start_app_wearing("dark.rippltheme", "Dark");
-    CHECK(!solid_square_in_first_row(DEFAULT_THEME_DARK_COLORS.selection_text));
-}
-
-static void a_wiped_theme_font_borrows_every_letter_until_it_is_read_again(void)
-{
-    start_app_lettered(LETTERED_SOUND);
-    fake_hal_wipe_theme_assets();
-    app_show_notice("Busy", "Working");
-    const Font *body = theme_store_font(THEME_FONT_BODY);
-    CHECK_EQUAL(0, body->glyph_count);
-    CHECK(font_find_glyph(body, 'M') == font_find_glyph(DEFAULT_THEME.fonts.body, 'M'));
-    CHECK_EQUAL(DEFAULT_THEME.fonts.body->ascent, body->ascent);
-    step();
-    CHECK_EQUAL(2, theme_store_font(THEME_FONT_BODY)->glyph_count);
-    CHECK(solid_square_in_first_row(DEFAULT_THEME_DARK_COLORS.selection_text));
-}
-
-static void a_theme_font_that_fails_its_checks_is_left_for_the_players_own(void)
-{
-    const LetteredSpoil spoils[] = {LETTERED_DAMAGED, LETTERED_OUT_OF_ORDER};
-    for (int index = 0; index < 2; index++) {
-        start_app_lettered(spoils[index]);
-        CHECK(theme_store_package() != NULL);
-        CHECK_EQUAL(0, theme_store_font(THEME_FONT_BODY)->glyph_count);
-        CHECK(!solid_square_in_first_row(DEFAULT_THEME_DARK_COLORS.selection_text));
-    }
-}
-
-static void a_wallpaper_lies_after_the_fonts_in_the_shared_memory(void)
-{
-    start_app_lettered(LETTERED_PAPERED);
-    const Font *body = theme_store_font(THEME_FONT_BODY);
-    const Wallpaper *wallpaper = theme_store_wallpaper(false);
-    CHECK(wallpaper->ready);
-    CHECK_EQUAL(2, body->glyph_count);
-    CHECK_EQUAL(32, (const uint8_t *)(const void *)wallpaper->pairs -
-                        (const uint8_t *)(const void *)body->glyphs);
-    CHECK_EQUAL(0xFFFFu, wallpaper->pairs[0x01] & 0xFFFFu);
-    CHECK_EQUAL(0u, wallpaper->pairs[0x01] >> 16);
-}
-
 static ThemeLayout unplaced(void)
 {
     ThemeLayout layout;
@@ -4407,10 +4326,6 @@ int main(void)
         TEST_CASE(a_wiped_wallpaper_is_never_drawn_and_comes_back_on_the_next_step),
         TEST_CASE(a_wallpaper_that_fails_its_check_leaves_the_plain_background),
         TEST_CASE(a_small_wallpaper_serves_the_upright_screen_too),
-        TEST_CASE(a_theme_font_draws_the_letters_it_has_and_borrows_the_rest),
-        TEST_CASE(a_wiped_theme_font_borrows_every_letter_until_it_is_read_again),
-        TEST_CASE(a_theme_font_that_fails_its_checks_is_left_for_the_players_own),
-        TEST_CASE(a_wallpaper_lies_after_the_fonts_in_the_shared_memory),
         TEST_CASE(a_theme_layout_moves_the_progress_bar_and_hides_the_title),
         TEST_CASE(lyrics_hide_only_the_lines_they_overlap),
         TEST_CASE(a_remembered_theme_file_that_is_gone_leaves_the_built_in_theme),

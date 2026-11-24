@@ -20,31 +20,10 @@ static void wear_spacing(ThemeMetrics *metrics, const uint8_t *spacing)
     }
 }
 
-static void wear_fonts(ThemeFonts *fonts)
-{
-    const Font **fields[] = {&fonts->title, &fonts->body, &fonts->small, &fonts->status};
-    const Font *const builtin[THEME_FONT_COUNT] = {
-#define THEME_FONT(id, name, height) DEFAULT_THEME.fonts.name,
-#include "ui/theme_fonts.def"
-#undef THEME_FONT
-    };
-    for (size_t field = 0; field < sizeof fields / sizeof fields[0]; field++) {
-        for (int id = 0; id < THEME_FONT_COUNT; id++) {
-            const Font *worn = theme_store_font((ThemeFontId)id);
-            if (*fields[field] == builtin[id] && worn != NULL) {
-                *fields[field] = worn;
-                break;
-            }
-        }
-    }
-}
-
-static void wear_theme_file(Theme *theme, Theme *stage)
+static void wear_theme_file(Theme *theme)
 {
     const ThemePackage *package = theme_store_package();
     if (package != NULL) {
-        wear_fonts(&theme->fonts);
-        wear_fonts(&stage->fonts);
         theme->icons = theme_store_icons();
         theme->wallpaper = theme_store_wallpaper(theme_is_portrait(theme));
         theme->layout = &package->layouts[theme_is_portrait(theme) ? THEME_WALLPAPER_PORTRAIT
@@ -75,7 +54,7 @@ void app_dress_theme(void)
         default_theme_enlarge_status(&app.theme);
         default_theme_enlarge_status(&app.stage_theme);
     }
-    wear_theme_file(&app.theme, &app.stage_theme);
+    wear_theme_file(&app.theme);
     int slide_ms = (int)settings_animation_ms(settings->options, SELECTION_SLIDE_MS);
     app.theme.metrics.selection_slide_ms = slide_ms;
     app.stage_theme.metrics.selection_slide_ms = slide_ms;

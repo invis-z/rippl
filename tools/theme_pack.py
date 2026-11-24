@@ -1,5 +1,4 @@
 import argparse
-import json
 import re
 import struct
 import sys
@@ -25,7 +24,7 @@ BYTE_FIELDS = ("border_width", "shine_height")
 BOX_KEYS = {"fill", "border", "shine", "ink", "border_width", "border_edges", "shine_height", "inset",
             "radius", "opacity"}
 THEME_KEYS = {"name", "author", "description", "selection", "colors", "boxes", "spacing", "icons",
-              "wallpaper", "wallpaper_portrait", "fonts", "now_playing",
+              "wallpaper", "wallpaper_portrait", "now_playing",
               "now_playing_portrait", "accents", "cover_flow", "now_playing_scene",
               "home_art", "home_scene"}
 LAYOUTS = ("now_playing", "now_playing_portrait")
@@ -61,13 +60,6 @@ FLAG_NO_HOME_ART = 2
 ASSET_ENTRY_SIZE = 16
 ASSET_MEMORY = 28224
 WALLPAPER_PAIR_BYTES = 1024
-FIRST_FONT_KIND = 2
-MAX_FONT_GLYPHS = 512
-LEAST_FONT_SIZE = 8
-MOST_FONT_SIZE = 32
-GLYPH_KEYS = {"char", "left", "top", "advance", "rows"}
-GLYPH_RECORD = struct.Struct("<HHBBbbBx")
-FONT_RANGES = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "fonts.json"
 PALETTE_COLORS = 16
 HEX_DIGITS = "0123456789abcdef"
 ICON_LEVELS = ".123456789abcdef"
@@ -77,7 +69,6 @@ HEX_COLOR = re.compile(r"^#([0-9a-fA-F]{6})$")
 ENTRY = re.compile(r"^THEME_(?:COLOR|BOX)\(\w+,\s*(\w+)\)\s*$")
 SPACING_ENTRY = re.compile(r"^THEME_SPACING\(\w+,\s*(\w+),\s*(\d+),\s*(\d+)\)\s*$")
 ICON_ENTRY = re.compile(r"^THEME_ICON\(\w+,\s*(\w+),\s*(\d+),\s*(\d+)\)\s*$")
-FONT_ENTRY = re.compile(r"^THEME_FONT\(\w+,\s*(\w+),\s*(\d+)\)\s*$")
 LAYOUT_ENTRY = re.compile(r"^THEME_LAYOUT\(\w+,\s*(\w+),\s*(\d+)\)\s*$")
 BASE_THEME = "dark"
 SOURCE_SUFFIX = ".toml"
@@ -125,17 +116,6 @@ def layout_in(definition):
     found = []
     for line in definition.read_text(encoding="utf-8").splitlines():
         match = LAYOUT_ENTRY.match(line.strip())
-        if match:
-            found.append((match.group(1), int(match.group(2))))
-    return found
-
-
-def fonts_in(definition):
-    if not definition.exists():
-        return []
-    found = []
-    for line in definition.read_text(encoding="utf-8").splitlines():
-        match = FONT_ENTRY.match(line.strip())
         if match:
             found.append((match.group(1), int(match.group(2))))
     return found
@@ -346,87 +326,6 @@ def wallpaper_assets(theme, base, where):
     return found
 
 
-def aligned(size):
-    return (size + 3) // 4 * 4
-
-
-def glyph_char(glyph, where):
-    char = glyph.get("char")
-    if not isinstance(char, str) or len(char) != 1 or ord(char) > 0xFFFF:
-        raise ThemeError(f"{where}: each glyph names one character, char = \"A\"")
-    return ord(char)
-
-
-def glyph_number(glyph, key, span, where):
-    value = glyph.get(key)
-    if isinstance(value, bool) or not isinstance(value, int) or not span[0] <= value <= span[1]:
-        raise ThemeError(f"{where}: {key} must be a whole number from {span[0]} to {span[1]}")
-    return value
-
-
-def glyph_levels(rows, where):
-    if not isinstance(rows, list) or any(not isinstance(row, str) for row in rows):
-        raise ThemeError(f"{where}: rows is a list of rows of text")
-    width = len(rows[0]) if rows else 0
-    if any(len(row) != width for row in rows) or width > 255 or len(rows) > 255:
-        raise ThemeError(f"{where}: every row needs the same length, at most 255")
-    levels = [ICON_LEVELS.find(mark) if mark != "0" else 0 for row in rows for mark in row.lower()]
-    if -1 in levels:
-        raise ThemeError(f"{where}: a row is made of . and 1-9, a-f, from clear to solid")
-    return width, len(rows), levels
-
-
-def glyph_parts(glyph, offset, where):
-    if not isinstance(glyph, dict) or set(glyph) - GLYPH_KEYS:
-        raise ThemeError(f"{where}: a glyph has char, left, top, advance and rows")
-    code = glyph_char(glyph, where)
-    where = f"{where} {glyph['char']!r}"
-    width, height, levels = glyph_levels(glyph.get("rows", []), where)
-    left, top = (glyph_number(glyph, key, (-128, 127), where) for key in ("left", "top"))
-    advance = glyph_number(glyph, "advance", (0, 255), where)
-    record = GLYPH_RECORD.pack(code, offset, width, height, left, top, advance)
-    padded = levels + [0] * (len(levels) % 2)
-    return code, record, bytes(first << 4 | second for first, second in zip(padded[::2], padded[1::2]))
-
-
-def font_glyphs(glyphs, where):
-    if not isinstance(glyphs, list) or not 1 <= len(glyphs) <= MAX_FONT_GLYPHS:
-        raise ThemeError(f"{where}: glyphs is a list of 1 to {MAX_FONT_GLYPHS} glyphs")
-    ordered = sorted(glyphs, key=lambda glyph: glyph_char(glyph, where))
-    records, bitmap, seen = b"", b"", set()
-    for glyph in ordered:
-        code, record, levels = glyph_parts(glyph, len(bitmap), where)
-        if code in seen:
-            raise ThemeError(f"{where}: {glyph['char']!r} is given twice")
-        seen.add(code)
-        records, bitmap = records + record, bitmap + levels
-    if len(bitmap) > 0xFFFF:
-        raise ThemeError(f"{where}: the glyphs need more than 65,535 bytes")
-    return len(ordered), records, bitmap
-
-
-def font_asset(table, kind, limit, where):
-    if not isinstance(table, dict) or set(table) - {"ascent", "descent", "glyphs"}:
-        raise ThemeError(f"{where}: a font names a file, or gives ascent, descent and glyphs")
-    ascent = glyph_number(table, "ascent", (1, limit), where)
-    descent = glyph_number(table, "descent", (0, limit), where)
-    if ascent + descent > limit:
-        raise ThemeError(f"{where}: ascent and descent add up to {ascent + descent}, "
-                         f"more than the {limit} this text has room for")
-    count, records, bitmap = font_glyphs(table.get("glyphs"), where)
-    head = struct.pack("<BBHHBB", kind, ascent, count, len(bitmap), descent, 0)
-    return head, records + bitmap, aligned(len(records)) + aligned(len(bitmap))
-
-
-def font_assets(theme, base, fonts, where):
-    table = {**base.get("fonts", {}), **own_table(theme, "fonts", where)}
-    unknown = set(table) - {name for name, _ in fonts}
-    if unknown:
-        raise ThemeError(f"{where}: {', '.join(sorted(unknown))} is not a font name")
-    return [font_asset(table[name], FIRST_FONT_KIND + index, limit, f"{where}: font {name}")
-            for index, (name, limit) in enumerate(fonts) if name in table]
-
-
 def one_scene(theme, key, kinds, colors, color_table, names, where):
     table = own_table(theme, key, where)
     if not table:
@@ -491,13 +390,12 @@ def with_scene(theme, folder, where):
     return theme
 
 
-def check_memory(walls, fonts, where):
-    needed = sum(memory for _, _, memory in fonts) + max((memory for _, _, memory in walls),
-                                                         default=0)
+def check_memory(walls, where):
+    needed = max((memory for _, _, memory in walls), default=0)
     if needed > ASSET_MEMORY:
-        raise ThemeError(f"{where}: the fonts and wallpaper need {needed:,} bytes of the player's "
+        raise ThemeError(f"{where}: the wallpaper needs {needed:,} bytes of the player's "
                          f"memory, more than its {ASSET_MEMORY:,}; use a smaller or repeating "
-                         "wallpaper, or fewer fonts")
+                         "wallpaper")
 
 
 def asset_table(assets, first_offset):
@@ -506,51 +404,6 @@ def asset_table(assets, first_offset):
         entries += head + struct.pack("<II", offset, checksum(section))
         offset += len(section)
     return entries
-
-
-def rasterised(path, size, limit):
-    import font_build
-    try:
-        ranges = json.loads(FONT_RANGES.read_text(encoding="utf-8"))["character_ranges"]
-        for tried in [size] if size else range(MOST_FONT_SIZE, LEAST_FONT_SIZE - 1, -1):
-            font = font_build.load_font(path, tried)
-            ascent, descent = font.getmetrics()
-            if ascent + descent <= limit:
-                break
-        glyphs = [font_build.render_glyph(font, code)
-                  for code in font_build.covered_codepoints(path, ranges)]
-    except (OSError, ValueError, KeyError) as error:
-        raise ThemeError(f"{path.name}: {error}") from None
-    rows = [["".join(ICON_LEVELS[level] for level in glyph.levels[top:top + glyph.width])
-             for top in range(0, glyph.width * glyph.height, max(glyph.width, 1))]
-            for glyph in glyphs]
-    return {"ascent": ascent, "descent": descent,
-            "glyphs": [{"char": chr(glyph.codepoint), "left": glyph.left, "top": glyph.top,
-                        "advance": glyph.advance, "rows": shape}
-                       for glyph, shape in zip(glyphs, rows)]}
-
-
-def font_file(table, limit, folder, where):
-    name, size = table["file"], table.get("size")
-    named = isinstance(name, str) and Path(name).name == name and set(table) <= {"file", "size"}
-    sized = size is None or (not isinstance(size, bool) and isinstance(size, int)
-                             and LEAST_FONT_SIZE <= size <= MOST_FONT_SIZE)
-    if not named or not sized:
-        raise ThemeError(f"{where}: a font file sits beside the theme; size is "
-                         f"{LEAST_FONT_SIZE} to {MOST_FONT_SIZE} pixels")
-    return rasterised(folder / name, size, limit)
-
-
-def with_fonts(theme, fonts, folder, where):
-    table = theme.get("fonts")
-    if not isinstance(table, dict):
-        return theme
-    resolved = dict(table)
-    for name, limit in fonts:
-        font = table.get(name)
-        if isinstance(font, dict) and "file" in font:
-            resolved[name] = font_file(font, limit, folder, f"{where}: font {name}")
-    return {**theme, "fonts": resolved}
 
 
 def fitted(image, limit):
@@ -674,7 +527,7 @@ def flags_of(theme, where):
     return (FLAG_DARK_COVER_FLOW if style == "dark" else 0) | (0 if home_art else FLAG_NO_HOME_ART)
 
 
-def pack(theme, base, colors, boxes, where="theme", spacing=(), icons=(), fonts=(),
+def pack(theme, base, colors, boxes, where="theme", spacing=(), icons=(),
          layout=(), scene_names=None):
     check_keys(theme, where)
     color_table = merged(base, theme, "colors", colors, where)
@@ -687,12 +540,11 @@ def pack(theme, base, colors, boxes, where="theme", spacing=(), icons=(), fonts=
     icon_count, icon_bytes = icon_section({**base.get("icons", {}), **own_table(theme, "icons", where)},
                                           icons, where)
     walls = wallpaper_assets(theme, base, where)
-    faces = font_assets(theme, base, fonts, where)
-    check_memory(walls, faces, where)
+    check_memory(walls, where)
     scenes = scene_assets(theme, colors, color_table, scene_names, where) if scene_names else []
     if any(theme.get(key) for key, *_ in SCENES) and not scene_names:
         raise ThemeError(f"{where}: this packer can't read scenes")
-    assets = walls + faces + scenes
+    assets = walls + scenes
     placed = [layout_bytes(theme, base, layout, key, where) for key in LAYOUTS]
     accents = accents_of(theme, where)
     flags = flags_of(theme, where)
@@ -757,7 +609,7 @@ def package_wallpapers(package, table_at):
     for index in range(package[HEADER_SIZE] if header >= ASSET_HEADER_SIZE else 0):
         kind, _, width, height, _, offset, _ = struct.unpack_from(
             "<BBHHHII", package, table_at + ASSET_ENTRY_SIZE * index)
-        if kind >= FIRST_FONT_KIND:
+        if kind >= len(WALLPAPERS):
             continue
         palette = struct.unpack_from(f"<{PALETTE_COLORS}H", package, offset)
         pixels_at = offset + 2 * PALETTE_COLORS
@@ -842,7 +694,6 @@ def build_all(sources, definitions, base_source=None):
     boxes = names_in(definitions / "theme_boxes.def")
     spacing = spacing_in(definitions / "theme_spacing.def")
     icons = icons_in(definitions / "theme_icons.def")
-    fonts = fonts_in(definitions / "theme_fonts.def")
     layout = layout_in(definitions / "theme_layout.def")
     scene_folder = definitions.resolve().parents[2] / "np_faces" / "include" / "np_faces"
     scene_names = scene_compile.definitions(scene_folder) if scene_folder.is_dir() else None
@@ -852,9 +703,8 @@ def build_all(sources, definitions, base_source=None):
     for path in sorted(sources.glob("*" + SOURCE_SUFFIX)):
         under = {} if path == own_base else base
         theme = with_images(read_source(path), under, path.parent, path.name)
-        theme = with_fonts(theme, fonts, path.parent, path.name)
         theme = with_scene(theme, path.parent, path.name)
-        packages[path.stem] = pack(theme, under, colors, boxes, path.name, spacing, icons, fonts,
+        packages[path.stem] = pack(theme, under, colors, boxes, path.name, spacing, icons,
                                    layout, scene_names)
     return packages
 

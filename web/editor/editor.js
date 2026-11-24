@@ -1,6 +1,5 @@
 import { buildAccents, shownAccent } from "./accent_editor.js";
 import { arrangeUpright } from "./arrange.js";
-import { buildFonts } from "./font_editor.js";
 import { buildIcons } from "./icon_editor.js";
 import { AREAS, colorOf, drawingScript, findElement, walk } from "./drawing.js";
 import { drawingEditor } from "./drawing_editor.js";
@@ -28,14 +27,12 @@ const GUIDE = "guide.html";
 const LOOK = [
   { id: "colours", label: "Colours" },
   { id: "wallpaper", label: "Picture behind the lists", screen: "list" },
-  { id: "fonts", label: "Lettering" },
   { id: "shapes", label: "Rows, title bar and spacing", screen: "list" },
   { id: "icons", label: "Icons", screen: "list" },
 ];
 const OWN_SCREEN = { id: "screen", label: "This screen's colours" };
 const LOOK_LEADS = {
   wallpaper: "It's cut to 16 colours. Fade it until the text reads well.",
-  fonts: "Lettering for titles, lists and small text: use a font file, a picture of your letters, or draw your own.",
   icons: "The small pictures in the title bar and the lists, and the icons on Home tiles. Drag to draw and right-drag to erase; the theme's colours tint them.",
 };
 const SCREENS = [
@@ -88,7 +85,7 @@ const SETTLE_MS = 350;
 const DRAFT = "echopod-theme-draft";
 const NAME_BYTES = 23;
 const SLUG_LETTERS = 23;
-const MERGED_PARTS = ["colors", "boxes", "spacing", "icons", "wallpapers", "fonts"];
+const MERGED_PARTS = ["colors", "boxes", "spacing", "icons", "wallpapers"];
 const SKIP_STEP_MS = 100;
 const ZOOM_STEPS = 4;
 const COLOUR_SLACK = 24;
@@ -1210,14 +1207,6 @@ function panelLegacy(section, build, openFirst = false) {
   return [el("h2", {}, section), el("p", { class: "lead" }, LOOK_LEADS[section]), host];
 }
 
-const FONT_NAMES = { title: "Titles font", body: "List text font", small: "Small text font" };
-const LICENCES = [
-  ["", "Choose one"],
-  ["mine", "I drew them, or they came with Rippl"],
-  ["open", "From a font with an open licence, like the SIL Open Font License"],
-  ["unsure", "I'm not sure"],
-];
-
 function kilobytes(bytes) {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
@@ -1230,10 +1219,6 @@ function share(bytes, limit) {
 function memoryBar() {
   const parts = memoryParts(state.theme, state.schema);
   const pieces = [
-    ...Object.entries(parts.fonts).map(([name, bytes]) => [FONT_NAMES[name], bytes, () => {
-      state.theme.fonts[name] = null;
-      delete state.theme.font_sources?.[name];
-    }]),
     ["Wallpaper", parts.wallpaper, () => {
       for (const key of Object.keys(state.theme.wallpapers ?? {})) {
         state.theme.wallpapers[key] = null;
@@ -1243,7 +1228,7 @@ function memoryBar() {
   const over = parts.used > parts.limit;
   const scale = Math.max(parts.limit, parts.used);
   const used = share(parts.used, parts.limit);
-  const bar = el("div", { class: "memory-track", role: "img", "aria-label": `${used} of the player's room for pictures and fonts used`, title: `${kilobytes(parts.used)} of ${kilobytes(parts.limit)}` },
+  const bar = el("div", { class: "memory-track", role: "img", "aria-label": `${used} of the player's room for pictures used`, title: `${kilobytes(parts.used)} of ${kilobytes(parts.limit)}` },
     pieces.map(([label, bytes], index) => el("span", {
       class: `memory-part memory-part-${index}`,
       style: `width: ${(bytes * 100) / scale}%`,
@@ -1253,17 +1238,14 @@ function memoryBar() {
     el("li", {}, el("span", { class: `memory-dot memory-part-${index}` }), `${label} ${share(bytes, parts.limit)}`)));
   const box = el("div", { class: over ? "memory over" : "memory", "data-memory": "" },
     el("p", { class: "memory-total" }, over
-      ? `Too much: the pictures and fonts need ${used} of the player's room for them`
+      ? `Too much: the wallpaper needs ${used} of the player's room for it`
       : pieces.length
-        ? `Pictures and fonts use ${used} of the player's room for them`
-        : "The player has room for a wallpaper and your own fonts"),
-    bar, pieces.length ? legend : null,
-    !over && parts.wallpaper > parts.limit * 0.8
-      ? el("p", { class: "hint" }, "A picture the size of the screen takes nearly all of it. Tick “Repeat a small picture” to leave room for your own fonts.")
-      : null);
+        ? `Wallpaper uses ${used} of the player's room for it`
+        : "The player has room for a wallpaper"),
+    bar, pieces.length ? legend : null);
   if (over) {
     box.append(
-      el("p", { class: "hint" }, "Make a font smaller, use a smaller or repeating wallpaper, or remove one of these."),
+      el("p", { class: "hint" }, "Use a smaller or repeating wallpaper, or remove it."),
       el("div", { class: "actions" }, pieces.map(([label, bytes, drop]) => el("button", { type: "button", onclick: () => {
         drop();
         changed({ rebuild: true });
@@ -1272,30 +1254,6 @@ function memoryBar() {
     );
   }
   return box;
-}
-
-function licenceField() {
-  const fonts = Object.values(state.theme.fonts ?? {}).some(Boolean);
-  if (!fonts) {
-    return null;
-  }
-  const select = el("select", {}, LICENCES.map(([value, label]) => new Option(label, value)));
-  select.value = state.theme.font_licence ?? "";
-  const advice = el("p", { class: "hint" });
-  const explain = () => {
-    advice.textContent = select.value === "unsure"
-      ? "Keep this theme to yourself until you know the font may be passed on. Most free fonts say so in a licence file that comes with them."
-      : select.value === "open"
-        ? "Include the font's licence when you share the theme."
-        : "";
-  };
-  select.addEventListener("change", () => {
-    state.theme.font_licence = select.value;
-    remember();
-    explain();
-  });
-  explain();
-  return [el("h3", {}, "The fonts in this theme"), group(field("Where they're from", select)), advice];
 }
 
 function withMemory(parts) {
@@ -1324,7 +1282,6 @@ function panelShare() {
       el("li", {}, "On the player, open Settings, Display, Theme and pick it.")),
     el("div", { class: "actions" },
       el("button", { type: "button", class: "primary", disabled: !bytes, onclick: download }, "Save the theme file")),
-    ...(licenceField() ?? []),
     el("h3", {}, "Share it"),
     el("p", { class: "hint" }, "Send the theme file to anyone, and the editable copy too if they'd like to change it."),
     group(field("Made by", author, "Stored in the theme"), field("Description", about, "Stored in the theme")),
@@ -1385,7 +1342,7 @@ function startFrom(step, name, label) {
   state.picked = null;
   const icons = name === "tiles" && tileIcons();
   if (!fits()) {
-    say("That drawing doesn't fit with the rest of this theme. Make room by removing a picture or a font.", true);
+    say("That drawing doesn't fit with the rest of this theme. Make room by removing a picture.", true);
   } else {
     say(`Started again from ${label}.${icons ? " Its icons are under Icons, ready to redraw." : ""} Undo brings back your drawing.`);
   }
@@ -1541,7 +1498,6 @@ function lookParts(id) {
     colours: () => panelColours(),
     shapes: () => panelShapes(),
     wallpaper: () => withMemory(panelLegacy("wallpaper", buildWallpapers, true)),
-    fonts: () => withMemory(panelLegacy("fonts", buildFonts, true)),
     icons: () => panelLegacy("icons", buildIcons),
   }[id]();
   const [, lead, ...rest] = built;
@@ -2523,9 +2479,7 @@ function download() {
 
 function downloadSource() {
   syncScene();
-  const licence = LICENCES.find(([value]) => value && value === state.theme.font_licence);
-  const note = licence ? `# Fonts: ${licence[1]}\n` : "";
-  save(`${slug(state.theme.name)}.toml`, note + toToml(state.theme, state.schema), "text/plain");
+  save(`${slug(state.theme.name)}.toml`, toToml(state.theme, state.schema), "text/plain");
 }
 
 function save(name, bytes, type) {

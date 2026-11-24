@@ -4,12 +4,10 @@
 
 #include "core/hash.h"
 #include "core/resident.h"
-#include "default_theme.h"
 #include "hal/system.h"
 
 enum {
-    WALLPAPER_PAIR_BYTES = 1024,
-    WORD_BYTES = 4
+    WALLPAPER_PAIR_BYTES = 1024
 };
 
 typedef enum AssetState {
@@ -27,65 +25,11 @@ typedef struct Arena {
 _Static_assert(HAL_THEME_ASSET_BYTES >= WALLPAPER_PAIR_BYTES + THEME_WALLPAPER_LONG_SIDE *
                                                                    THEME_WALLPAPER_SHORT_SIDE / 2,
                "the asset memory holds a whole screen of wallpaper");
-_Static_assert(sizeof(Glyph) == THEME_GLYPH_RECORD_BYTES && offsetof(Glyph, bitmap_offset) == 2 &&
-                   offsetof(Glyph, width) == 4 && offsetof(Glyph, advance) == 8,
-               "a glyph record in a theme file is a Glyph as it lies in memory");
 
-static const Font *builtin_font(ThemeFontId id)
+RIPPL_STARTUP_CODE void theme_assets_reset(ThemeAssets *assets)
 {
-    const Font *const fonts[THEME_FONT_COUNT] = {
-#define THEME_FONT(id, name, height) DEFAULT_THEME.fonts.name,
-#include "ui/theme_fonts.def"
-#undef THEME_FONT
-    };
-    return fonts[id];
-}
-
-static uint32_t aligned(uint32_t size)
-{
-    return (size + WORD_BYTES - 1) / WORD_BYTES * WORD_BYTES;
-}
-
-static uint32_t font_bytes(ThemePackageFont font)
-{
-    return aligned(font.glyph_count * (uint32_t)sizeof(Glyph)) + aligned(font.bitmap_bytes);
-}
-
-static uint32_t fonts_end(const ThemePackage *package, int before)
-{
-    uint32_t end = 0;
-    for (int id = 0; id < before; id++) {
-        end += package->fonts[id].glyph_count > 0 ? font_bytes(package->fonts[id]) : 0;
-    }
-    return end;
-}
-
-static void unready_font(Font *font, ThemeFontId id)
-{
-    const Font *builtin = builtin_font(id);
-    *font = (Font){.ascent = builtin->ascent, .descent = builtin->descent, .fallback = builtin};
-}
-
-static void unready_fonts(ThemeAssets *assets, const ThemePackage *package)
-{
-    bool any = false;
-    for (int id = 0; id < THEME_FONT_COUNT; id++) {
-        unready_font(&assets->fonts[id], (ThemeFontId)id);
-        any = any || package->fonts[id].glyph_count > 0;
-    }
-    assets->fonts_state = any ? ASSET_WANTED : ASSET_NONE;
-}
-
-RIPPL_STARTUP_CODE void theme_assets_reset(ThemeAssets *assets, const ThemePackage *package)
-{
-    unready_fonts(assets, package);
     assets->wallpaper_state = ASSET_NONE;
     assets->wallpaper.ready = false;
-}
-
-const Font *theme_assets_font(ThemeAssets *assets, const ThemePackage *package, ThemeFontId id)
-{
-    return package->fonts[id].glyph_count > 0 ? &assets->fonts[id] : NULL;
 }
 
 static bool small_enough_to_turn(ThemePackageWallpaper wallpaper)
@@ -117,12 +61,6 @@ void theme_assets_watch(ThemeAssets *assets)
     if (assets->wipes == hal_system_theme_asset_wipes()) {
         return;
     }
-    for (int id = 0; id < THEME_FONT_COUNT; id++) {
-        if (assets->fonts[id].glyph_count > 0) {
-            unready_font(&assets->fonts[id], (ThemeFontId)id);
-            assets->fonts_state = ASSET_WANTED;
-        }
-    }
     if (assets->wallpaper_state == ASSET_READY) {
         assets->wallpaper_state = ASSET_WANTED;
         assets->wallpaper.ready = false;
@@ -131,22 +69,7 @@ void theme_assets_watch(ThemeAssets *assets)
 
 bool theme_assets_wanted(const ThemeAssets *assets)
 {
-    return assets->fonts_state == ASSET_WANTED || assets->wallpaper_state == ASSET_WANTED;
-}
-
-RIPPL_STARTUP_HELPER static bool glyphs_sound(const Glyph *glyphs, uint32_t count,
-                                              uint32_t bitmap_bytes)
-{
-    for (uint32_t index = 0; index < count; index++) {
-        const Glyph *glyph = &glyphs[index];
-        uint32_t bytes = ((uint32_t)glyph->width * glyph->height + 1) / 2;
-        bool ordered = index == 0 || glyph->codepoint > glyphs[index - 1].codepoint;
-        if (!ordered || glyph->bitmap_offset > bitmap_bytes ||
-            bytes > bitmap_bytes - glyph->bitmap_offset) {
-            return false;
-        }
-    }
-    return true;
+    return assets->wallpaper_state == ASSET_WANTED;
 }
 
 bool theme_source_read(const ThemeSource *source, uint32_t offset, void *target, uint32_t length)
@@ -157,42 +80,6 @@ bool theme_source_read(const ThemeSource *source, uint32_t offset, void *target,
     return source->builtin >= 0
                ? hal_system_builtin_theme_read((uint32_t)source->builtin, offset, target, length)
                : hal_file_read(source->file, offset, target, length);
-}
-
-RIPPL_STARTUP_HELPER static bool read_font(const ThemeSource *file, ThemePackageFont entry,
-                                           uint8_t *place, Font *font)
-{
-    uint32_t table = entry.glyph_count * (uint32_t)sizeof(Glyph);
-    uint8_t *bitmap = place + aligned(table);
-    if (!theme_source_read(file, entry.offset, place, table) ||
-        !theme_source_read(file, entry.offset + table, bitmap, entry.bitmap_bytes) ||
-        hash_update(hash_update(HASH_START, place, table), bitmap, entry.bitmap_bytes) !=
-            entry.checksum ||
-        !glyphs_sound((const Glyph *)(void *)place, entry.glyph_count, entry.bitmap_bytes)) {
-        return false;
-    }
-    font->glyphs = (const Glyph *)(void *)place;
-    font->bitmap = bitmap;
-    font->glyph_count = entry.glyph_count;
-    font->bitmap_size = entry.bitmap_bytes;
-    font->ascent = entry.ascent;
-    font->descent = entry.descent;
-    return true;
-}
-
-static void load_fonts(ThemeAssets *assets, const ThemePackage *package, const ThemeSource *file,
-                       Arena arena)
-{
-    for (int id = 0; id < THEME_FONT_COUNT; id++) {
-        ThemePackageFont entry = package->fonts[id];
-        uint32_t at = fonts_end(package, id);
-        Font loaded = assets->fonts[id];
-        bool fits = entry.glyph_count > 0 && at + font_bytes(entry) <= arena.size;
-        if (fits && read_font(file, entry, arena.bytes + at, &loaded)) {
-            assets->fonts[id] = loaded;
-        }
-    }
-    assets->fonts_state = ASSET_READY;
 }
 
 RIPPL_STARTUP_HELPER static void fill_pairs(uint32_t *pairs, const uint8_t *palette)
@@ -227,10 +114,8 @@ static bool read_wallpaper(ThemeAssets *assets, ThemePackageWallpaper entry,
 static void load_wallpaper(ThemeAssets *assets, const ThemePackage *package,
                            const ThemeSource *file, Arena arena)
 {
-    uint32_t start = fonts_end(package, THEME_FONT_COUNT);
-    Arena rest = {arena.bytes + start, start <= arena.size ? arena.size - start : 0};
     ThemePackageWallpaper entry = package->wallpapers[assets->wallpaper_kind];
-    bool loaded = read_wallpaper(assets, entry, file, rest);
+    bool loaded = read_wallpaper(assets, entry, file, arena);
     assets->wallpaper_state = loaded ? ASSET_READY : ASSET_FAILED;
 }
 
@@ -241,9 +126,6 @@ RIPPL_STARTUP_CODE bool theme_assets_tend(ThemeAssets *assets, const ThemePackag
     void *memory = hal_system_theme_assets(&size);
     Arena arena = {memory, memory != NULL ? size : 0};
     assets->wipes = hal_system_theme_asset_wipes();
-    if (assets->fonts_state == ASSET_WANTED) {
-        load_fonts(assets, package, file, arena);
-    }
     if (assets->wallpaper_state == ASSET_WANTED) {
         load_wallpaper(assets, package, file, arena);
     }

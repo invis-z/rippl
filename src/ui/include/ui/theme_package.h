@@ -43,9 +43,7 @@ enum {
     THEME_PACKAGE_PALETTE_BYTES = 2 * THEME_PACKAGE_PALETTE_COLORS,
     THEME_PACKAGE_MAX_BYTES = 3072,
     THEME_WALLPAPER_LONG_SIDE = 320,
-    THEME_WALLPAPER_SHORT_SIDE = 170,
-    THEME_FONT_MAX_GLYPHS = 512,
-    THEME_GLYPH_RECORD_BYTES = 10
+    THEME_WALLPAPER_SHORT_SIDE = 170
 };
 
 typedef enum ThemeWallpaperKind {
@@ -55,8 +53,7 @@ typedef enum ThemeWallpaperKind {
 } ThemeWallpaperKind;
 
 enum {
-    THEME_ASSET_FIRST_FONT = THEME_WALLPAPER_COUNT,
-    THEME_ASSET_SCENE = THEME_ASSET_FIRST_FONT + THEME_FONT_COUNT,
+    THEME_ASSET_SCENE = 5,
     THEME_ASSET_KINDS = THEME_ASSET_SCENE + 1,
     THEME_ASSET_HOME_SCENE = 8
 };
@@ -66,15 +63,6 @@ typedef enum ThemeSceneId {
     THEME_SCENE_HOME,
     THEME_SCENE_COUNT
 } ThemeSceneId;
-
-typedef struct ThemePackageFont {
-    uint32_t offset;
-    uint32_t checksum;
-    uint16_t glyph_count;
-    uint16_t bitmap_bytes;
-    uint8_t ascent;
-    uint8_t descent;
-} ThemePackageFont;
 
 typedef struct ThemePackageWallpaper {
     uint32_t offset;
@@ -112,7 +100,6 @@ typedef struct ThemePackage {
     char name[THEME_PACKAGE_NAME_BYTES];
     ThemePackageIcon icons[THEME_ICON_COUNT];
     ThemePackageWallpaper wallpapers[THEME_WALLPAPER_COUNT];
-    ThemePackageFont fonts[THEME_FONT_COUNT];
     ThemeLayout layouts[THEME_WALLPAPER_COUNT];
     ThemePackageScene scene;
     ThemePackageScene home_scene;

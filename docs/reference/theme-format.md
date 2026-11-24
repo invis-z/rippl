@@ -43,14 +43,14 @@ This packs every `.toml` in `my-themes` into `my-themes/packed/<file>.rippltheme
 | What | Limit |
 |---|---|
 | Theme head: colours, boxes, accents, icons | 3,072 bytes |
-| Wallpapers and fonts together | 28,224 bytes of player memory |
+| Wallpaper | 28,224 bytes of player memory |
 | One scene, packed | 6,144 bytes |
 | Scenes on the player, Home and Now Playing together | About 3,300 bytes |
 | Scene steps per drawing | 20,000 |
 | Theme files listed on the player | 8 |
 | File name, without `.rippltheme` | 1 to 23 bytes |
 
-Typical sizes: 205 bytes with no icons; about 2,000 with every status and list icon; about 1,800 more for six 24 × 24 Home tile icons; about 27,000 for a full-screen wallpaper; about 5,000 for a 16 px font.
+Typical sizes: 205 bytes with no icons; about 2,000 with every status and list icon; about 1,800 more for six 24 × 24 Home tile icons; about 27,000 for a full-screen wallpaper.
 
 A scene too big for the player doesn't load, and Now Playing or Home shows the standard screen. The packer and the editor warn about it.
 
@@ -275,29 +275,6 @@ Text commands take what to show (`song`, `artist`, `album`, `lyric`, `codec`, `s
 | `format(font, x, y, w, h, align, colour)`, `codec(font, x, y, w, h, colour)` | The codec box, with or without the stream |
 
 On Home, the cover is the album art Home shows, and the text sources are the playing track, empty when nothing plays. A script with a mistake draws nothing more; the player shows the standard screen if it can't read the scene.
-
-## Fonts
-
-`[fonts.title]`, `[fonts.body]` and `[fonts.small]` replace the player's fonts:
-
-| Font | Used for | Tallest line |
-|---|---|---|
-| `title` | Header titles | 20 px |
-| `body` | Lists, menus, the large status bar | 20 px |
-| `small` | Second lines, small print, the status bar | 15 px |
-
-```toml
-[fonts.body]
-file = "MyFont-Medium.ttf"
-
-[fonts.small]
-file = "MyFont-Regular.ttf"
-size = 11
-```
-
-- Without `size` the packer picks the largest that fits.
-- Fonts cover basic Latin, digits, punctuation, curly quotes, dashes, the ellipsis, €, ★ and ✓. Other characters use the player's own font.
-- The editor's source writes fonts out as glyphs, so it needs no font file.
 
 ## Wallpaper
 

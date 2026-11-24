@@ -161,7 +161,6 @@ export function defaultTheme(schema) {
     spacing: Object.fromEntries(schema.spacing.map((entry) => [entry.name, null])),
     icons: Object.fromEntries(schema.icons.map((entry) => [entry.name, null])),
     wallpapers: Object.fromEntries(schema.wallpapers.map((entry) => [entry.name, null])),
-    fonts: Object.fromEntries(schema.fonts.map((entry) => [entry.name, null])),
     layouts: Object.fromEntries(
       schema.layouts.map((key) => [key, Object.fromEntries(schema.layout.map((entry) => [entry.name, null]))]),
     ),
@@ -337,88 +336,12 @@ function assetTable(assets, firstOffset) {
 }
 
 const WALLPAPER_PAIR_BYTES = 1024;
-const FIRST_FONT_KIND = 2;
-const MAX_FONT_GLYPHS = 512;
-const GLYPH_RECORD_SIZE = 10;
-
-function aligned(size) {
-  return Math.ceil(size / 4) * 4;
-}
 
 function wholeNumber(value, least, most, what) {
   if (!Number.isInteger(value) || value < least || value > most) {
     throw new ThemeError(`${what} must be a whole number from ${least} to ${most}`);
   }
   return value;
-}
-
-function glyphCode(glyph, where) {
-  const code = typeof glyph.char === "string" && glyph.char.length === 1 ? glyph.char.charCodeAt(0) : -1;
-  if (code < 0) {
-    throw new ThemeError(`${where}: each glyph names one character`);
-  }
-  return code;
-}
-
-function glyphLevels(glyph, where) {
-  const rows = glyph.rows ?? [];
-  const width = rows[0]?.length ?? 0;
-  if (rows.some((row) => row.length !== width) || width > 255 || rows.length > 255) {
-    throw new ThemeError(`${where}: every row needs the same length, at most 255`);
-  }
-  const levels = rows.flatMap((row) => Array.from(row.toLowerCase(), (mark) => (mark === "0" ? 0 : ICON_MARKS.indexOf(mark))));
-  if (levels.includes(-1)) {
-    throw new ThemeError(`${where}: a row is made of . and 1-9, a-f, from clear to solid`);
-  }
-  return { width, height: rows.length, levels };
-}
-
-function fontAsset(font, entry, kind) {
-  const where = `font ${entry.name}`;
-  const ascent = wholeNumber(font.ascent, 1, entry.height, `${where}: ascent`);
-  const descent = wholeNumber(font.descent, 0, entry.height, `${where}: descent`);
-  if (ascent + descent > entry.height) {
-    throw new ThemeError(`${where}: ascent and descent add up to ${ascent + descent}, more than ${entry.height}`);
-  }
-  if (!Array.isArray(font.glyphs) || font.glyphs.length < 1 || font.glyphs.length > MAX_FONT_GLYPHS) {
-    throw new ThemeError(`${where}: 1 to ${MAX_FONT_GLYPHS} glyphs`);
-  }
-  const ordered = font.glyphs.map((glyph) => [glyphCode(glyph, where), glyph]).sort((first, second) => first[0] - second[0]);
-  const records = new Uint8Array(GLYPH_RECORD_SIZE * ordered.length);
-  const view = new DataView(records.buffer);
-  const bitmap = [];
-  ordered.forEach(([code, glyph], index) => {
-    if (index > 0 && ordered[index - 1][0] === code) {
-      throw new ThemeError(`${where}: ${glyph.char} is given twice`);
-    }
-    const { width, height, levels } = glyphLevels(glyph, where);
-    const at = GLYPH_RECORD_SIZE * index;
-    view.setUint16(at, code, true);
-    view.setUint16(at + 2, bitmap.length, true);
-    records.set([width, height], at + 4);
-    view.setInt8(at + 6, wholeNumber(glyph.left, -128, 127, `${where}: left`));
-    view.setInt8(at + 7, wholeNumber(glyph.top, -128, 127, `${where}: top`));
-    records[at + 8] = wholeNumber(glyph.advance, 0, 255, `${where}: advance`);
-    const padded = levels.length % 2 === 1 ? [...levels, 0] : levels;
-    for (let level = 0; level < padded.length; level += 2) {
-      bitmap.push((padded[level] << 4) | padded[level + 1]);
-    }
-  });
-  if (bitmap.length > 0xffff) {
-    throw new ThemeError(`${where}: the glyphs need more than 65,535 bytes`);
-  }
-  const bytes = new Uint8Array(records.length + bitmap.length);
-  bytes.set(records);
-  bytes.set(bitmap, records.length);
-  const head = [kind, ascent, ordered.length & 0xff, ordered.length >> 8, bitmap.length & 0xff, bitmap.length >> 8, descent, 0];
-  return { head, bytes, memory: aligned(records.length) + aligned(bitmap.length) };
-}
-
-function fontAssets(theme, schema) {
-  return schema.fonts
-    .map((entry, index) => [entry, index, theme.fonts?.[entry.name]])
-    .filter(([, , font]) => font)
-    .map(([entry, index, font]) => fontAsset(font, entry, FIRST_FONT_KIND + index));
 }
 
 function oneScene(theme, schema, { key, title, kinds }) {
@@ -474,36 +397,21 @@ function sceneAssets(theme, schema) {
   return found;
 }
 
-function checkMemory(walls, fonts, schema) {
-  const needed = fonts.reduce((sum, font) => sum + font.memory, 0) + Math.max(0, ...walls.map((wall) => wall.memory));
+function checkMemory(walls, schema) {
+  const needed = Math.max(0, ...walls.map((wall) => wall.memory));
   if (needed > schema.asset_memory) {
     throw new ThemeError(
-      "The wallpaper and your fonts together are more than the player has room for. Use a smaller or repeating wallpaper, or fewer fonts.",
+      "The wallpaper is more than the player has room for. Use a smaller or repeating wallpaper.",
     );
   }
   return needed;
 }
 
 export function assetMemory(theme, schema) {
-  return checkMemory(wallpaperSections(theme, schema), fontAssets(theme, schema), schema);
+  return checkMemory(wallpaperSections(theme, schema), schema);
 }
 
 export function memoryParts(theme, schema) {
-  const fonts = {};
-  schema.fonts.forEach((entry, index) => {
-    const font = theme.fonts?.[entry.name];
-    if (!font) {
-      return;
-    }
-    try {
-      fonts[entry.name] = fontAsset(font, entry, FIRST_FONT_KIND + index).memory;
-    } catch (error) {
-      if (!(error instanceof ThemeError)) {
-        throw error;
-      }
-      fonts[entry.name] = 0;
-    }
-  });
   let wallpaper = 0;
   try {
     wallpaper = Math.max(0, ...wallpaperSections(theme, schema).map((wall) => wall.memory));
@@ -512,8 +420,7 @@ export function memoryParts(theme, schema) {
       throw error;
     }
   }
-  const used = Object.values(fonts).reduce((sum, bytes) => sum + bytes, wallpaper);
-  return { fonts, wallpaper, used, limit: schema.asset_memory };
+  return { wallpaper, used: wallpaper, limit: schema.asset_memory };
 }
 
 
@@ -641,9 +548,8 @@ export function pack(theme, schema) {
   const spaces = spacingBytes(theme, schema);
   const icons = iconSection(theme, schema);
   const walls = wallpaperSections(theme, schema);
-  const fonts = fontAssets(theme, schema);
-  checkMemory(walls, fonts, schema);
-  const assets = [...walls, ...fonts, ...sceneAssets(theme, schema)];
+  checkMemory(walls, schema);
+  const assets = [...walls, ...sceneAssets(theme, schema)];
   const [wide, tall] = schema.layouts.map((key) => layoutBytes(theme, schema, key));
   const accents = accentSection(theme);
   const flags = (theme.cover_flow === "dark" ? FLAG_DARK_COVER_FLOW : 0) | (theme.home_art === false ? FLAG_NO_HOME_ART : 0);
@@ -771,49 +677,6 @@ function wallpaperFrom(bytes, view, at, size) {
   return { palette: palette.slice(0, kept), rows };
 }
 
-function fontFrom(bytes, view, at, entry) {
-  const font = { ascent: entry.ascent, descent: entry.descent, glyphs: [] };
-  const bitmapAt = at + GLYPH_RECORD_SIZE * entry.count;
-  for (let index = 0; index < entry.count; index++) {
-    const record = at + GLYPH_RECORD_SIZE * index;
-    const [width, height] = [bytes[record + 4], bytes[record + 5]];
-    const start = view.getUint16(record + 2, true);
-    const rows = [];
-    for (let row = 0; row < height; row++) {
-      let marks = "";
-      for (let column = 0; column < width; column++) {
-        const place = row * width + column;
-        const pair = bytes[bitmapAt + start + (place >> 1)];
-        marks += ICON_MARKS[place % 2 === 0 ? pair >> 4 : pair & 0x0f];
-      }
-      rows.push(marks);
-    }
-    font.glyphs.push({
-      char: String.fromCharCode(view.getUint16(record, true)),
-      left: view.getInt8(record + 6),
-      top: view.getInt8(record + 7),
-      advance: bytes[record + 8],
-      rows,
-    });
-  }
-  return font;
-}
-
-function unpackFont(bytes, view, field, theme, schema) {
-  const entry = schema.fonts[bytes[field] - FIRST_FONT_KIND];
-  const found = {
-    ascent: bytes[field + 1],
-    descent: bytes[field + 6],
-    count: view.getUint16(field + 2, true),
-    bitmap: view.getUint16(field + 4, true),
-  };
-  const at = view.getUint32(field + 8, true);
-  const fits = entry && found.count >= 1 && found.ascent >= 1 && found.ascent + found.descent <= entry.height;
-  if (fits && at + GLYPH_RECORD_SIZE * found.count + found.bitmap <= bytes.length) {
-    theme.fonts[entry.name] = fontFrom(bytes, view, at, found);
-  }
-}
-
 function sectionEnd(bytes, view, tableAt, count, at) {
   let end = bytes.length;
   for (let index = 0; index < count; index++) {
@@ -852,8 +715,7 @@ function unpackWallpapers(bytes, view, tableAt, theme, schema) {
       unpackScene(bytes, view, field, theme, schema, end);
       continue;
     }
-    if (bytes[field] >= FIRST_FONT_KIND) {
-      unpackFont(bytes, view, field, theme, schema);
+    if (bytes[field] >= schema.wallpapers.length) {
       continue;
     }
     const entry = schema.wallpapers[bytes[field]];
@@ -974,16 +836,6 @@ export function toToml(theme, schema) {
     for (const entry of schema.layout.filter((place) => theme.layouts?.[key]?.[place.name])) {
       parts.push(...tomlPlace(key, entry.name, theme.layouts[key][entry.name]));
     }
-  }
-  for (const entry of schema.fonts.filter((slot) => theme.fonts?.[slot.name])) {
-    const font = theme.fonts[entry.name];
-    parts.push(`[fonts.${entry.name}]`, `ascent = ${font.ascent}`, `descent = ${font.descent}`, "glyphs = [");
-    for (const glyph of font.glyphs) {
-      const rows = glyph.rows.map((row) => `"${row}"`).join(", ");
-      const where = `left = ${glyph.left}, top = ${glyph.top}, advance = ${glyph.advance}`;
-      parts.push(`    { char = ${JSON.stringify(glyph.char)}, ${where}, rows = [${rows}] },`);
-    }
-    parts.push("]", "");
   }
   for (const { key } of SCENES) {
     const scene = theme[key];

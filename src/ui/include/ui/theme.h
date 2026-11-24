@@ -46,13 +46,6 @@ typedef enum ThemeIconId {
 } ThemeIconId;
 #undef THEME_ICON
 
-#define THEME_FONT(id, name, height) THEME_FONT_##id,
-typedef enum ThemeFontId {
-#include "ui/theme_fonts.def"
-    THEME_FONT_COUNT
-} ThemeFontId;
-#undef THEME_FONT
-
 #define THEME_LAYOUT(id, name, height) THEME_LAYOUT_##id,
 typedef enum ThemeLayoutId {
 #include "ui/theme_layout.def"

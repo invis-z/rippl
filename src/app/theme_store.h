@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "gfx/font.h"
 #include "np_faces/now_playing_face.h"
 #include "settings/settings.h"
 #include "theme_assets.h"
@@ -31,7 +30,6 @@ int theme_store_current(void);
 bool theme_store_choose(int index);
 void theme_store_choose_builtin(int builtin);
 bool theme_store_wear(const char *name);
-const Font *theme_store_font(ThemeFontId id);
 const Wallpaper *theme_store_wallpaper(bool portrait);
 void theme_store_watch_assets(void);
 bool theme_store_tend_assets(void);

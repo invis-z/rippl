@@ -559,82 +559,6 @@ static void a_home_scene_too_big_or_empty_is_left_out(void)
     }
 }
 
-typedef struct FontEntry {
-    uint8_t kind;
-    uint8_t ascent;
-    uint8_t descent;
-    uint16_t glyphs;
-    uint32_t offset;
-} FontEntry;
-
-static Built built_with_font(FontEntry font)
-{
-    Built built = built_with_wallpapers();
-    uint8_t *field = built.bytes + WALL_TABLE + THEME_PACKAGE_ASSET_ENTRY_BYTES;
-    field[0] = font.kind;
-    field[1] = font.ascent;
-    put_u16(field, 2, font.glyphs);
-    put_u16(field, 4, 300);
-    field[6] = font.descent;
-    field[7] = 0;
-    put_u32(field, 8, font.offset);
-    put_u32(field, 12, 0xF0F0F0F0u);
-    seal_core(&built, WALL_CORE);
-    return built;
-}
-
-static void a_file_says_where_its_fonts_lie_and_how_they_measure(void)
-{
-    Built built = built_with_font(
-        (FontEntry){THEME_ASSET_FIRST_FONT + THEME_FONT_BODY, 15, 5, 95, WALL_CORE + 4});
-    ThemePackage package = defaults();
-    CHECK(theme_package_decode(built.bytes, built.size, &package));
-    ThemePackageFont body = package.fonts[THEME_FONT_BODY];
-    CHECK_EQUAL(WALL_CORE + 4, body.offset);
-    CHECK_EQUAL(0xF0F0F0F0u, body.checksum);
-    CHECK_EQUAL(95, body.glyph_count);
-    CHECK_EQUAL(300, body.bitmap_bytes);
-    CHECK_EQUAL(15, body.ascent);
-    CHECK_EQUAL(5, body.descent);
-    CHECK_EQUAL(0, package.fonts[THEME_FONT_TITLE].glyph_count);
-    CHECK_EQUAL(320, package.wallpapers[THEME_WALLPAPER_LANDSCAPE].width);
-    CHECK_EQUAL(0, package.wallpapers[THEME_WALLPAPER_PORTRAIT].width);
-}
-
-static void a_font_too_tall_for_its_text_or_misshapen_is_left_out(void)
-{
-    const uint8_t body = THEME_ASSET_FIRST_FONT + THEME_FONT_BODY;
-    const uint8_t small = THEME_ASSET_FIRST_FONT + THEME_FONT_SMALL;
-    const FontEntry bad[] = {{body, 16, 5, 95, WALL_CORE},
-                             {small, 12, 4, 95, WALL_CORE},
-                             {body, 0, 4, 95, WALL_CORE},
-                             {body, 16, 4, 0, WALL_CORE},
-                             {body, 16, 4, THEME_FONT_MAX_GLYPHS + 1, WALL_CORE},
-                             {body, 16, 4, 95, WALL_CORE - 1},
-                             {THEME_ASSET_KINDS, 16, 4, 95, WALL_CORE}};
-    for (uint32_t index = 0; index < sizeof bad / sizeof bad[0]; index++) {
-        Built built = built_with_font(bad[index]);
-        ThemePackage package = defaults();
-        CHECK(theme_package_decode(built.bytes, built.size, &package));
-        for (int font = 0; font < THEME_FONT_COUNT; font++) {
-            CHECK_EQUAL(0, package.fonts[font].glyph_count);
-        }
-    }
-    Built small_enough = built_with_font((FontEntry){small, 12, 3, 95, WALL_CORE});
-    ThemePackage package = defaults();
-    CHECK(theme_package_decode(small_enough.bytes, small_enough.size, &package));
-    CHECK_EQUAL(95, package.fonts[THEME_FONT_SMALL].glyph_count);
-}
-
-static void a_file_without_fonts_clears_the_ones_a_package_held(void)
-{
-    Built built = built_with_wallpapers();
-    ThemePackage package = defaults();
-    package.fonts[THEME_FONT_SMALL].glyph_count = 9;
-    CHECK(theme_package_decode(built.bytes, built.size, &package));
-    CHECK_EQUAL(0, package.fonts[THEME_FONT_SMALL].glyph_count);
-}
-
 enum {
     LAYOUT_AT = THEME_PACKAGE_ASSET_HEADER_BYTES,
     LAYOUT_BOX = THEME_PACKAGE_LAYOUT_BOX_BYTES
@@ -851,11 +775,8 @@ int main(void)
         TEST_CASE(a_wallpaper_table_that_passes_the_checked_part_is_refused),
         TEST_CASE(a_file_with_the_short_header_has_no_wallpapers),
         TEST_CASE(the_packed_sample_brings_a_small_wallpaper_to_repeat),
-        TEST_CASE(a_file_says_where_its_fonts_lie_and_how_they_measure),
         TEST_CASE(a_file_brings_a_home_scene_beside_now_playing),
         TEST_CASE(a_home_scene_too_big_or_empty_is_left_out),
-        TEST_CASE(a_font_too_tall_for_its_text_or_misshapen_is_left_out),
-        TEST_CASE(a_file_without_fonts_clears_the_ones_a_package_held),
         TEST_CASE(a_file_places_now_playing_for_each_way_the_screen_is_held),
         TEST_CASE(a_place_out_of_reach_or_oddly_aligned_is_left_to_the_player),
         TEST_CASE(places_that_pass_the_end_of_the_file_are_refused),
