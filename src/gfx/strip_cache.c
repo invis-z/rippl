@@ -35,28 +35,20 @@ static Color *pixel_at(const Canvas *canvas, int x, int y)
     return &canvas->pixels[(y - canvas->bounds.y) * canvas->bounds.width + x - canvas->bounds.x];
 }
 
-static void fill_colors(Color *dst, Color color, int count)
+static void copy_colors(Color *dst, const Color *src, int count)
 {
-    if (count > 0 && ((uintptr_t)dst & 2u) != 0) {
-        *dst++ = color;
+    while (count >= 4) {
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+        dst[3] = src[3];
+        dst += 4;
+        src += 4;
+        count -= 4;
+    }
+    while (count > 0) {
+        *dst++ = *src++;
         count--;
-    }
-    uint32_t pair = (uint32_t)color | (uint32_t)color << 16;
-    uint32_t *words = (uint32_t *)(void *)dst;
-    while (count >= 8) {
-        words[0] = pair;
-        words[1] = pair;
-        words[2] = pair;
-        words[3] = pair;
-        words += 4;
-        count -= 8;
-    }
-    while (count >= 2) {
-        *words++ = pair;
-        count -= 2;
-    }
-    if (count > 0) {
-        *(Color *)(void *)words = color;
     }
 }
 
@@ -204,9 +196,9 @@ __attribute__((noinline)) void strip_cache_blit(const void *memory, Canvas *canv
             skip = 0;
             int take = len < need ? len : need;
             if (literal) {
-                __builtin_memcpy(dst, lit, (size_t)take * sizeof(Color));
+                copy_colors(dst, lit, take);
             } else {
-                fill_colors(dst, color, take);
+                canvas_fill_colors(dst, color, take);
             }
             dst += take;
             need -= take;
@@ -218,4 +210,110 @@ __attribute__((noinline)) void strip_cache_abort(void *memory)
 {
     StripCache *cache = memory;
     cache->state = CACHE_NONE;
+}
+
+enum {
+    LIST_MAGIC = 0x54534C44
+};
+
+_Static_assert(sizeof(StripListKey) == sizeof(StripCacheKey) + 3 * sizeof(const void *) + 32,
+               "the strip list key has no padding bytes");
+
+struct StripList {
+    StripListKey key;
+    int last_y;
+    uint32_t words;
+    uint32_t capacity;
+    uint32_t cmd_offset;
+    uint8_t valid;
+    uint8_t pad[3];
+};
+
+static void *cache_tail(void *memory, uint32_t size, uint32_t *tail_size)
+{
+    *tail_size = 0;
+    if (memory == NULL || ((uintptr_t)memory & 3u) != 0 || size <= sizeof(StripCache)) {
+        return NULL;
+    }
+    const StripCache *cache = memory;
+    if (cache->key.magic != CACHE_MAGIC || cache->state == CACHE_BUILDING) {
+        return NULL;
+    }
+    uint32_t used = (uint32_t)sizeof(StripCache);
+    if (cache->state == CACHE_READY) {
+        used += ((uint32_t)cache->key.area.height + (uint32_t)cache->data_words) *
+                (uint32_t)sizeof(uint16_t);
+    }
+    uintptr_t base = (uintptr_t)memory;
+    uintptr_t align = sizeof(void *);
+    uintptr_t at = (base + used + align - 1u) & ~(align - 1u);
+    if (at - base >= size) {
+        return NULL;
+    }
+    *tail_size = size - (uint32_t)(at - base);
+    return (void *)at;
+}
+
+__attribute__((noinline)) StripListAction strip_list_open(void *memory, uint32_t size, Rect shown,
+                                                          const StripListKey *requested,
+                                                          uint32_t payload_bytes, StripList **out,
+                                                          void **payload, const int32_t **cmds,
+                                                          uint32_t *words)
+{
+    *out = NULL;
+    *payload = NULL;
+    *cmds = NULL;
+    *words = 0;
+    if (rect_is_empty(shown)) {
+        return STRIP_LIST_NONE;
+    }
+    uint32_t tail_bytes = 0;
+    StripList *list = cache_tail(memory, size, &tail_bytes);
+    uint32_t align = (uint32_t)sizeof(void *);
+    uint32_t head = ((uint32_t)sizeof(StripList) + align - 1u) & ~(align - 1u);
+    uint32_t cmd_offset = (head + payload_bytes + 3u) & ~3u;
+    if (list == NULL || tail_bytes <= cmd_offset) {
+        return STRIP_LIST_NONE;
+    }
+    StripListKey key = *requested;
+    key.cache.magic = CACHE_MAGIC;
+    key.magic = LIST_MAGIC;
+    uint8_t *raw = (uint8_t *)list;
+    if (shown.y > key.cache.area.y && list->valid && shown.y > list->last_y &&
+        list->cmd_offset == cmd_offset && __builtin_memcmp(&list->key, &key, sizeof key) == 0) {
+        list->last_y = shown.y;
+        *payload = raw + head;
+        *cmds = (const int32_t *)(const void *)(raw + cmd_offset);
+        *words = list->words;
+        return STRIP_LIST_REPLAY;
+    }
+    if (shown.y != key.cache.area.y) {
+        return STRIP_LIST_NONE;
+    }
+    list->key = key;
+    list->last_y = shown.y;
+    list->words = 0;
+    list->capacity = (tail_bytes - cmd_offset) / (uint32_t)sizeof(int32_t);
+    list->cmd_offset = cmd_offset;
+    list->valid = 1;
+    *out = list;
+    *payload = raw + head;
+    return STRIP_LIST_RECORD;
+}
+
+__attribute__((noinline)) void strip_list_push(StripList *list, uint32_t header,
+                                               const int32_t *values, uint32_t count)
+{
+    if (list == NULL || !list->valid) {
+        return;
+    }
+    if (list->words + 1u + count > list->capacity) {
+        list->valid = 0;
+        return;
+    }
+    int32_t *cmds = (int32_t *)(void *)((uint8_t *)list + list->cmd_offset);
+    cmds[list->words++] = (int32_t)header;
+    for (uint32_t i = 0; i < count; i++) {
+        cmds[list->words++] = values[i];
+    }
 }

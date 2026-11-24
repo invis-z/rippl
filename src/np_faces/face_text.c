@@ -6,7 +6,6 @@
 #include "core/string_builder.h"
 #include "core/text.h"
 #include "ui/label.h"
-#include "ui/rippl_logo.h"
 
 enum {
     MILLISECONDS_PER_SECOND = 1000,
@@ -55,7 +54,8 @@ RIPPL_NP_FACES_CODE int face_scroll_offset(MarqueeTiming timing, int text_width,
     return (int)((phase - timing.pause_ms) * timing.speed_px_per_s / MILLISECONDS_PER_SECOND);
 }
 
-RIPPL_NP_FACES_CODE bool face_text_visible(const Canvas *canvas, const Font *font, Rect area)
+RIPPL_NP_FACES_CODE __attribute__((noinline)) bool face_text_visible(const Canvas *canvas,
+                                                                     const Font *font, Rect area)
 {
     int line = font_line_height(font);
     if (line > area.height) {
@@ -230,22 +230,15 @@ RIPPL_NP_FACES_CODE static void pause_icon(Canvas *canvas, Rect box, Color color
     canvas_fill_rect(canvas, (Rect){box.x + box.width - bar, box.y, bar, box.height}, color);
 }
 
-RIPPL_NP_FACES_CODE static void next_icon(Canvas *canvas, Rect box, Color color)
+RIPPL_NP_FACES_CODE static void skip_icon(Canvas *canvas, Rect box, Color color, bool points_right)
 {
     int bar = larger(box.width / SKIP_BAR_DIVISOR, 1);
     int half = (box.width - bar) / HALF;
-    triangle(canvas, (Rect){box.x, box.y, half, box.height}, color, true);
-    triangle(canvas, (Rect){box.x + half, box.y, half, box.height}, color, true);
-    canvas_fill_rect(canvas, (Rect){box.x + box.width - bar, box.y, bar, box.height}, color);
-}
-
-RIPPL_NP_FACES_CODE static void previous_icon(Canvas *canvas, Rect box, Color color)
-{
-    int bar = larger(box.width / SKIP_BAR_DIVISOR, 1);
-    int half = (box.width - bar) / HALF;
-    canvas_fill_rect(canvas, (Rect){box.x, box.y, bar, box.height}, color);
-    triangle(canvas, (Rect){box.x + bar, box.y, half, box.height}, color, false);
-    triangle(canvas, (Rect){box.x + bar + half, box.y, half, box.height}, color, false);
+    int bar_x = points_right ? box.x + box.width - bar : box.x;
+    int first_x = points_right ? box.x : box.x + bar;
+    canvas_fill_rect(canvas, (Rect){bar_x, box.y, bar, box.height}, color);
+    triangle(canvas, (Rect){first_x, box.y, half, box.height}, color, points_right);
+    triangle(canvas, (Rect){first_x + half, box.y, half, box.height}, color, points_right);
 }
 
 RIPPL_NP_FACES_CODE void face_icon_draw(Canvas *canvas, FaceIcon icon, Rect box, Color color)
@@ -258,10 +251,10 @@ RIPPL_NP_FACES_CODE void face_icon_draw(Canvas *canvas, FaceIcon icon, Rect box,
         pause_icon(canvas, box, color);
         break;
     case FACE_ICON_NEXT:
-        next_icon(canvas, box, color);
+        skip_icon(canvas, box, color, true);
         break;
     case FACE_ICON_PREVIOUS:
-        previous_icon(canvas, box, color);
+        skip_icon(canvas, box, color, false);
         break;
     case FACE_ICON_NONE:
         break;
@@ -329,58 +322,4 @@ RIPPL_NP_FACES_CODE void face_format_row(Canvas *canvas, const NowPlayingFrame *
         Rect rest = {x, line->area.y, line->area.x + line->area.width - x, line->area.height};
         label_draw(canvas, (TextStyle){line->font, line->color}, (Label){rest, stream});
     }
-}
-
-enum {
-    LOGO_LABEL_MARGIN = 3,
-    LOGO_LABEL_BASE = 48,
-    LOGO_LABEL_SIDE = LOGO_LABEL_BASE + 2 * LOGO_LABEL_MARGIN,
-    LOGO_LABEL_MAGIC_A = 0x4C424C52u,
-    LOGO_LABEL_MAGIC_B = 0x524C424Cu
-};
-
-typedef struct FaceLogoCache {
-    uint32_t magic_a;
-    uint32_t magic_b;
-    Color background;
-    Color foreground;
-    Color pixels[LOGO_LABEL_SIDE * LOGO_LABEL_SIDE];
-} FaceLogoCache;
-
-RIPPL_NP_FACES_CODE Image face_logo_cover(void *scratch, uint32_t scratch_size, Color background,
-                                          Color foreground)
-{
-    if (scratch == NULL || scratch_size < sizeof(FaceLogoCache)) {
-        return (Image){0};
-    }
-    uintptr_t end = (uintptr_t)scratch + scratch_size;
-    uintptr_t at = (end - sizeof(FaceLogoCache)) & ~(uintptr_t)3u;
-    if (at < (uintptr_t)scratch) {
-        return (Image){0};
-    }
-    FaceLogoCache *cache = (FaceLogoCache *)at;
-    if (cache->magic_a != LOGO_LABEL_MAGIC_A || cache->magic_b != LOGO_LABEL_MAGIC_B ||
-        cache->background != background || cache->foreground != foreground) {
-        Color palette[COLOR_ALPHA_OPAQUE + 1];
-        for (uint8_t level = 0; level <= COLOR_ALPHA_OPAQUE; level++) {
-            palette[level] = color_blend(background, foreground, level);
-        }
-        for (int index = 0; index < LOGO_LABEL_SIDE * LOGO_LABEL_SIDE; index++) {
-            cache->pixels[index] = background;
-        }
-        int side =
-            RIPPL_LOGO_LABEL.side < LOGO_LABEL_BASE ? RIPPL_LOGO_LABEL.side : LOGO_LABEL_BASE;
-        for (int y = 0; y < side; y++) {
-            Color *dst =
-                &cache->pixels[(y + LOGO_LABEL_MARGIN) * LOGO_LABEL_SIDE + LOGO_LABEL_MARGIN];
-            for (int x = 0; x < side; x++) {
-                dst[x] = palette[rippl_logo_alpha(&RIPPL_LOGO_LABEL, x, y)];
-            }
-        }
-        cache->background = background;
-        cache->foreground = foreground;
-        cache->magic_a = LOGO_LABEL_MAGIC_A;
-        cache->magic_b = LOGO_LABEL_MAGIC_B;
-    }
-    return (Image){cache->pixels, LOGO_LABEL_SIDE, LOGO_LABEL_SIDE};
 }

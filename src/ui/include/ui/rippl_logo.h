@@ -4,6 +4,7 @@
 
 #include "gfx/canvas.h"
 #include "gfx/color.h"
+#include "gfx/image.h"
 
 #define RIPPL_ORANGE COLOR_RGB(255, 147, 30)
 
@@ -18,3 +19,4 @@ extern const RipplLogo RIPPL_LOGO_LABEL;
 uint8_t rippl_logo_alpha(const RipplLogo *logo, int x, int y);
 void rippl_logo_draw(Canvas *canvas, const RipplLogo *logo, Point origin, Color color,
                      uint8_t alpha);
+Image rippl_logo_cover(void *scratch, uint32_t scratch_size, Color background, Color foreground);
