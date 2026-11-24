@@ -49,9 +49,6 @@ if tall {
     rect(20, top + 34, 129, 27, RED)
     rect(20, top + 61, 129, 3, AMBER)
     text("A", title, 25, top + 6, 14, 20, left, RED)
-    if present(codec) {
-        text(codec, small, 100, top + 10, 44, 16, right, INK_SOFT)
-    }
 } else {
     rect(25, top + 7, 269, 117, LABEL)
     rect(33, top + 29, 253, 1, RULE)
@@ -60,9 +57,6 @@ if tall {
     rect(25, top + 59, 269, 56, RED)
     rect(25, top + 115, 269, 4, AMBER)
     text("A", title, 25, top + 59, 40, 56, center, LABEL)
-    if present(codec) {
-        text(codec, small, 254, top + 59, 40, 56, center, LABEL)
-    }
 }
 
 let fx = tall ? 34 : 65
@@ -71,6 +65,39 @@ let fw = tall ? 101 : 189
 let fh = tall ? 35 : 64
 rounded(fx, fy, fw, fh, 5, SHELL)
 rounded(fx + 2, fy + 2, fw - 4, fh - 4, 4, DEEP)
+
+if tall {
+    trapezoid(34, top + 72, 101, 28, 8, SHELL_HI)
+} else {
+    trapezoid(71, top + 129, 177, 38, 12, SHELL_HI)
+}
+let hole_hub = tall ? 56 : 72
+let hole_y = (top + (tall ? 82 : 143)) * 16 + 8
+ring((tall ? 58 : 103) * 16 + 8, hole_y, hole_hub, 0, DEEP)
+ring((tall ? 110 : 215) * 16 + 8, hole_y, hole_hub, 0, DEEP)
+if tall {
+    rect(46, top + 89, 77, 11, DEEP)
+    let ct = top + 108
+    let counter_x = (width - 52) / 2
+    rounded(counter_x - 10, ct, 72, 32, 6, SHELL)
+    rect(counter_x - 6, ct + 1, 64, 1, SHELL_HI)
+    let c = top + 148
+    rect(8, c, 153, 109, LABEL)
+    rect(8, c, 153, 2, RED)
+    rect(16, c + 24, 137, 1, RULE)
+    rect(16, c + 47, 137, 1, RULE)
+    rect(16, c + 70, 137, 1, RULE)
+} else {
+    rect(87, top + 153, 145, 14, DEEP)
+}
+
+if present(codec) {
+    if tall {
+        text(codec, small, 100, top + 10, 44, 16, right, INK_SOFT)
+    } else {
+        text(codec, small, 254, top + 59, 40, 56, center, LABEL)
+    }
+}
 
 let high = tall ? 312 : 594
 let low = tall ? 152 : 280
@@ -103,27 +130,9 @@ if badge != none {
 }
 
 if tall {
-    trapezoid(34, top + 72, 101, 28, 8, SHELL_HI)
-} else {
-    trapezoid(71, top + 129, 177, 38, 12, SHELL_HI)
-}
-let hole_hub = tall ? 56 : 72
-let hole_y = (top + (tall ? 82 : 143)) * 16 + 8
-ring((tall ? 58 : 103) * 16 + 8, hole_y, hole_hub, 0, DEEP)
-ring((tall ? 110 : 215) * 16 + 8, hole_y, hole_hub, 0, DEEP)
-if tall {
-    rect(46, top + 89, 77, 11, DEEP)
     bar(46, top + 92, 77, 3, TAPE, AMBER, LABEL)
-} else {
-    rect(87, top + 153, 145, 14, DEEP)
-    bar(87, top + 157, 145, 3, TAPE, AMBER, LABEL)
-}
-
-if tall {
     let ct = top + 108
     let counter_x = (width - 52) / 2
-    rounded(counter_x - 10, ct, 72, 32, 6, SHELL)
-    rect(counter_x - 6, ct + 1, 64, 1, SHELL_HI)
     let start = isqrt(200000 * 256)
     let radius = isqrt((200000 + shown) * 256)
     let turns = (radius - start) * 250
@@ -144,11 +153,6 @@ if tall {
     }
 
     let c = top + 148
-    rect(8, c, 153, 109, LABEL)
-    rect(8, c, 153, 2, RED)
-    rect(16, c + 24, 137, 1, RULE)
-    rect(16, c + 47, 137, 1, RULE)
-    rect(16, c + 70, 137, 1, RULE)
     line(song, title, 16, c + 3, 137, 20, center, INK)
     line(artist, body, 16, c + 26, 137, 20, center, INK_SOFT)
     line(album, body, 16, c + 49, 137, 20, center, INK_SOFT)
@@ -159,6 +163,7 @@ if tall {
     }
     times(small, 16, c + 90, 137, 16, INK, INK)
 } else {
+    bar(87, top + 157, 145, 3, TAPE, AMBER, LABEL)
     line(song, title, 33, 8, 253, 20, left, INK)
     if present(feedback) {
         text(feedback, body, 33, 31, 253, 20, left, INK)

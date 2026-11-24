@@ -33,6 +33,9 @@ typedef struct SceneCode {
     uint32_t strings_size;
     void *work;
     uint32_t work_size;
+    void *cache;
+    uint32_t cache_size;
+    uint32_t cache_stamp;
 } SceneCode;
 
 typedef struct SceneMenu {

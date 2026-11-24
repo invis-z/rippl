@@ -11,6 +11,13 @@ enum {
 };
 #undef SCENE_OP
 
+#define SCENE_INPUT(id, name) INPUT_##id,
+enum {
+#include "np_faces/scene_inputs.def"
+    INPUT_COUNT
+};
+#undef SCENE_INPUT
+
 enum {
     IMMEDIATE = 0x8000,
     FIRST_FREE = 40,
@@ -64,7 +71,8 @@ static NpTestScene run_themed(const Program *program, const SceneMenu *menu,
 {
     NpTestScene scene = np_test_scene(NP_FACE_STANDARD, NP_TEST_LAYOUTS[0], NP_TEST_PLAYING);
     static uint32_t work[SCENE_WORK_BYTES / sizeof(uint32_t)];
-    scene.frame.scene = (SceneCode){program->bytes, program->size, NULL, 0, work, sizeof work};
+    scene.frame.scene =
+        (SceneCode){program->bytes, program->size, NULL, 0, work, sizeof work, NULL, 0, 0};
     if (icons != NULL) {
         scene.theme.icons = icons;
     }
@@ -85,8 +93,8 @@ static NpTestScene run(const Program *program, const char *strings, uint32_t str
 {
     NpTestScene scene = np_test_scene(NP_FACE_STANDARD, NP_TEST_LAYOUTS[0], NP_TEST_PLAYING);
     static uint32_t work[SCENE_WORK_BYTES / sizeof(uint32_t)];
-    scene.frame.scene =
-        (SceneCode){program->bytes, program->size, strings, strings_size, work, sizeof work};
+    scene.frame.scene = (SceneCode){
+        program->bytes, program->size, strings, strings_size, work, sizeof work, NULL, 0, 0};
     np_test_clear(pixels);
     Canvas canvas = canvas_make(pixels, (Rect){0, 0, scene.layout.width, scene.layout.height});
     NowPlayingFrame frame = np_test_frame(&scene);
@@ -431,6 +439,85 @@ static void a_backdrop_fills_its_area_with_the_theme(void)
     CHECK_EQUAL(NP_TEST_SENTINEL, at(&scene, 8, 8));
 }
 
+static void draw_in_strips(const NpTestScene *scene, Color *out, int height)
+{
+    np_test_clear(out);
+    NowPlayingFrame frame = np_test_frame(scene);
+    for (int y = 0; y < scene->layout.height; y += height) {
+        int rows = y + height <= scene->layout.height ? height : scene->layout.height - y;
+        Canvas strip =
+            canvas_make(out + y * scene->layout.width, (Rect){0, y, scene->layout.width, rows});
+        scene_draw(&frame, &strip);
+    }
+}
+
+static void a_scene_caches_its_static_draws_across_frames(void)
+{
+    Program program = {.size = 0};
+    red(&program, FIRST_FREE);
+    op(&program, OP_JUMP_ZERO);
+    put(&program, INPUT_PLAYING);
+    uint32_t else_patch = program.size;
+    put(&program, 0);
+    op(&program, OP_SET);
+    put(&program, FIRST_FREE + 1);
+    put(&program, number(10));
+    op(&program, OP_JUMP);
+    uint32_t end_patch = program.size;
+    put(&program, 0);
+    uint32_t else_at = program.size;
+    program.bytes[else_patch] = (uint8_t)else_at;
+    program.bytes[else_patch + 1] = (uint8_t)(else_at >> 8);
+    op(&program, OP_SET);
+    put(&program, FIRST_FREE + 1);
+    put(&program, number(20));
+    uint32_t end_at = program.size;
+    program.bytes[end_patch] = (uint8_t)end_at;
+    program.bytes[end_patch + 1] = (uint8_t)(end_at >> 8);
+    rect(&program, 0, 0, FIRST_FREE);
+    op(&program, OP_CLIP);
+    put(&program, number(8));
+    put(&program, number(0));
+    put(&program, number(8));
+    put(&program, number(8));
+    rect(&program, 10, 0, FIRST_FREE);
+    op(&program, OP_UNCLIP);
+    op(&program, OP_RECT);
+    put(&program, FIRST_FREE + 1);
+    put(&program, number(20));
+    put(&program, number(4));
+    put(&program, number(4));
+    put(&program, FIRST_FREE);
+    op(&program, OP_END);
+
+    static uint32_t work[SCENE_WORK_BYTES / sizeof(uint32_t)];
+    static uint32_t cache[2048];
+    memset(cache, 0, sizeof cache);
+    NpTestScene scene = np_test_scene(NP_FACE_STANDARD, NP_TEST_LAYOUTS[0], NP_TEST_PLAYING);
+    scene.frame.scene = (SceneCode){program.bytes, program.size, NULL,         0, work,
+                                    sizeof work,   cache,        sizeof cache, 1};
+    draw_in_strips(&scene, pixels, 17);
+    CHECK_EQUAL(RED, at(&scene, 1, 1));
+    CHECK_EQUAL(RED, at(&scene, 11, 1));
+    CHECK_EQUAL(RED, at(&scene, 11, 21));
+    CHECK_EQUAL(NP_TEST_SENTINEL, at(&scene, 21, 21));
+
+    scene.status.state = PLAYER_PAUSED;
+    scene.frame.playing = false;
+    draw_in_strips(&scene, pixels, 17);
+    CHECK_EQUAL(RED, at(&scene, 1, 1));
+    CHECK_EQUAL(RED, at(&scene, 11, 1));
+    CHECK_EQUAL(NP_TEST_SENTINEL, at(&scene, 11, 21));
+    CHECK_EQUAL(RED, at(&scene, 21, 21));
+
+    uint32_t tiny[16] = {0};
+    scene.frame.scene.cache = tiny;
+    scene.frame.scene.cache_size = sizeof tiny;
+    draw_in_strips(&scene, pixels, 17);
+    CHECK_EQUAL(RED, at(&scene, 1, 1));
+    CHECK_EQUAL(RED, at(&scene, 21, 21));
+}
+
 int main(void)
 {
     static const TestCase cases[] = {
@@ -446,6 +533,7 @@ int main(void)
         TEST_CASE(a_backdrop_fills_its_area_with_the_theme),
         TEST_CASE(a_tile_draws_the_icon_of_the_item_it_holds),
         TEST_CASE(without_a_menu_or_an_icon_a_tile_draws_no_icon),
+        TEST_CASE(a_scene_caches_its_static_draws_across_frames),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

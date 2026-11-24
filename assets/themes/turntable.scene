@@ -16,15 +16,15 @@ let qy = cy * 16 + 8
 gradient(x, y, width, height, #482c18, #281810)
 ring(qx, qy, (67 * 16 * SCALE + 128) >> 8, (64 * 16 * SCALE + 128) >> 8, ALU)
 ring(qx, qy, (64 * 16 * SCALE + 128) >> 8, 0, VINYL)
+repeat groove from 0 to 4 {
+    let radius = ((38 + 7 * groove) * 16 * SCALE + 128) >> 8
+    ring(qx, qy, radius + 16, radius, ALU_DARK)
+}
 
 let label = (28 * SCALE + 128) >> 8
 let angle = position % 3600 * 256 / 3600
 turned_cover(cx, cy, label, angle)
 ring(qx, qy, label * 16 + 16, label * 16, VINYL)
-repeat groove from 0 to 4 {
-    let radius = ((38 + 7 * groove) * 16 * SCALE + 128) >> 8
-    ring(qx, qy, radius + 16, radius, ALU_DARK)
-}
 ring(qx, qy, (48 * SCALE + 128) >> 8, 0, ALU)
 
 if badge != none {

@@ -415,12 +415,23 @@ bool theme_store_scene(int which, SceneCode *code, const ThemeColors **chrome)
     *chrome = tinted ? (const ThemeColors *)(const void *)section : NULL;
     section += tinted ? THEME_SCENE_CHROME_BYTES : 0;
     uint32_t work_at = (size - SCENE_WORK_BYTES) / WORD_BYTES * WORD_BYTES;
+    void *cache = NULL;
+    uint32_t cache_size = 0;
+    uint32_t cache_stamp = 0;
+    if (which == THEME_SCENE_NOW_PLAYING) {
+        cache = theme_assets_spare(&block->package, &cache_size);
+        uint32_t key[3] = {hal_system_theme_asset_wipes(), block->revision, scene.checksum};
+        cache_stamp = hash_update(HASH_START, key, sizeof key);
+    }
     *code = (SceneCode){section,
                         scene.code_bytes,
                         (const char *)section + scene.code_bytes,
                         scene.string_bytes,
                         place + work_at,
-                        SCENE_WORK_BYTES};
+                        SCENE_WORK_BYTES,
+                        cache,
+                        cache_size,
+                        cache_stamp};
     return true;
 }
 

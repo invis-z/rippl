@@ -25,4 +25,5 @@ const Wallpaper *theme_assets_wallpaper(ThemeAssets *assets, const ThemePackage 
 void theme_assets_watch(ThemeAssets *assets);
 bool theme_assets_wanted(const ThemeAssets *assets);
 bool theme_assets_tend(ThemeAssets *assets, const ThemePackage *package, const ThemeSource *source);
+void *theme_assets_spare(const ThemePackage *package, uint32_t *size);
 bool theme_source_read(const ThemeSource *source, uint32_t offset, void *target, uint32_t length);
