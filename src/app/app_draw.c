@@ -70,7 +70,7 @@ static void draw_slide(Canvas *canvas, Screen *arriving)
 
 static void draw_frame(void *context, Canvas *canvas)
 {
-    const AppState *state = context;
+    AppState *state = context;
     if (draw_running_fade(canvas)) {
         return;
     }
