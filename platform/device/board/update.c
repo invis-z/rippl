@@ -123,7 +123,9 @@ static HalUpdateRecord outcome(HalUpdateResult result, uint8_t detail)
 static void remember(HalUpdateRecord record)
 {
     board_start_record_update(record);
-    storage_reset();
+    if (shared->last_session.card_written > 0 || shared->last_session.card_starts > 0) {
+        storage_reset();
+    }
     (void)update_record_save(record);
 }
 
