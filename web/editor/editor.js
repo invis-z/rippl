@@ -1273,6 +1273,11 @@ function panelShare() {
     state.theme.author = author.value;
     remember();
   });
+  const adaptedFrom = el("input", { value: state.theme.adapted_from ?? "", maxlength: 40, placeholder: "Original author" });
+  adaptedFrom.addEventListener("input", () => {
+    state.theme.adapted_from = adaptedFrom.value;
+    remember();
+  });
   return [
     el("h2", {}, "Put it on your player"),
     noticeBox(),
@@ -1284,7 +1289,11 @@ function panelShare() {
       el("button", { type: "button", class: "primary", disabled: !bytes, onclick: download }, "Save the theme file")),
     el("h3", {}, "Share it"),
     el("p", { class: "hint" }, "Send the theme file to anyone, and the editable copy too if they'd like to change it."),
-    group(field("Made by", author, "Stored in the theme"), field("Description", about, "Stored in the theme")),
+    group(
+      field("Made by", author, "Stored in the theme"),
+      field("Adapted from", adaptedFrom, "Optional original author"),
+      field("Description", about, "Stored in the theme"),
+    ),
     el("div", { class: "actions" },
       el("button", { type: "button", onclick: downloadSource }, "Save an editable copy"),
       el("a", { class: "link", href: GUIDE, target: "_blank", rel: "noopener" }, "Theme guide")),

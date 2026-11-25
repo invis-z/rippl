@@ -23,8 +23,8 @@ ALL_EDGES = 15
 BYTE_FIELDS = ("border_width", "shine_height")
 BOX_KEYS = {"fill", "border", "shine", "ink", "border_width", "border_edges", "shine_height", "inset",
             "radius", "opacity"}
-THEME_KEYS = {"name", "author", "description", "selection", "colors", "boxes", "spacing", "icons",
-              "wallpaper", "wallpaper_portrait", "now_playing",
+THEME_KEYS = {"name", "author", "adapted_from", "description", "selection", "colors", "boxes",
+              "spacing", "icons", "wallpaper", "wallpaper_portrait", "now_playing",
               "now_playing_portrait", "accents", "cover_flow", "now_playing_scene",
               "home_art", "home_scene"}
 LAYOUTS = ("now_playing", "now_playing_portrait")
@@ -65,7 +65,7 @@ PALETTE_COLORS = 16
 HEX_DIGITS = "0123456789abcdef"
 ICON_LEVELS = ".123456789abcdef"
 ICON_PAIRS = (("battery", "battery_level"), ("battery_large", "battery_level_large"))
-CREDIT_LIMITS = {"author": 40, "description": 120}
+CREDIT_LIMITS = {"author": 40, "adapted_from": 40, "description": 120}
 HEX_COLOR = re.compile(r"^#([0-9a-fA-F]{6})$")
 ENTRY = re.compile(r"^THEME_(?:COLOR|BOX)\(\w+,\s*(\w+)\)\s*$")
 SPACING_ENTRY = re.compile(r"^THEME_SPACING\(\w+,\s*(\w+),\s*(\d+),\s*(\d+)\)\s*$")

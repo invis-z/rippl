@@ -1,5 +1,6 @@
 name = "Cassette"
 author = "Rippl"
+adapted_from = "hva314"
 description = "A tape in its shell, the reels turning while a track plays"
 
 [colors]

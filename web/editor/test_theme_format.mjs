@@ -73,11 +73,12 @@ assert.equal(bareBytes[52] & 2, 2);
 assert.equal(unpack(bareBytes, schema).home_art, false);
 assert.equal(unpack(dark, schema).home_art, true);
 assert.match(toToml(bare, schema), /home_art = false/);
-const credited = { ...defaultTheme(schema), author: "Ann \"Lee\"", description: "  Blue and calm " };
+const credited = { ...defaultTheme(schema), author: "Ann \"Lee\"", adapted_from: " EchoPod ", description: "  Blue and calm " };
 const creditedToml = toToml(credited, schema);
 assert.match(creditedToml, /^author = "Ann \\"Lee\\""$/m);
+assert.match(creditedToml, /^adapted_from = "EchoPod"$/m);
 assert.match(creditedToml, /^description = "Blue and calm"$/m);
-assert.doesNotMatch(toToml(defaultTheme(schema), schema), /^(author|description) =/m);
+assert.doesNotMatch(toToml(defaultTheme(schema), schema), /^(author|adapted_from|description) =/m);
 
 const homeTheme = defaultTheme(schema);
 const SCENE_ROOM = 6144;

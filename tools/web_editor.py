@@ -106,14 +106,15 @@ def shared_sources(folder, taken):
 def gallery_entry(path, shared):
     theme = theme_pack.read_source(path)
     return {"file": path.stem, "name": theme.get("name", path.stem),
-            "author": theme.get("author", ""), "description": theme.get("description", ""),
-            "shared": shared}
+            "author": theme.get("author", ""), "adapted_from": theme.get("adapted_from", ""),
+            "description": theme.get("description", ""), "shared": shared}
 
 
 def images_of(path):
     theme = theme_pack.read_source(path)
     tables = [(theme.get(key), "image") for key, _, _ in theme_pack.WALLPAPERS]
     tables.append((theme.get("now_playing_scene"), "file"))
+    tables.append((theme.get("home_scene"), "file"))
     return [path.parent / table[key] for table, key in tables
             if isinstance(table, dict) and isinstance(table.get(key), str)]
 

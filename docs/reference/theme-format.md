@@ -60,6 +60,7 @@ A scene too big for the player doesn't load, and Now Playing or Home shows the s
 |---|---|
 | `name` | 1 to 23 bytes. Required |
 | `author` | Up to 40 characters |
+| `adapted_from` | Optional original author, up to 40 characters |
 | `description` | Up to 120 characters |
 | `selection` | The box that draws the selected row: `selection`, `selection_flat`, `selection_outline` or any other box |
 | `cover_flow` | Cover Flow's stage is always black. `"theme"` (default) puts the theme's text colours on it; `"dark"` the dark look's, for light themes |

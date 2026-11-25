@@ -30,7 +30,9 @@ function picture(theme) {
 
 function card(theme) {
   const made = element("article", null, "card");
-  const by = theme.author ? `by ${theme.author}` : "";
+  const by = theme.adapted_from
+    ? (theme.author ? `adapted by ${theme.author} from ${theme.adapted_from}` : `adapted from ${theme.adapted_from}`)
+    : (theme.author ? `by ${theme.author}` : "");
   const links = element("p", null, "links");
   links.append(
     link("Download", `themes/${theme.file}.rippltheme`, `${theme.name}.rippltheme`),

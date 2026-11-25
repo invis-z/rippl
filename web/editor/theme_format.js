@@ -822,7 +822,7 @@ function tomlBox(box) {
 
 export function toToml(theme, schema) {
   const parts = [`name = ${JSON.stringify(theme.name)}`];
-  for (const key of ["author", "description"]) {
+  for (const key of ["author", "adapted_from", "description"]) {
     if (typeof theme[key] === "string" && theme[key].trim() !== "") {
       parts.push(`${key} = ${JSON.stringify(theme[key].trim())}`);
     }

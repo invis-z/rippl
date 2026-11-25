@@ -1,5 +1,6 @@
 name = "Turntable"
 author = "Rippl"
+adapted_from = "hva314"
 description = "A record spinning on a walnut deck, the label turning with it and the tonearm crossing it as the queue plays"
 
 [colors]
