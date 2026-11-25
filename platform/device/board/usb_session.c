@@ -29,7 +29,9 @@ enum {
     LUN_COUNT = 2,
     WRITE_BUFFER_SECTORS = 64,
     WORKING_COMMANDS = 2,
-    SCREEN_DARK_MS = 30000
+    SCREEN_DARK_MS = 30000,
+    SUSPEND_QUIET_MS = 200,
+    UNPLUG_NOTICE_MS = 10000
 };
 
 static UsbShared *shared;
@@ -40,6 +42,7 @@ static UsbFallback fallback;
 static VbusDebounce vbus;
 static SdHealth card_at_start;
 static bool screen_dark;
+static bool host_suspended;
 static uint32_t screen_used_ms;
 static uint32_t write_buffer[WRITE_BUFFER_SECTORS * MSC_SECTOR_SIZE / 4];
 
@@ -171,9 +174,27 @@ static UsbSessionEnd serve(void)
 {
     MscStats shown = msc_stats(&msc);
     uint32_t refreshed = hal_clock_milliseconds();
+    host_suspended = false;
+    bool suspending = false;
+    uint32_t suspended_since = 0;
     light_screen();
-    while (vbus_debounce_present(&vbus, usb_vbus_present(), hal_clock_milliseconds())) {
+    for (;;) {
+        bool vbus_now = usb_vbus_present();
         uint32_t now = hal_clock_milliseconds();
+        if (!vbus_debounce_present(&vbus, vbus_now, now)) {
+            break;
+        }
+        if (vbus_now && usb_port_suspended()) {
+            if (!suspending) {
+                suspending = true;
+                suspended_since = now;
+            } else if (now - suspended_since >= SUSPEND_QUIET_MS) {
+                host_suspended = true;
+            }
+        } else if (vbus_now) {
+            suspending = false;
+            host_suspended = false;
+        }
         if (now - refreshed >= COUNTER_REFRESH_MS && stats_changed(msc_stats(&msc), shown)) {
             shown = msc_stats(&msc);
             show_counters(shown);
@@ -257,9 +278,12 @@ UsbStorageOutcome usb_storage_session(UsbShared *state)
     shared = state;
     UsbSessionEnd end = run();
     bool cable_back = end == USB_SESSION_UNPLUGGED && usb_vbus_present();
-    if (end == USB_SESSION_UNPLUGGED && !cable_back && shared->last_session.left_mounted != 0) {
+    bool written =
+        shared->last_session.card_written > 0 || shared->last_session.internal_written > 0;
+    if (end == USB_SESSION_UNPLUGGED && !cable_back && shared->last_session.left_mounted != 0 &&
+        written && !host_suspended) {
         app_show_notice(i18n_text(STR_USB_UNPLUGGED_TITLE), i18n_text(STR_USB_UNPLUGGED_MESSAGE));
-        board_wait_for_key();
+        board_wait_for_key(UNPLUG_NOTICE_MS);
     }
     if (end == USB_SESSION_EJECTED || end == USB_SESSION_UNPLUGGED) {
         update_after_usb(shared);

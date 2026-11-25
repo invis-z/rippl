@@ -9,8 +9,8 @@
 
 enum {
     USB_PORT_PACKET_BYTES = (int)USB_AUDIO_MAX_PACKET > (int)USB_HIGH_SPEED_PACKET_SIZE
-        ? USB_AUDIO_MAX_PACKET
-        : USB_HIGH_SPEED_PACKET_SIZE,
+                                ? USB_AUDIO_MAX_PACKET
+                                : USB_HIGH_SPEED_PACKET_SIZE,
     USB_PORT_PACKET_WORDS = (USB_PORT_PACKET_BYTES + 3) / 4
 };
 
@@ -69,3 +69,4 @@ void usb_poll(UsbPort *port);
 UsbProbe usb_probe(void);
 bool usb_reply_pending(const UsbPort *port);
 bool usb_send_report(UsbPort *port, uint8_t report);
+bool usb_port_suspended(void);

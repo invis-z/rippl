@@ -425,3 +425,8 @@ bool usb_port_connect(UsbPort *port)
     usb_device_set_speed(&port->device, USB_SPEED_FULL);
     return usb_connect(&port->link);
 }
+
+bool usb_port_suspended(void)
+{
+    return (read_register(DSTS) & DSTS_SUSPENDED) != 0;
+}

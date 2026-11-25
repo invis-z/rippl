@@ -49,6 +49,7 @@
 #define DCFG_CLEARED_BITS 0x7F3u
 #define DCFG_FULL_SPEED 0x1u
 #define DCFG_HIGH_SPEED 0x0u
+#define DSTS_SUSPENDED (1u << 0)
 #define DSTS_SPEED_SHIFT 1
 #define DSTS_SPEED_MASK 0x3u
 #define DSTS_HIGH_SPEED 0x0u

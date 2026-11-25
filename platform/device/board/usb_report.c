@@ -34,7 +34,7 @@ static void show(const char *title, const char *label_a, uint32_t value_a, const
     append_field(&builder, label_a, value_a);
     append_field(&builder, label_b, value_b);
     app_show_notice(title, text);
-    board_wait_for_key();
+    board_wait_for_key(0);
 }
 
 void usb_report_show(const UsbReport *report)

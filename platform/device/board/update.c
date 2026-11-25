@@ -172,7 +172,7 @@ static void install(const UpdateFile *update, const UpdateStorage *storage, bool
         restart_after_unplug();
     }
     app_show_notice(i18n_text(STR_UPDATE_FAILED), i18n_text(STR_UPDATE_RETRY));
-    board_wait_for_key();
+    board_wait_for_key(0);
 }
 
 void update_after_usb(UsbShared *state)
@@ -206,6 +206,6 @@ void update_after_usb(UsbShared *state)
         string_builder_append_unsigned(&builder, storage.slot_sectors / SECTORS_PER_MIB);
         string_builder_append_char(&builder, ')');
         app_show_notice(i18n_text(STR_UPDATE_NOT_INSTALLED), text);
-        board_wait_for_key();
+        board_wait_for_key(0);
     }
 }
