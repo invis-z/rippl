@@ -71,7 +71,7 @@ bool board_audio_stream_play(void);
 void board_audio_stream_pause(void);
 uint32_t board_audio_stream_consumed(void);
 void board_audio_stream_close(void);
-void board_wait_for_key(void);
+void board_wait_for_key(uint32_t timeout_ms);
 void board_main(void);
 bool board_usb_listening(void);
 void board_power_hold(void);

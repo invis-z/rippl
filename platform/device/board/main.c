@@ -83,7 +83,7 @@ static const UsbOverlayEntry *load_usb_code(void)
     usb_power_down();
     app_show_notice("USB",
                     i18n_text(restart_pending ? STR_RESCAN_RESTART_NEEDED : STR_USB_NO_CODE));
-    board_wait_for_key();
+    board_wait_for_key(0);
     return NULL;
 }
 

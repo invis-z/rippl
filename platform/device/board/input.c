@@ -4,6 +4,7 @@
 #include "device/key_ladder.h"
 #include "device/key_scanner.h"
 #include "gpio.h"
+#include "hal/clock.h"
 #include "irq.h"
 #include "registers.h"
 
@@ -119,14 +120,18 @@ void hal_input_drop_presses(void)
     irq_restore(primask);
 }
 
-void board_wait_for_key(void)
+void board_wait_for_key(uint32_t timeout_ms)
 {
     HalKeyTransition transition;
     while (hal_input_next_transition(&transition)) {
     }
+    uint32_t started = hal_clock_milliseconds();
     for (;;) {
         board_display_service();
         if (hal_input_next_transition(&transition) && transition.pressed) {
+            return;
+        }
+        if (timeout_ms > 0 && hal_clock_milliseconds() - started >= timeout_ms) {
             return;
         }
     }
