@@ -25,3 +25,6 @@ target_link_libraries(rippl_ui
     PUBLIC rippl_core rippl_gfx
     PRIVATE rippl_options rippl_compact rippl_lto
 )
+if(CMAKE_CROSSCOMPILING)
+    set_source_files_properties(toast.c PROPERTIES COMPILE_DEFINITIONS RIPPL_RESIDENT_TABLES)
+endif()

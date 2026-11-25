@@ -70,7 +70,7 @@ static void draw_slide(Canvas *canvas, Screen *arriving)
 
 static void draw_frame(void *context, Canvas *canvas)
 {
-    const AppState *state = context;
+    AppState *state = context;
     if (draw_running_fade(canvas)) {
         return;
     }
@@ -83,7 +83,11 @@ static void draw_frame(void *context, Canvas *canvas)
     if (!screen->full_screen) {
         status_bar_draw(canvas, app_current_theme(), state->status_bar);
     }
-    toast_draw(&state->toast, canvas, app_current_theme());
+    if (hal_system_code2_ready()) {
+        toast_draw(&state->toast, canvas, app_current_theme());
+    } else {
+        toast_draw_plain(&state->toast, canvas, app_current_theme());
+    }
     if (state->options.show_frame_time) {
         FrameBreakdown breakdown = {
             .total_us = frame_stats_average_us(&state->frame_stats),

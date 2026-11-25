@@ -17,3 +17,4 @@ bluetooth_screen_open_details calls returns before pushing unless hal_system_cod
 bluetooth_screen_init addresses stores code 2 handlers in its screen, called only after a guarded open
 app_start addresses inlines the screen inits, which store code 2 handlers without calling them
 use_fits calls returns before equalizer_fits_apply unless hal_system_code2_ready()
+draw_frame calls calls toast_draw only when hal_system_code2_ready(), falling back to toast_draw_plain
