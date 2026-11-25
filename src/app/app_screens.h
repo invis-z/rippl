@@ -98,6 +98,7 @@ struct AppScreens {
     Core1Option core1;
     Core1AccelOption core1_accel;
     MenuItem home_items[HOME_ITEM_COUNT];
+    bool home_now_playing_first;
     DiagnosticsGate diagnostics_gate;
     HomeArt home_art;
     MenuScene home_scene;
@@ -128,6 +129,7 @@ typedef struct AppScreensContext {
 } AppScreensContext;
 
 Screen *app_screens_init(AppScreens *screens, AppScreensContext context);
+void app_screens_sync_home(AppScreens *screens, bool now_playing_first);
 MenuItem app_screens_open_item(const char *label, Screen *target);
 Screen *app_screens_build_menu(MenuScreen *menu, const char *title, const MenuItem *items,
                                int count, const Theme *theme);

@@ -3573,6 +3573,55 @@ static void a_face_theme_chosen_in_settings_applies_without_a_restart(void)
     CHECK(fake_hal_pixel(2, 0) != DEFAULT_THEME.colors->header_top);
 }
 
+static void capsule_puts_now_playing_first_on_home_and_restores_on_dark(void)
+{
+    Settings defaults = settings_defaults();
+    start_app_wearing_face(&defaults, NP_FACE_STANDARD);
+    uint32_t size = 0;
+    theme_fixture_on_card("capsule.rippltheme", "capsule.rippltheme", &size);
+    play_first_album_track();
+    wait_ms(SLIDE_DURATION_MS);
+    hold_back();
+    open_setting(SETTINGS_DISPLAY, DISPLAY_THEME_ROW);
+    move_down(THEME_COUNT);
+    tap(KEY_PLAY);
+    CHECK(title_is("Display"));
+    CHECK(theme_store_has_scene(THEME_SCENE_HOME));
+    CHECK(theme_store_has_scene(THEME_SCENE_NOW_PLAYING));
+    CHECK((theme_store_package()->flags & THEME_FLAG_NOW_PLAYING_FIRST) != 0);
+    hold_back();
+    wait_ms(SLIDE_DURATION_MS);
+    CHECK(title_is("Rippl"));
+    move_up(2);
+    tap(KEY_PLAY);
+    wait_ms(SLIDE_DURATION_MS);
+    CHECK(title_is("Now Playing"));
+    tap(KEY_BACK);
+    wait_ms(SLIDE_DURATION_MS);
+    move_down(1);
+    tap(KEY_PLAY);
+    wait_ms(SLIDE_DURATION_MS);
+    CHECK(title_is("Music"));
+    hold_back();
+    wait_ms(SLIDE_DURATION_MS);
+    move_down(1);
+    tap(KEY_PLAY);
+    CHECK(title_is("Settings"));
+    tap(KEY_PLAY);
+    CHECK(title_is("Display"));
+    tap(KEY_PLAY);
+    CHECK(title_is("Theme"));
+    move_up(THEME_COUNT);
+    tap(KEY_PLAY);
+    CHECK(title_is("Display"));
+    hold_back();
+    wait_ms(SLIDE_DURATION_MS);
+    move_up(1);
+    tap(KEY_PLAY);
+    wait_ms(SLIDE_DURATION_MS);
+    CHECK(title_is("Music"));
+}
+
 static void a_paused_face_frame_followed_by_an_idle_frame_sends_nothing(void)
 {
     ShotSetup setup = {SHOT_LANDSCAPE, SHOT_PAUSED, NP_FACE_CASSETTE, true};
@@ -4369,6 +4418,7 @@ int main(void)
         TEST_CASE(a_start_that_finds_its_code_again_runs_normally),
         TEST_CASE(a_theme_chosen_while_a_track_plays_shows_its_text_on_now_playing),
         TEST_CASE(a_theme_worn_while_the_screen_is_idle_is_drawn_on_the_next_step),
+        TEST_CASE(capsule_puts_now_playing_first_on_home_and_restores_on_dark),
     };
     return test_run_all(cases, TEST_CASE_COUNT(cases));
 }

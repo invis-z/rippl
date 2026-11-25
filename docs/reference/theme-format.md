@@ -65,6 +65,7 @@ A scene too big for the player doesn't load, and Now Playing or Home shows the s
 | `selection` | The box that draws the selected row: `selection`, `selection_flat`, `selection_outline` or any other box |
 | `cover_flow` | Cover Flow's stage is always black. `"theme"` (default) puts the theme's text colours on it; `"dark"` the dark look's, for light themes |
 | `home_art` | `true` (default) shows album art beside the Home menu, or below it upright; `false` gives the menu the whole screen |
+| `now_playing_first` | `false` (default) keeps Now Playing at the bottom of Home; `true` moves it to the top when a track is loaded |
 
 ## Colours
 

@@ -58,4 +58,7 @@ void app_dress_theme(void)
     int slide_ms = (int)settings_animation_ms(settings->options, SELECTION_SLIDE_MS);
     app.theme.metrics.selection_slide_ms = slide_ms;
     app.stage_theme.metrics.selection_slide_ms = slide_ms;
+    if (app.screens.home.config.items != NULL) {
+        app_screens_sync_home(&app.screens, app.theme.now_playing_first);
+    }
 }

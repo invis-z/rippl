@@ -141,6 +141,7 @@ typedef struct Theme {
     MarqueeTiming marquee;
     ThemeSelection selection;
     bool no_menu_panel;
+    bool now_playing_first;
 } Theme;
 
 extern const ThemeBoxes THEME_STANDARD_BOXES;

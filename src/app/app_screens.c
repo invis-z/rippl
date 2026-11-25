@@ -238,12 +238,22 @@ static bool home_scene_update(void *context, uint32_t now_ms)
     return true;
 }
 
+static int home_scene_slot(void *context, int position)
+{
+    const MenuScreen *menu = context;
+    int slot = menu_screen_scene_slot(context, position);
+    if (!menu->config.theme->now_playing_first || slot < 0) {
+        return slot;
+    }
+    return slot == 0 ? HOME_ITEM_COUNT - 1 : slot - 1;
+}
+
 static bool home_scene_draw(void *context, Canvas *canvas, MenuScreen *menu)
 {
     const AppScreens *screens = context;
     const HomeArt *art = &screens->home_art;
-    SceneMenu items = {&menu->model, menu->list.selected, menu_screen_scene_list,
-                       menu_screen_scene_slot, menu};
+    SceneMenu items = {&menu->model, menu->list.selected, menu_screen_scene_list, home_scene_slot,
+                       menu};
     NowPlayingHome stage = {.title = menu->config.title, .menu = &items};
     if (!art->has_album ||
         cover_cache_full(art->covers, art->album, &stage.cover) != COVER_LOADED) {
@@ -252,9 +262,47 @@ static bool home_scene_draw(void *context, Canvas *canvas, MenuScreen *menu)
     return now_playing_draw_home(&screens->now_playing, &stage, canvas);
 }
 
+void app_screens_sync_home(AppScreens *screens, bool now_playing_first)
+{
+    if (screens->home_now_playing_first == now_playing_first) {
+        return;
+    }
+    screens->home_now_playing_first = now_playing_first;
+    MenuItem playing;
+    if (now_playing_first) {
+        playing = screens->home_items[HOME_ITEM_COUNT - 1];
+        for (int index = HOME_ITEM_COUNT - 1; index > 0; index--) {
+            screens->home_items[index] = screens->home_items[index - 1];
+        }
+        screens->home_items[0] = playing;
+    } else {
+        playing = screens->home_items[0];
+        for (int index = 0; index < HOME_ITEM_COUNT - 1; index++) {
+            screens->home_items[index] = screens->home_items[index + 1];
+        }
+        screens->home_items[HOME_ITEM_COUNT - 1] = playing;
+    }
+    if (screens->home.config.items == NULL || playing.shown == NULL ||
+        !playing.shown(playing.shown_context)) {
+        return;
+    }
+    int count = list_view_rows(&screens->home.list);
+    if (count <= 1) {
+        return;
+    }
+    int selected = screens->home.list.selected;
+    if (now_playing_first) {
+        selected = selected == count - 1 ? 0 : selected + 1;
+    } else {
+        selected = selected == 0 ? count - 1 : selected - 1;
+    }
+    list_view_select(&screens->home.list, selected, screens->home.now_ms);
+}
+
 static void build_home(AppScreens *screens, AppScreensContext context)
 {
     const Theme *theme = context.theme;
+    screens->home_now_playing_first = false;
     screens->home_items[0] =
         app_screens_open_item(i18n_text(STR_RESCAN_MUSIC_TITLE), &screens->music.screen);
     screens->home_items[1] = shelf_item(screens, context, SPOKEN_AUDIOBOOK);
@@ -270,6 +318,7 @@ static void build_home(AppScreens *screens, AppScreensContext context)
         app_screens_open_item(i18n_text(STR_MENU_NOW_PLAYING), &screens->now_playing.screen);
     screens->home_items[5].shown = player_has_track;
     screens->home_items[5].shown_context = context.player;
+    app_screens_sync_home(screens, theme->now_playing_first);
     home_art_init(&screens->home_art, context.covers, context.store, context.player, theme);
     screens->home_art.notice = hal_storage_card_ready() ? NULL : i18n_text(STR_MENU_NO_CARD);
     screens->home_scene = (MenuScene){home_scene_update, home_scene_draw, screens, false};

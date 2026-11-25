@@ -67,12 +67,16 @@ assert.equal(opacityPercent(6), 60);
 assert.match(toToml(clear, schema), /opacity = 60/);
 assert.doesNotMatch(toToml(defaultTheme(schema), schema), /opacity/);
 
-const bare = { ...defaultTheme(schema), home_art: false };
+const bare = { ...defaultTheme(schema), home_art: false, now_playing_first: true };
 const bareBytes = pack(bare, schema);
 assert.equal(bareBytes[52] & 2, 2);
+assert.equal(bareBytes[52] & 4, 4);
 assert.equal(unpack(bareBytes, schema).home_art, false);
+assert.equal(unpack(bareBytes, schema).now_playing_first, true);
 assert.equal(unpack(dark, schema).home_art, true);
+assert.equal(unpack(dark, schema).now_playing_first, false);
 assert.match(toToml(bare, schema), /home_art = false/);
+assert.match(toToml(bare, schema), /now_playing_first = true/);
 const credited = { ...defaultTheme(schema), author: "Ann \"Lee\"", adapted_from: " EchoPod ", description: "  Blue and calm " };
 const creditedToml = toToml(credited, schema);
 assert.match(creditedToml, /^author = "Ann \\"Lee\\""$/m);
