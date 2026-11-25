@@ -26,7 +26,7 @@ BOX_KEYS = {"fill", "border", "shine", "ink", "border_width", "border_edges", "s
 THEME_KEYS = {"name", "author", "adapted_from", "description", "selection", "colors", "boxes",
               "spacing", "icons", "wallpaper", "wallpaper_portrait", "now_playing",
               "now_playing_portrait", "accents", "cover_flow", "now_playing_scene",
-              "home_art", "home_scene"}
+              "home_art", "now_playing_first", "home_scene"}
 LAYOUTS = ("now_playing", "now_playing_portrait")
 LAYOUT_KEYS = {"x", "y", "width", "height", "align", "hide"}
 LAYOUT_COVER_KEYS = {"x", "y", "size", "hide"}
@@ -58,6 +58,7 @@ SCENE_SMOOTH = 4
 SCENE_LANDSCAPE = 8
 FLAG_DARK_COVER_FLOW = 1
 FLAG_NO_HOME_ART = 2
+FLAG_NOW_PLAYING_FIRST = 4
 ASSET_ENTRY_SIZE = 16
 ASSET_MEMORY = 28224
 WALLPAPER_PAIR_BYTES = 1024
@@ -530,7 +531,12 @@ def flags_of(theme, where):
     home_art = theme.get("home_art", True)
     if not isinstance(home_art, bool):
         raise ThemeError(f"{where}: home_art is true or false")
-    return (FLAG_DARK_COVER_FLOW if style == "dark" else 0) | (0 if home_art else FLAG_NO_HOME_ART)
+    now_playing_first = theme.get("now_playing_first", False)
+    if not isinstance(now_playing_first, bool):
+        raise ThemeError(f"{where}: now_playing_first is true or false")
+    return ((FLAG_DARK_COVER_FLOW if style == "dark" else 0)
+            | (0 if home_art else FLAG_NO_HOME_ART)
+            | (FLAG_NOW_PLAYING_FIRST if now_playing_first else 0))
 
 
 def pack(theme, base, colors, boxes, where="theme", spacing=(), icons=(),

@@ -111,6 +111,7 @@ void default_theme_dress(Theme *theme, const ThemePackage *package, ThemeChoice 
         theme->boxes = &package->boxes;
         theme->selection = (ThemeSelection)package->selection;
         theme->no_menu_panel = (package->flags & THEME_FLAG_NO_HOME_ART) != 0;
+        theme->now_playing_first = (package->flags & THEME_FLAG_NOW_PLAYING_FIRST) != 0;
     }
     if (tinted != NULL && default_theme_takes_accent(package)) {
         const ThemeAccent *accent = &package->accents[default_theme_accent(package, choice.accent)];

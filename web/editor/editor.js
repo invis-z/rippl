@@ -1178,12 +1178,18 @@ function panelShapes() {
     el("p", { class: "hint" }, "The big letter that shows while you scroll a long list."),
     group(...boxFields(boxes.section)),
     el("h3", {}, "Home"),
-    state.designs.home
-      ? el("p", { class: "hint" }, "Your own Home drawing decides what goes on the Home screen. Change it on the Home screen itself.")
-      : group(field("Album art beside the menu", toggle(state.theme.home_art !== false, (shown) => {
-        state.theme.home_art = shown;
+    group(
+      ...(state.designs.home
+        ? [el("p", { class: "hint" }, "Your own Home drawing decides what goes on the Home screen. Change it on the Home screen itself.")]
+        : [field("Album art beside the menu", toggle(state.theme.home_art !== false, (shown) => {
+          state.theme.home_art = shown;
+          changed();
+        }), "Turn it off to give the menu the whole screen")]),
+      field("Now Playing at the top", toggle(state.theme.now_playing_first === true, (first) => {
+        state.theme.now_playing_first = first;
         changed();
-      }), "Turn it off to give the menu the whole screen")),
+      }), "Show Now Playing above Music when a track is loaded"),
+    ),
     el("h3", {}, "Spacing"),
     group(...spacing),
     more,

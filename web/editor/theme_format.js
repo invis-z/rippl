@@ -17,6 +17,7 @@ const ACCENT_NAME_SIZE = 13;
 const CUSTOM_ACCENT = 0xff;
 const FLAG_DARK_COVER_FLOW = 1;
 const FLAG_NO_HOME_ART = 2;
+const FLAG_NOW_PLAYING_FIRST = 4;
 export const MOST_ACCENTS = 8;
 const SCENE_KIND = 5;
 const SCENE_SOURCE_KIND = 6;
@@ -172,6 +173,7 @@ export function defaultTheme(schema) {
     home_scene: null,
     cover_flow: "theme",
     home_art: true,
+    now_playing_first: false,
   };
 }
 
@@ -504,6 +506,7 @@ function unpackAccents(bytes, view, at, theme) {
   }
   theme.cover_flow = header >= ASSET_HEADER_SIZE && (bytes[52] & FLAG_DARK_COVER_FLOW) ? "dark" : "theme";
   theme.home_art = !(header >= ASSET_HEADER_SIZE && (bytes[52] & FLAG_NO_HOME_ART));
+  theme.now_playing_first = header >= ASSET_HEADER_SIZE && Boolean(bytes[52] & FLAG_NOW_PLAYING_FIRST);
   return ACCENT_SIZE * count;
 }
 
@@ -557,7 +560,9 @@ export function pack(theme, schema) {
   const assets = [...walls, ...sceneAssets(theme, schema)];
   const [wide, tall] = schema.layouts.map((key) => layoutBytes(theme, schema, key));
   const accents = accentSection(theme);
-  const flags = (theme.cover_flow === "dark" ? FLAG_DARK_COVER_FLOW : 0) | (theme.home_art === false ? FLAG_NO_HOME_ART : 0);
+  const flags = (theme.cover_flow === "dark" ? FLAG_DARK_COVER_FLOW : 0)
+    | (theme.home_art === false ? FLAG_NO_HOME_ART : 0)
+    | (theme.now_playing_first === true ? FLAG_NOW_PLAYING_FIRST : 0);
   const long = assets.length > 0 || wide.length + tall.length > 0 || accents.count > 0 || flags !== 0;
   const header = long ? ASSET_HEADER_SIZE : HEADER_SIZE;
   const tables = 2 * schema.colors.length + BOX_SIZE * schema.boxes.length + spaces.length + wide.length +
@@ -830,6 +835,9 @@ export function toToml(theme, schema) {
   parts.push(`selection = "${theme.selection}"`);
   if (theme.home_art === false) {
     parts.push("home_art = false");
+  }
+  if (theme.now_playing_first === true) {
+    parts.push("now_playing_first = true");
   }
   if (theme.cover_flow === "dark") {
     parts.push('cover_flow = "dark"');
