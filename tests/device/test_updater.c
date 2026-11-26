@@ -356,13 +356,24 @@ static void images_that_could_not_boot_are_invalid(void)
     check_invalid(broken_image(0x208 + 12, 0), IMAGE_SIZE);
     check_invalid(broken_image(0x218, 0x03000000), IMAGE_SIZE);
     check_invalid(broken_image(0x218 + 4, 0), IMAGE_SIZE);
-    check_invalid(broken_image(0x218 + 4, 184), IMAGE_SIZE);
+    check_invalid(broken_image(0x218 + 12, 0x46000 - 4), IMAGE_SIZE);
     check_invalid(broken_image(0x228, 0x03078CD4), IMAGE_SIZE);
     check_invalid(broken_image(0x238, 0x03078CD4), IMAGE_SIZE);
     check_invalid(broken_image(CODE_OFFSET + CODE_SIZE, 0), IMAGE_SIZE);
     check_invalid(broken_image(CODE_OFFSET + CODE_SIZE + 4, 0x03050100), IMAGE_SIZE);
     check_invalid(broken_image(CODE_OFFSET + CODE_SIZE + 4, 0x03004001), IMAGE_SIZE);
     check_invalid(broken_image(CODE_OFFSET + 4, 0x03050201), IMAGE_SIZE);
+}
+
+static void an_image_without_row_2_passes_the_check(void)
+{
+    uint8_t *image = valid_image(1);
+    memset(image + 0x228, 0, 16);
+    seal(image);
+    reset(image, IMAGE_SIZE);
+    UpdateStorage storage_target = target();
+    UpdateFile update = source();
+    CHECK_EQUAL(UPDATE_VALID, updater_check(&update, &storage_target));
 }
 
 static const char EIGHT_GB_MARKER[] = "HIFIEC00IMG";
@@ -533,6 +544,7 @@ int main(void)
         TEST_CASE(images_with_the_wrong_shape_or_damage_are_invalid),
         TEST_CASE(an_image_that_does_not_fit_a_slot_is_invalid),
         TEST_CASE(images_that_could_not_boot_are_invalid),
+        TEST_CASE(an_image_without_row_2_passes_the_check),
         TEST_CASE(the_installed_image_is_recognised),
         TEST_CASE(a_half_installed_image_is_installed_again),
         TEST_CASE(installing_fills_both_slots_with_the_image),

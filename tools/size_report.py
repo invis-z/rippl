@@ -14,8 +14,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-CODE_WINDOW = 0x2666C
-LOADED_LIMIT = 437600
+CODE_WINDOW = 0x2A000
+DATA_WINDOW = 0x46000
 OVERLAY_CAPACITY = 0x15000
 RESIDENT_CAPACITY = 0x4800
 NP_FACES_CAPACITY = 0x3600
@@ -184,7 +184,7 @@ def summary(device_map, overlay_map=None, usb_overlay_map=None):
     data = sizes.get(".data", 0)
     bss = sizes.get(".bss", 0)
     lines = [limit_line("code window", code, CODE_WINDOW),
-             limit_line("loaded total (code + .data + .bss)", code + data + bss, LOADED_LIMIT)]
+             limit_line("data RAM (.data + .bss)", data + bss, DATA_WINDOW)]
     if ".resident" in sizes:
         lines.append(limit_line("resident tables", sizes[".resident"], RESIDENT_CAPACITY))
     if ".np_faces" in sizes:

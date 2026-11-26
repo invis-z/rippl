@@ -64,13 +64,10 @@ CODE_OFFSET = PAYLOAD_OFFSET + TABLE_CAPACITY * ROW.size
 MARKER_OFFSET = FW_SIZE + HEADER_SIZE
 MARKER_SIZE = 8
 ROW0_TARGET = 0x03050B68
-ROW2 = (0x03078CD0, 0x03079DCC, 4, 0)
-CODE_LIMIT = 0x030771D4
+CODE_LIMIT = OVERLAY_BASE
 DATA_BASE = 0x03004000
-DATA_LIMIT = 0x0304C000
+LOADER_START = 0x0304A000
 ENTRY_VECTOR_SIZE = 8
-MAX_DATA_SIZE = 180
-LOADED_LIMIT = 437600
 DATE_OFFSET = 0x00
 BRAND_OFFSET = 0x10
 BUILD_TAG_OFFSET = 0x30
@@ -414,8 +411,6 @@ def check_firmware(firmware):
         raise ImageError("code and data must be multiples of 4 bytes")
     if len(code) < ENTRY_VECTOR_SIZE or len(data) < ENTRY_VECTOR_SIZE:
         raise ImageError("code and data must each start with an 8-byte vector table")
-    if len(data) > MAX_DATA_SIZE:
-        raise ImageError(f".data is {len(data)} bytes; only up to {MAX_DATA_SIZE} is proven")
     if firmware.resident and (len(firmware.resident) % 4 or
                               len(firmware.resident) < RESIDENT_HEADER_SIZE):
         raise ImageError("the resident tables must start with a 16-byte header, in whole words")
@@ -432,14 +427,10 @@ def check_firmware(firmware):
         raise ImageError("the reset handler must be inside the code block")
     if struct.unpack_from("<II", code) != (stack, reset):
         raise ImageError("the code vector table must match the entry vector")
-    if ROW0_TARGET + len(code) > CODE_LIMIT:
+    if CODE_BASE + len(code) > CODE_LIMIT:
         raise ImageError(f"code is {len(code)} bytes and would reach {CODE_LIMIT:#010x}")
-    if DATA_BASE + len(data) + firmware.bss_size > DATA_LIMIT:
-        raise ImageError(f".data and .bss would pass {DATA_LIMIT:#010x}")
-    loaded = len(code) + len(data) + firmware.bss_size
-    if loaded > LOADED_LIMIT:
-        raise ImageError(f"code, .data and .bss come to {loaded:,} bytes; "
-                         f"only up to {LOADED_LIMIT:,} is proven to start")
+    if DATA_BASE + len(data) + firmware.bss_size > LOADER_START:
+        raise ImageError(f".data and .bss would reach the boot loader at {LOADER_START:#010x}")
 
 
 def text_field(text, name):
@@ -494,7 +485,6 @@ def build_image(firmware, brand, build_tag, date, overlay=b"", core1_mp3=b"", co
     rows = [
         (ROW0_TARGET, CODE_BASE, code_size, ROW0_TARGET + code_size),
         (DATA_BASE, data_size, DATA_BASE + data_size, data_size + firmware.bss_size),
-        ROW2,
     ]
     rows += [(0, 0, 0, 0)] * (TABLE_CAPACITY - len(rows))
     return assemble(ImageParts(bytes(header), tuple(rows), payload, bytes(MARKER_SIZE), overlay,

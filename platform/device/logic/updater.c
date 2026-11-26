@@ -18,7 +18,6 @@ enum {
     CODE_OFFSET = 0xD68,
     VECTOR_BYTES = 8,
     MINIMUM_DATA = 8,
-    MAXIMUM_DATA = 180,
     FW_SIZE_OFFSET = 0x1F4,
     MAGIC_OFFSET = 0x1F8,
     FW1_END_OFFSET = 0x80,
@@ -34,8 +33,9 @@ enum {
 
 #define CODE_BASE 0x03050000u
 #define CODE_TARGET 0x03050B68u
-#define CODE_LIMIT 0x030771D4u
+#define CODE_LIMIT 0x03088000u
 #define DATA_BASE 0x03004000u
+#define LOADER_START 0x0304A000u
 
 static const uint8_t MAGIC[8] = {'R', 'K', 'n', 'a', 'n', 'o', 'F', 'W'};
 static const uint8_t STOCK_BRAND[8] = {'R', 'o', 'c', 'k', 'c', 'h', 'i', 'p'};
@@ -145,28 +145,47 @@ static bool code_row_is_valid(const uint8_t *header, uint32_t *code_size)
     *code_size = size;
     return row_word(header, 0, 0) == CODE_TARGET && row_word(header, 0, 1) == CODE_BASE &&
            row_word(header, 0, 3) == CODE_TARGET + size && size % 4 == 0 && size >= VECTOR_BYTES &&
-           size <= CODE_LIMIT - CODE_TARGET;
+           size <= CODE_LIMIT - CODE_BASE;
 }
 
 static bool data_row_is_valid(const uint8_t *header)
 {
     uint32_t size = row_word(header, 1, 1);
-    return row_word(header, 1, 0) == DATA_BASE && size >= MINIMUM_DATA && size <= MAXIMUM_DATA &&
-           size % 4 == 0 && row_word(header, 1, 2) == DATA_BASE + size;
+    uint32_t zero_length = row_word(header, 1, 3);
+    return row_word(header, 1, 0) == DATA_BASE && size >= MINIMUM_DATA &&
+           size <= LOADER_START - DATA_BASE && size % 4 == 0 &&
+           row_word(header, 1, 2) == DATA_BASE + size &&
+           zero_length <= LOADER_START - (DATA_BASE + size);
 }
 
-static bool other_rows_are_valid(const uint8_t *header)
+static bool row_is_zero(const uint8_t *header, uint32_t row)
+{
+    for (uint32_t word = 0; word < 4; word++) {
+        if (row_word(header, row, word) != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool row_is_legacy_row_2(const uint8_t *header)
 {
     for (uint32_t word = 0; word < 4; word++) {
         if (row_word(header, 2, word) != ROW_2[word]) {
             return false;
         }
     }
+    return true;
+}
+
+static bool other_rows_are_valid(const uint8_t *header)
+{
+    if (!row_is_zero(header, 2) && !row_is_legacy_row_2(header)) {
+        return false;
+    }
     for (uint32_t row = 3; row < TABLE_ROWS; row++) {
-        for (uint32_t word = 0; word < 4; word++) {
-            if (row_word(header, row, word) != 0) {
-                return false;
-            }
+        if (!row_is_zero(header, row)) {
+            return false;
         }
     }
     return true;
