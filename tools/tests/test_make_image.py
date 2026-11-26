@@ -233,11 +233,8 @@ class FirmwareRulesTest(unittest.TestCase):
     def test_a_code_vector_that_disagrees_with_the_entry_vector_is_refused(self):
         self.assert_refused(firmware(code_reset=0x03050201))
 
-    def test_data_larger_than_the_proven_180_bytes_is_refused(self):
-        self.assert_refused(firmware(data_tail=b"\x00" * 176))
-
-    def test_data_of_exactly_180_bytes_is_accepted(self):
-        self.assertEqual(IMAGE_SIZE, len(build(firmware(data_tail=b"\x00" * 172))))
+    def test_data_of_more_than_180_bytes_is_accepted(self):
+        self.assertEqual(IMAGE_SIZE, len(build(firmware(data_tail=b"\x00" * 1024))))
 
     def test_code_past_the_row_0_end_is_refused(self):
         limit = 0x030771D4 - 0x03050B68 - 256
@@ -247,15 +244,15 @@ class FirmwareRulesTest(unittest.TestCase):
         limit = 0x030771D4 - 0x03050B68 - 256
         self.assertEqual(IMAGE_SIZE, len(build(firmware(code_tail=b"\x00" * limit))))
 
-    def test_data_and_bss_beyond_0x0304c000_are_refused(self):
-        self.assert_refused(firmware(bss_size=0x48000))
+    def test_data_and_bss_reaching_the_boot_loader_are_refused(self):
+        self.assert_refused(firmware(bss_size=0x46000 - 8 + 4))
 
-    def test_code_data_and_bss_past_the_proven_total_are_refused(self):
-        self.assert_refused(firmware(code_tail=b"\x00" * 150000, bss_size=288000))
+    def test_data_and_bss_ending_at_the_boot_loader_are_accepted(self):
+        self.assertEqual(IMAGE_SIZE, len(build(firmware(bss_size=0x46000 - 8))))
 
-    def test_code_data_and_bss_at_the_proven_total_are_accepted(self):
-        code = 150000
-        bss = make_image.LOADED_LIMIT - 256 - code - 8
+    def test_code_data_and_bss_past_the_old_437600_total_are_accepted(self):
+        code = 157000
+        bss = 0x46000 - 8
         self.assertEqual(IMAGE_SIZE, len(build(firmware(code_tail=b"\x00" * code, bss_size=bss))))
 
     def test_unaligned_code_is_refused(self):

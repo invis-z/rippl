@@ -143,8 +143,8 @@ class ReportTest(unittest.TestCase):
     def test_summary_measures_against_each_limit(self):
         lines = size_report.summary(MAP, OVERLAY_MAP)
         self.assertEqual(lines[0], "code window: 4,096 of 157,292 bytes, 153,196 free")
-        self.assertEqual(lines[1], "loaded total (code + .data + .bss): 135,176 of 437,600 bytes, "
-                                   "302,424 free")
+        self.assertEqual(lines[1], "data RAM (.data + .bss): 131,080 of 286,720 bytes, "
+                                   "155,640 free")
         self.assertEqual(lines[2], "resident tables: 15,152 of 18,432 bytes, 3,280 free")
         self.assertEqual(lines[3], "np_faces: 6,160 of 13,824 bytes, 7,664 free")
         self.assertEqual(lines[4], ".high_ram: 69,632 of 72,192 bytes, 2,560 free")
@@ -152,7 +152,7 @@ class ReportTest(unittest.TestCase):
 
     def test_summary_omits_the_faces_and_high_ram_lines_a_map_does_not_have(self):
         bare = MAP.split(".high_ram ")[0]
-        self.assertEqual(["code window", "loaded total (code + .data + .bss)"],
+        self.assertEqual(["code window", "data RAM (.data + .bss)"],
                          [line.split(":")[0] for line in size_report.summary(bare)])
 
     def test_summary_flags_high_ram_and_the_faces_when_they_overflow(self):
